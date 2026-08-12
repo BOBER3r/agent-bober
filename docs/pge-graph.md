@@ -694,6 +694,61 @@ src/pge/engine/real-workload.test.ts` rewrites the committed file, and every oth
 test re-derives it and asserts the committed bytes are unchanged. The numbers above therefore
 go red the moment they stop being true, and the diff is the statement that they changed.
 
+### A committed workload corpus
+
+A cap sized from a fixture is a cap sized from nothing, and a plan-and-contracts measurement
+alone does not say whether the OTHER eight channels are anywhere near their limit. Both gaps
+are closed by a corpus of real payloads, committed at **`.bober/workload/`** (never
+`.bober/golden/` — a workload entry is not a golden case, and the two directories are enforced
+by disjoint gates) and read at test time by `src/pge/golden/workload.ts`.
+
+Every entry is `{ entryId, channel, provenance, value }`, one file per entry, named for its
+own `entryId` — the same "the directory is the truth, not a list" discipline
+[The committed golden dataset](#the-committed-golden-dataset) uses. `provenance` says where the
+value came from: `"file"` (a byte-exact copy of one committed file's parsed value), `"file-group"`
+(assembled from several files — the whole `SprintContract[]` one spec's `sprints` resolves to),
+or `"observed"` (no committed file anywhere in the repository carries a payload for this
+channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, through a
+`RunContext.commit` spy, rather than invented).
+
+| channel | corpus maximum (canonical bytes) | declared limit | source |
+| --- | --- | --- | --- |
+| `spec` | 48,097 | 4,096 | every `.bober/specs/*.json` that parses (52 of 53 — see below) |
+| `sprintContracts` | 135,106 | 4,096 | one entry per spec, the whole `SprintContract[]` its `sprints` resolve to |
+| `messages` | 1,292 | 4,096 | a representative sample of `.bober/handoffs/gen-report-*.json` `notes` |
+| `evaluations` | 1,067 | 4,096 | a representative sample of `.bober/eval-results/*.json` summaries |
+| `refs` | 283 | 4,096 | observed from a real run |
+| `ledger` | 221 | 4,096 | observed from a real run |
+| `branchStatus` | 102 | 4,096 | observed from a real run |
+| `testAnchors` | 114 | 4,096 | one real committed contract's own `successCriteria`, via `anchorId()` |
+| `counters` | 64 | 4,096 | observed from a real run |
+| `verdict` | 8 | 4,096 | this section's own committed measurement's real `verdict` |
+
+`sc-2-2` (the maximum is computed with the commit boundary's OWN `byteSize`
+(`src/pge/runtime/commit.ts`), never a reimplementation) and `sc-2-4` (every declared channel
+has at least one entry, proven to bite by deleting one from a temp copy) are unit-tested in
+`src/pge/golden/workload.test.ts`. The `messages`/`evaluations`/`refs` maxima above are also
+recorded in the committed measurement itself, as `corpusHeadroom`, alongside the
+`spec`/`sprintContracts` rejections this section already documents — the same "corpus-sized
+payload against the declared limit" question, extended to the channels real generator and
+evaluator output flows through.
+
+**60 of 250 committed contracts and 1 of 53 committed specs do not parse** under their own
+schema (an earlier contract/spec era) and are skipped rather than crashing the corpus build —
+`src/pge/golden/__fixtures__/workload-build.ts` records which, with `safeParse`.
+
+Regenerate the whole corpus with:
+
+```
+BUILD_WORKLOAD_CORPUS=1 npx vitest run src/pge/golden/workload.test.ts
+MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
+```
+
+in that order — the second command reads the corpus the first one just wrote.
+
+**Nothing above is fixed either.** No cap in the committed artifact was raised by this corpus;
+sizing the caps from it is the next sprint's work.
+
 ## Engine migration disposition
 
 This section records — in writing, as the deliverable it is — where the graph engine

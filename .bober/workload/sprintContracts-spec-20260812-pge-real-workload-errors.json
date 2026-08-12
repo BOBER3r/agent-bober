@@ -1,0 +1,738 @@
+{
+  "entryId": "sprintContracts-spec-20260812-pge-real-workload-errors",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-1.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-2.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-3.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-4.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-5.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-6.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-7.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-8.json",
+      ".bober/contracts/sprint-spec-20260812-pge-real-workload-errors-9.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 1,
+      "title": "Observe what a real 29 KB plan actually does to the graph engine",
+      "description": "Stop deriving and start observing. Build a harness that runs PgeEngine over this repository's own committed 29,247-byte PlanSpec with every effect stubbed and the network disabled, and commit what happens as data: every StateBloatError raised, the terminal node reached, and the run verdict. Nothing is fixed in this sprint. Its entire value is that the next four sprints act on a measurement rather than on a chain of inferences.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "A committed test constructs a real PgeEngine over the committed .bober/topology/coding.json and runs it with .bober/specs/spec-20260805-pge-graph-engineering.json as the planner's output, with every effect answered from stubs and fetch replaced by a throwing implementation.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The run's rejected updates are collected and written to a committed measurement artifact recording, per rejection: channel id, nodeId, serialised bytes, and the channel's declared limit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "The measurement artifact records the terminal node the run reached and the run verdict, read from the interpreter's own GraphRunResult rather than from the PipelineResult PgeEngine.run returns.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "A test asserts the measurement is reproducible: re-running the harness against unchanged inputs produces byte-identical measurement output.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "If the observation contradicts the spec's assumptions -- for example if the writes are not rejected, or the terminal node differs from the derivation -- the measurement is committed unchanged and the SPEC's assumptions are corrected in the same commit. The measurement is never adjusted to match the prediction.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Raising any cap or changing any channel declaration -- that is sprint 3.",
+        "Fixing FinalizeWithoutSpecError, adding an error channel, or touching PipelineResult.",
+        "Adding or re-capturing any golden case."
+      ],
+      "stopConditions": [
+        "The harness cannot construct a PgeEngine over the committed artifact without editing shipped code -- stop and report what blocks it.",
+        "The observed behaviour contradicts the derivation in a way that invalidates the remaining eight sprints -- stop, commit the measurement, and report."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 3,
+      "generatorNotes": "Reuse the existing machinery rather than inventing a parallel one. src/pge/golden/executor.ts already builds `new PgeEngine(...)` over the committed artifact copied into a throwaway root, installs withNetworkDisabled, and binds every collaborator to a throwing function -- read it first and follow its shape. The rejections you need are on CommitResult.rejected (src/pge/runtime/commit.ts) and surface as TaskFailure entries with errorClass StateBloatError (src/pge/runtime/interpreter.ts:322-328, :1400-1412). Note carefully that PgeEngine.run DISCARDS GraphRunResult.verdict and .failures at :461-475, so a harness that only inspects the returned PipelineResult will see nothing -- you must observe the interpreter's result, which may mean driving the interpreter directly rather than through PgeEngine.run. Say in the code which one you drove and why. Do NOT put the measurement behind an env var that defaults to skipping; a measurement nobody runs is not a measurement.",
+      "evaluatorNotes": "The central risk is a harness that passes for the wrong reason. Verify the run genuinely used the committed .bober/topology/coding.json and not a fixture: golden-graph.ts raises spec to 8192 and sprintContracts to 65536, so a harness that accidentally picked it up would show FEWER rejections and look healthier. Check the graph actually loaded. Second: confirm the spec fed in is the real 29,247-byte file, not a truncated copy -- measure it in the test. Third: confirm the network and collaborator doors are genuinely shut by asserting a reached collaborator fails the run by name. Finally, re-run the harness twice and diff the measurement output yourself; sc-1-4 is only meaningful if you executed it.",
+      "estimatedFiles": [
+        "src/pge/engine/real-workload.test.ts",
+        "src/pge/engine/__fixtures__/real-workload.ts",
+        ".bober/topology/measurements/real-workload.json"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-1-1",
+          "result": "pass",
+          "timestamp": "2026-08-12T04:13:08Z"
+        }
+      ],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T04:13:08Z",
+      "completedAt": "2026-08-12T04:13:08Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 2,
+      "title": "A committed workload corpus, and the measurement extended to every channel",
+      "description": "Sprint 1 measured the plan channels. Real generator and evaluator payloads flow through messages, evaluations and refs, and those are unbounded strings today. Extend the measurement to every channel, and commit a corpus of real payloads that the caps will be derived from and pinned against for ever after -- so that a fixture can never again be the only evidence.",
+      "status": "in-progress",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-1"
+      ],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "A committed workload corpus holds real PlanSpec and SprintContract payloads drawn from .bober/specs/ and .bober/contracts/, plus representative generator and evaluator payloads, each labelled with the channel it exercises.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "A function computes, from the corpus, the maximum serialised byte size per channel using the SAME byteSize function the commit boundary uses -- not a reimplementation.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "The measurement from sprint 1 is extended to messages, evaluations and refs under corpus-sized payloads, and the results are committed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "A test asserts the corpus is non-empty for every channel the artifact declares, so a channel cannot silently escape measurement by having no corpus entry.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "The corpus is committed under version control and its location is documented; a test asserts it is read from disk at test time rather than inlined into the test file.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Changing any cap -- sprint 3 does that, using this corpus.",
+        "Trimming the corpus to make a number look better."
+      ],
+      "stopConditions": [
+        "A channel has no plausible real payload to measure -- record that fact explicitly rather than inventing one."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [
+        "CORRECTED BY THE SPRINT-2 CURATOR, verified by the orchestrator: the corpus must NOT live under .bober/golden/. src/pge/golden/runner.ts treats every file in that directory as one golden case and reports any non-.json entry as a stray, which feeds the BLOCKING CI golden gate; a workload/ subdirectory there also causes EISDIR in the gate, executor, coverage and capture tests, and fails dataset.test.ts. The corpus lives at .bober/workload/ instead.",
+        "byteSize (src/pge/runtime/commit.ts:257-259) is NOT exported — verified against the module's export list. Nothing pins that module's export surface, so adding `export` is the least invasive way to satisfy sc-2-2's ban on reimplementation. Sprint 1 left a duplicate copy of it in src/pge/engine/real-workload.test.ts which must be deleted in the same change.",
+        "60 of 250 files in .bober/contracts/ and 1 of 53 in .bober/specs/ FAIL schema parse, so a naive corpus loader that parses every file will throw. The loader must handle this deliberately and say what it does with unparseable files.",
+        "Four channels — refs, counters, branchStatus, ledger — have no committed real payload anywhere in the repository. sc-2-4 still requires a non-empty corpus entry for every declared channel, so these are the hard part; the curator identified a RunContext.commit spy as the technique for observing them from a real run."
+      ],
+      "outOfScope": [],
+      "ambiguityScore": 3,
+      "generatorNotes": "Import byteSize's behaviour rather than reimplementing it: the boundary uses Buffer.byteLength(canonicalJson(value), 'utf8') (src/pge/runtime/commit.ts:257-259). If byteSize is not exported, export it or expose an equivalent through a named helper -- do not hand-roll JSON.stringify, which will disagree with canonical form. GeneratorResult.notes is an unbounded z.string() and real ones run 1,100-1,900 chars, so evaluations is the channel to look at after spec. Draw corpus entries from files already in the repository so the corpus is real rather than synthetic, and record where each entry came from.",
+      "evaluatorNotes": "Check that the corpus is genuinely real: spot-check that entries correspond to actual files in .bober/specs/ and .bober/contracts/. Check the byte measurement matches the boundary's -- construct a value, run it through both the corpus helper and the real commit boundary, and confirm they agree; a divergence here silently mis-sizes every cap in sprint 3. Verify sc-2-4 bites by deleting a channel's corpus entry and confirming the test fails.",
+      "estimatedFiles": [
+        ".bober/workload/",
+        "src/pge/golden/workload.ts",
+        "src/pge/golden/workload.test.ts",
+        "src/pge/runtime/commit.ts",
+        "src/pge/engine/real-workload.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T04:30:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-3",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 3,
+      "title": "Size the caps to the corpus, regenerate the artifact, pin both directions",
+      "description": "The decided remedy: raise every implicated channel's maxInlineBytes to a value derived from the committed corpus, keep StateBloatError as a guard against genuinely runaway writes, regenerate the artifact and the state audit, take a MINOR graphVersion bump with a changelog entry, and pin each cap two-directionally against the corpus so that neither shrinking nor inflating one can happen silently.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-2"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "src/pge/topology/coding.graph.ts declares, for every channel the measurement implicates, a maxInlineBytes at least the corpus maximum for that channel, and .bober/topology/coding.json is regenerated from it via `pge dump`.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "graphVersion takes a MINOR bump and docs/pge-graph.md gains a changelog entry keyed by it, stating which caps moved and the measured basis for each.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "`pge dump --check`, `pge validate --mode full`, `pge docs --check`, `pge diff --require-version-bump` and `pge audit-state` followed by `git diff --exit-code` all pass against the regenerated artifact and the regenerated state audit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "A test pins each cap two-directionally against the committed corpus: lowering a cap below its corpus maximum FAILS, and raising a cap with no corpus payload justifying it FAILS. Both directions proven by mutation.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "A negative control proves StateBloatError still bites: a value above the NEW cap is still rejected and the write is still dropped, so the check was re-sized rather than removed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "The golden dataset still passes unchanged -- a MINOR bump does not invalidate cases, and no golden file is edited in this sprint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Removing or weakening the StateBloatError check.",
+        "Editing any golden case -- if a golden case fails here, that is a finding, not a licence to re-capture.",
+        "Adding the specDraft channel, which is sprint 7."
+      ],
+      "stopConditions": [
+        "The golden dataset fails after the cap change -- stop and report; a MINOR cap bump should not move any recorded artifact, and if it does, that is a defect worth understanding before proceeding.",
+        "`pge diff` reports the change as MAJOR rather than MINOR -- stop and reconsider the classification rather than forcing the bump."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 3,
+      "generatorNotes": "Edit the AUTHORED literal at src/pge/topology/coding.graph.ts:113-190, then regenerate the committed JSON with the pge CLI -- never hand-edit .bober/topology/coding.json, which `pge dump --check` will catch anyway. Pick caps from the corpus with deliberate headroom and say in the code comment what the headroom is for; a cap that exactly equals today's maximum will fail the day a spec grows one field. Keep StateBloatError: the point is to size the guard, not to delete it. Remember the state audit is a committed artifact gated by `pge audit-state` plus `git diff --exit-code` (src/pge/audit-git-gate.test.ts), so regenerate it in the same commit.",
+      "evaluatorNotes": "Verify the two-directional pin genuinely bites in BOTH directions by mutating it yourself -- lower a cap below corpus max and confirm failure, then raise one arbitrarily and confirm failure. A pin that only catches shrinkage is half a pin. Verify the negative control for StateBloatError by constructing a value above the new cap and confirming the write is dropped and a StateBloatError lands in `rejected`. Confirm .bober/topology/coding.json was regenerated rather than hand-edited by running `pge dump --check` yourself. Confirm the changelog entry states a MEASURED basis per cap, not a round number with no provenance.",
+      "estimatedFiles": [
+        "src/pge/topology/coding.graph.ts",
+        ".bober/topology/coding.json",
+        ".bober/topology/state-audit.json",
+        "docs/pge-graph.md",
+        "src/pge/golden/workload.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 4,
+      "title": "A real plan runs end to end on the graph engine",
+      "description": "The exit criterion of the viability work: prove that PgeEngine executing the committed 29 KB spec and its 14 contracts produces no StateBloatError, leaves state.spec non-null, and terminates at a declared terminal node. Note the terminal will NOT be the finalize node -- under the shipped autopilot noop mechanism the git-effect commit node is still refused FAIL_CLOSED, and reaching finalize needs a durable mechanism that is out of scope here.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-3"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "A committed test runs PgeEngine over the committed artifact with the real 29,247-byte spec and its 14 contracts and asserts zero failures with errorClass StateBloatError.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "The same run leaves state.spec non-null and state.sprintContracts holding all 14 contracts.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "The run terminates at a node the artifact declares, and the test names which one and why -- explicitly recording that it is not `finalize` and that the commit refusal under the noop mechanism is the reason.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "The sprint-1 measurement artifact is regenerated and its diff shows the rejections gone, so the fix is evidenced by the same instrument that found the defect.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "docs/pge-graph.md records that the graph engine has been run against a real workload, with the payload sizes and the terminal reached, replacing any claim that rests only on fixtures.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Reaching the finalize node, or changing the checkpoint mechanism to reach it.",
+        "Making the run report failure correctly -- that is sprint 5.",
+        "Asserting anything about wall-clock time."
+      ],
+      "stopConditions": [
+        "The run still rejects writes after the cap change -- stop and report which channel, since it means the corpus missed a payload shape.",
+        "Reaching a declared terminal requires editing a node body -- stop and report rather than widening the sprint."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 2,
+      "generatorNotes": "This is the payoff sprint for sprints 1-3 and it should reuse their harness rather than build a third one. Be precise in the assertions about WHICH terminal is reached: PgeEngine.run always calls commit.finalize (the boundary METHOD, :476-483) regardless of whether the graph's finalize NODE executed, and those two are different things -- the node's only edge in is commit -> finalize and commit is refused. Conflating them will produce a test that asserts something false. If state.spec is non-null but commit.finalize still throws, that is sprint 7's defect appearing early: record it and do not paper over it.",
+      "evaluatorNotes": "The failure mode to hunt is a test that passes because it ran a smaller spec. Measure the spec's byte size inside the test and assert it. Confirm all 14 contracts landed rather than a subset -- a partial write would still satisfy a naive non-null check. Verify sc-4-3 names the real terminal by reading the run's spans yourself rather than trusting the assertion's label. Verify the regenerated measurement in sc-4-4 is genuinely regenerated, by diffing it against the sprint-1 version.",
+      "estimatedFiles": [
+        "src/pge/engine/real-workload.test.ts",
+        ".bober/topology/measurements/real-workload.json",
+        "docs/pge-graph.md"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-5",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 5,
+      "title": "PipelineResult gains an error channel, layered in the engine",
+      "description": "A run whose commit was refused must not report that it succeeded. Add errors to PipelineResult and populate it from the interpreter's failures -- which PgeEngine.run currently discards, with a comment saying so. This deliberately revises a surface the previous spec froze; that revision is authorised, and the docs/pge-graph.md disposition it changes is updated in the same commit.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-4"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "PipelineResult declares errors?: readonly PipelineFailure[]; PipelineFailure carries nodeId, branchKey, errorClass and message, mapped 1:1 from TaskFailure minus superstep.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "The array is layered in PgeEngine.run, NOT inside finalizePipelineRun, by removing the discard at src/pge/engine/pge-engine.ts:461-475 -- mirroring how RunResultFlusher.flush layers needsClarification with a spread after finalization.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "The frozen key-order test in src/orchestrator/finalize.test.ts stays green, unmodified.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "A PgeEngine run whose git-effect commit node is refused FAIL_CLOSED under the autopilot noop mechanism returns a non-empty errors array whose first entry has nodeId \"commit\" and an errorClass naming the refusal.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "A TsPipelineEngine run returns a result with no errors key, and `success` keeps the shared deriveRunSuccess formula on both engines -- Option A semantics, per the spec's D3 decision.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "docs/pge-graph.md's engine-migration disposition and the sprint-13 recorded limitation are rewritten to state that the error channel now exists, in this commit.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Setting success:false on a fail-closed refusal -- explicitly Option B, out of scope, and it would add completionMarker to the divergence set.",
+        "Changing deriveRunSuccess, the runPipeline signature, or the completion marker.",
+        "Surfacing the errors in the CLI or MCP layers -- that is sprint 6.",
+        "Re-capturing golden cases -- that is sprint 8, deliberately separated so the diff is read on its own."
+      ],
+      "stopConditions": [
+        "Adding the optional field breaks a consumer that cannot be fixed within this sprint -- stop, list the consumers, and report.",
+        "conformance.engines.test.ts's divergence set changes as a side effect -- stop; a change to that pin must be deliberate and separately justified."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read src/orchestrator/workflow/flusher.ts:113-127 first -- it is the exact pattern, and its comment explains WHY engine-specific fields are layered after finalizePipelineRun rather than inside it: so the two engines cannot disagree about the shared fields. Follow it literally. The discard you are removing is at src/pge/engine/pge-engine.ts:461-475 and its own comment tells you what it was waiting for. Keep errors OPTIONAL so every existing consumer of PipelineResult keeps compiling; enumerate those consumers before you start. Do not widen the sprint split to absorb a terminal-node failure -- that would invent a failed sprint that did not happen, which the discarded comment warns against explicitly.",
+      "evaluatorNotes": "Two things to check hard. First, that the field really is layered in the engine and not in finalize: read finalizePipelineRun and confirm it is untouched, and confirm finalize.test.ts's key-order pin was not edited. Second, that the ts engine is genuinely unaffected -- run one and assert 'errors' in result is false, not merely that it is undefined. Then check the conformance divergence set is still exactly the four fields; if a fifth appeared, that is a stop condition and must be reported, not accepted. Finally verify the docs update actually replaces the old claim rather than appending a contradicting paragraph next to it.",
+      "estimatedFiles": [
+        "src/orchestrator/pipeline.ts",
+        "src/pge/engine/pge-engine.ts",
+        "src/pge/engine/pge-engine.test.ts",
+        "docs/pge-graph.md"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-6",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 6,
+      "title": "An operator can see the refusal",
+      "description": "An error channel nobody surfaces closes nothing. Make a non-empty errors array visible where a person or a CI job will actually encounter it: a non-zero exit from `bober run`, and a failed run state in the MCP run manager.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-5"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "`bober run` sets a non-zero process exit code when the result's errors array is non-empty, even when success is true under the Option A formula.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "`bober run` prints what was refused -- at minimum the nodeId and errorClass of each entry -- rather than a generic failure line.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "The MCP run manager sets RunState.status to \"failed\" and populates RunState.error when errors is non-empty; neither field needs a schema change.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "A run with an empty or absent errors array keeps today's exit code and today's run state exactly -- proven by a test, so the change is additive.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Changing the meaning of `success`.",
+        "Adding new fields to RunState -- status \"failed\" and error?: string already exist.",
+        "Reformatting unrelated CLI output."
+      ],
+      "stopConditions": [
+        "A CI wrapper in this repository depends on `bober run` exiting zero for a refused run -- stop and report it before changing the exit code."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 2,
+      "generatorNotes": "src/cli/commands/run.ts already sets process.exitCode = 1 at :241-242 when !result.success; add a branch rather than restructuring the existing one, and make sure the two do not fight. src/mcp/run-manager.ts already declares status 'failed' (:39) and error?: string (:46) and sets status at :209 and :233 -- follow the existing assignment sites. sc-6-4 is the important one: this must be strictly additive for runs that produced no errors, so write that test first.",
+      "evaluatorNotes": "Verify the additive claim in sc-6-4 by actually running a clean pipeline and confirming the exit code and run state are unchanged from before the sprint. Verify the exit code genuinely changes for a refused run by executing one end to end, not by unit-testing the branch in isolation. Check the printed output names the refused node -- a message that says 'run failed' without saying what was refused fails sc-6-2.",
+      "estimatedFiles": [
+        "src/cli/commands/run.ts",
+        "src/cli/commands/run.test.ts",
+        "src/mcp/run-manager.ts",
+        "src/mcp/run-manager.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-7",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 7,
+      "title": "A plan that never settles reports failure instead of crashing",
+      "description": "A planner that keeps asking for clarification exhausts planClarifyRounds and reaches the terminal boundary with state.spec still null, and commit.finalize throws FinalizeWithoutSpecError instead of returning a failed result. Fix it with a NEW scalar channel rather than a second writer on spec -- replaceIfNewer is scalar and the validator emits MultipleWritersOnScalarChannel at severity error, so adding spec to plan_clarify.writes is structurally illegal, not merely costly.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-6"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "A new scalar channel specDraft is declared in the authored graph with exactly ONE writer, the artifact is regenerated, and `pge validate --mode full` reports no MultipleWritersOnScalarChannel diagnostic.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "graphVersion takes a MINOR bump with a docs/pge-graph.md changelog entry, and the node inventory and channel table in that document are updated so `pge docs --check` passes.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "commit.finalize falls back to specDraft when state.spec is null and RESOLVES with success false, a populated errors array, and needsClarification true -- instead of rejecting with FinalizeWithoutSpecError.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "FinalizeWithoutSpecError still exists and is still thrown when NEITHER spec nor specDraft is present, so the class is narrowed rather than deleted. A test proves both branches.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "A golden case driving clarification to the planClarifyRounds bound is captured and passes -- the case the old crash made impossible to record.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-6",
+          "description": "docs/pge-graph.md's recorded-defect section is rewritten to describe the fixed behaviour, in this commit, rather than left describing a defect that no longer exists.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-7",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Adding spec to any second writer's `writes` -- structurally illegal, verified.",
+        "Deleting FinalizeWithoutSpecError.",
+        "Changing what planClarifyRounds bounds, or how clarification rounds are counted."
+      ],
+      "stopConditions": [
+        "Declaring specDraft trips a validator rule other than the writer count -- stop and report which diagnostic code.",
+        "The new golden case cannot be captured because the run still throws -- stop; sc-7-3 is then unmet and the sprint is not done."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 4,
+      "generatorNotes": "The illegality of the obvious fix is verified, so do not re-litigate it: replaceIfNewer is declared scalar at src/contracts/topology.ts:133 and the validator emits MultipleWritersOnScalarChannel at severity error at src/pge/topology/validate.ts:704-716. plan_materialize is the sole writer of spec today; plan_clarify writes only messages. Add specDraft as its own scalar channel with one writer. Remember commit.finalize is the boundary METHOD called unconditionally by PgeEngine.run -- this sprint is about that method, not about reaching the finalize NODE, which stays unreachable. Capture the new golden case with GOLDEN_CAPTURE=1 against the real bindings, per the existing two-run capture design.",
+      "evaluatorNotes": "Check sc-7-4 carefully -- it is the criterion most likely to be satisfied in appearance only. Construct a state with neither spec nor specDraft and confirm the error is still thrown; then construct one with only specDraft and confirm a resolved failed result. Verify the new channel really has one writer by reading the regenerated artifact, not the authored literal. Verify the captured golden case genuinely drives the bound rather than settling early, by reading its pinned responses. Confirm `pge docs --check` passes -- a new channel that is undocumented fails a blocking gate.",
+      "estimatedFiles": [
+        "src/pge/topology/coding.graph.ts",
+        ".bober/topology/coding.json",
+        "src/pge/runtime/commit.ts",
+        "src/pge/runtime/commit.test.ts",
+        "src/pge/golden/capture.ts",
+        ".bober/golden/",
+        "docs/pge-graph.md"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-8",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 8,
+      "title": "Reconcile the golden dataset, deliberately and diff-first",
+      "description": "The error channel changes every terminal artifact, so all five replay cases must be re-captured -- and two hand-authored integrity cases now state things that are false and must be RE-AUTHORED, not re-captured. This is the sprint where the temptation to run GOLDEN_CAPTURE=1 and commit without reading the diff is strongest, and where doing so would defeat the gate as surely as deleting it.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-7"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-8-1",
+          "description": "All five enforcement \"replay\" cases are re-captured via GOLDEN_CAPTURE=1 and pass; the commit message describes the diff field by field rather than merely stating that cases were re-captured.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-2",
+          "description": "pipeline-result-reports-success-with-no-error-channel.json is RE-AUTHORED -- its prose asserted behaviour the error channel has now removed, so a re-capture would preserve a false statement.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-3",
+          "description": "commit-refused-fail-closed-under-noop-gate.json is RE-AUTHORED to state what a fail-closed refusal now produces, including the errors array.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-4",
+          "description": "The replay-case count stays at or above GOLDEN_MIN_REPLAY_CASES, which is 5, and no case anywhere in this spec is relabelled from replay to integrity.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-5",
+          "description": "src/pge/golden/executor.test.ts's expectation that a truncated run THROWS is re-expressed as 'the case does not pass', since the spec-less path now resolves.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-6",
+          "description": "The blocking golden regression job passes end to end, dataset half and runtime half, against the reconciled dataset.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-7",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Relabelling any failing replay case as integrity to get a green build -- the floor has zero slack at exactly 5 and this is explicitly forbidden.",
+        "Deleting a case to make the count work.",
+        "Adding new scenarios beyond the one sprint 7 captured."
+      ],
+      "stopConditions": [
+        "A replay case cannot be made to pass by re-capture and the reason is a runtime defect rather than an expected artifact change -- stop and report the defect; do not re-author around it.",
+        "The dataset drops below the replay floor -- stop."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 3,
+      "generatorNotes": "The distinction between re-CAPTURE and re-AUTHOR is the whole sprint. A replay case's expectation is captured from a real run, so a behaviour change legitimately rewrites it. An integrity case is hand-authored prose plus a partial pin set: when the behaviour it describes changes, the PROSE is now false and must be rewritten by a human-equivalent act of judgement -- re-capturing it is not even possible, since replaying a partial pin set throws MissingRecordingError at the first unpinned call. Read the two named files and rewrite what they claim. When you re-capture the five, read the resulting diff before committing and write down what moved.",
+      "evaluatorNotes": "This sprint is where a green gate is least trustworthy, so verify the diff yourself. For each re-captured case, check the change is confined to the error channel and its consequences -- an unrelated artifact that moved is a finding. For the two re-authored cases, read their prose and confirm it describes current behaviour; a case that still claims PipelineResult has no error channel fails sc-8-2 regardless of whether the suite is green. Confirm the replay count by counting files with enforcement replay yourself. Confirm sc-8-5 by reading the rewritten assertion -- 'does not pass' and 'throws' are different claims and only one is now true.",
+      "estimatedFiles": [
+        ".bober/golden/",
+        "src/pge/golden/executor.test.ts",
+        "src/pge/golden/capture.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260812-pge-real-workload-errors-9",
+      "specId": "spec-20260812-pge-real-workload-errors",
+      "sprintNumber": 9,
+      "title": "Node coverage counts a node only when it actually ran",
+      "description": "The coverage pin reads nodeId off each span and adds it to the executed set with no status check, so a node whose span ended failed still counts as covered -- and the commit node, refused FAIL_CLOSED under the shipped noop mechanism, is exactly such a node. The committed node-coverage figure is therefore true as REACHED and weaker than it reads as EXERCISED. Correct the rule and restate the figure.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260812-pge-real-workload-errors-8"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-9-1",
+          "description": "coverage.test.ts counts a node as executed only when it has at least one span with status ok.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-2",
+          "description": "The corrected rule is proven by mutation in both directions: a node whose only span ended failed no longer counts, and a node that gains an ok span begins to count -- both failing the pin when the NEVER_EXECUTED list is not updated to match.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-3",
+          "description": "The NEVER_EXECUTED list is updated to whatever the corrected rule actually yields, and each entry still carries a claim about WHY the node is unreachable, with any claim that stopped being true rewritten rather than left standing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-4",
+          "description": "docs/pge-graph.md restates the node-coverage figure under the corrected rule, records the previous figure, and states plainly that the previous rule counted reached-but-refused nodes as covered.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-5",
+          "description": "The recorded reason for each unreachable node is re-verified against the code rather than carried forward -- in particular the claim about why synthesize is unreachable, which the analysis behind this spec flagged as possibly misattributed.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-6",
+          "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Making any node newly reachable -- executing commit and finalize under a durable checkpoint mechanism is the next spec.",
+        "Lowering the coverage floor to accommodate the corrected, likely smaller number."
+      ],
+      "stopConditions": [
+        "The corrected figure falls far enough that the golden dataset no longer meaningfully covers the graph -- stop and report the number rather than adjusting the rule to protect it."
+      ],
+      "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+      "assumptions": [],
+      "outOfScope": [],
+      "ambiguityScore": 3,
+      "generatorNotes": "The change itself is small: src/pge/golden/coverage.test.ts:108-110 reads nodeId and ignores status. The judgement is in sc-9-3 and sc-9-5. Each NEVER_EXECUTED entry is a CLAIM about why something cannot be reached, and the two-directional pin exists so a claim that dies fails the build rather than ageing into a lie -- so when the corrected rule moves a node into the list, write the real reason rather than reusing a neighbour's. Re-read the reason recorded for synthesize specifically: the analysis behind this spec found evidence that it is unreachable because rework_route's dispatch set is always empty, not because failing paths settle earlier. Verify which is true and record the true one.",
+      "evaluatorNotes": "Verify sc-9-2 by mutating in both directions yourself; a pin that only catches one direction is half a pin, and this repository's own standard says a gate that cannot fail is worse than no gate. For sc-9-5, do not accept a restated reason at face value -- trace it in the code. Check that the documented figure and the test's own floor agree; a document claiming a number the test does not enforce is the exact failure this sprint is correcting.",
+      "estimatedFiles": [
+        "src/pge/golden/coverage.test.ts",
+        "docs/pge-graph.md"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-12T00:00:00Z",
+      "updatedAt": "2026-08-12T00:00:00Z"
+    }
+  ]
+}

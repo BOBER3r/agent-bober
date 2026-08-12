@@ -1,0 +1,11 @@
+{
+  "entryId": "counters-observed-1",
+  "channel": "counters",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"research_route\" writing \"counters\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "researchReflexions": 1
+  }
+}

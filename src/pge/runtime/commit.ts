@@ -254,7 +254,15 @@ export function createFixedClock(iso: string): Clock {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function byteSize(value: unknown): number {
+/**
+ * The metric the cap check below measures against: canonical-JSON byte length.
+ *
+ * Exported so a corpus's own "maximum serialised byte size per channel" calculation
+ * (`src/pge/golden/workload.ts`) is never a reimplementation of the boundary's own number —
+ * two copies of the metric that decides every channel cap is exactly the drift a committed
+ * corpus exists to prevent.
+ */
+export function byteSize(value: unknown): number {
   return Buffer.byteLength(canonicalJson(value), "utf8");
 }
 

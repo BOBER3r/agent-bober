@@ -1,0 +1,11 @@
+{
+  "entryId": "counters-observed-3",
+  "channel": "counters",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"plan_clarify_check\" writing \"counters\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "planClarifyRounds": 1
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "entryId": "evaluations-eval-sprint-spec-20260618-medical-grounding-critic-2-1",
+  "channel": "evaluations",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/eval-results/eval-sprint-spec-20260618-medical-grounding-critic-2-1.json"
+  },
+  "value": {
+    "id": "eval-sprint-spec-20260618-medical-grounding-critic-2-1",
+    "seq": 0,
+    "contractId": "sprint-spec-20260618-medical-grounding-critic-2",
+    "sprintNumber": 2,
+    "iteration": 1,
+    "verdict": "pass",
+    "summary": "All 8 criteria pass. synthesizeGrounded fail-closed gate: try/catch->abstain around every LLM call, one bounded re-synth. Single engine swap. All zero-LLM negative assertions (lines 157,375,474,584,629,711,778,982,1027) unchanged; only grounded call-count (line 923) updated 1->2. 6 pre-existing cockpit E2E failures unrelated.",
+    "evalId": "eval-sprint-spec-20260618-medical-grounding-critic-2-1"
+  }
+}

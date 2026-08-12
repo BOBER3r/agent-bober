@@ -1,0 +1,9 @@
+{
+  "entryId": "verdict-real-workload-measurement",
+  "channel": "verdict",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/topology/measurements/real-workload.json"
+  },
+  "value": "failed"
+}

@@ -1,0 +1,442 @@
+{
+  "entryId": "sprintContracts-spec-20260628-priority-hub",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260628-priority-hub-1.json",
+      ".bober/contracts/sprint-spec-20260628-priority-hub-2.json",
+      ".bober/contracts/sprint-spec-20260628-priority-hub-3.json",
+      ".bober/contracts/sprint-spec-20260628-priority-hub-4.json",
+      ".bober/contracts/sprint-spec-20260628-priority-hub-5.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260628-priority-hub-1",
+      "specId": "spec-20260628-priority-hub",
+      "sprintNumber": 1,
+      "title": "Canonical Finding schema, FactStore finding source, and `bober hub list`",
+      "description": "Create the src/hub/ module with the owned Finding Zod schema, a FindingSource interface plus a FactStoreFindingSource that reads predicate 'finding' rows and parses each JSON value into a validated Finding, and a `bober hub list` CLI command that prints the findings held in the project's own FactStore. This is the foundational vertical slice: schema to source to CLI output.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "src/hub/finding.ts exports a Zod Finding schema with id, domain, title, kind (enum action|watch|risk|question), urgency (int 1-5), severity (int 1-5), evidence (string[]), surfacedAt (ISO datetime), dueBy (optional ISO), tags (string[]), estDurationMin (optional int), calendarSafeTitle (optional string), status (enum open|in-progress|snoozed|done|dropped), and promotesTo (optional string).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "A unit test asserts the Finding schema rejects an urgency of 6 and a kind of 'todo', and accepts a fully-populated valid finding object.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "FactStoreFindingSource.read() returns one validated Finding per active predicate-'finding' fact whose JSON value parses, and skips a row with a malformed JSON value without throwing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "Invoking `bober hub list` against a FactStore seeded with two finding facts prints two lines, each showing the finding title, kind, urgency, and severity.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "npm run build completes with zero TypeScript errors after the new src/hub/ module and hub command registration are added.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the cross-repo collector, sibling resolution, or dedup (Sprint 2 owns those).",
+        "Do not implement scope parsing, the lens judge, ranking, or priority.md rendering.",
+        "Do not redefine the Finding schema anywhere outside src/hub/finding.ts.",
+        "Do not add a vault-markdown FindingSource; only the FactStore source is in scope here.",
+        "Do not modify the FactStore constructor in this sprint."
+      ],
+      "stopConditions": [
+        "src/hub/finding.ts, the FindingSource interface plus FactStoreFindingSource, and the `bober hub list` command exist and all five success criteria pass evaluation.",
+        "npm run build exits zero and the hub unit tests added this sprint pass under the project test runner."
+      ],
+      "definitionOfDone": "The hub module owns a single Zod Finding schema matching the locked design field set, a FactStoreFindingSource that turns predicate-'finding' rows into validated Findings while skipping malformed rows, and a `bober hub list` command that prints the local store's findings with kind/urgency/severity. The build is green and the new hub tests pass.",
+      "assumptions": [
+        "Findings are stored as FactStore rows at predicate 'finding' with the Finding serialized as the JSON value, mirroring SharedBlackboard.publish (src/fleet/shared-blackboard.ts:84-90).",
+        "getActiveFacts(scope, undefined, 'finding') is the read path (src/state/facts.ts:222-257).",
+        "The hub OWNS the Finding schema; siblings import it (research:121-126; team-lead scope item 1)."
+      ],
+      "outOfScope": [
+        "Multi-repo aggregation (Sprint 2).",
+        "Judge, scope, ranking (Sprint 3).",
+        "priority.md and decide (Sprint 4).",
+        "chat hub surface (Sprint 5)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/hub/finding.ts exporting FindingSchema (Zod) and the Finding type. Field set is locked in .bober/research/research-20260627-knowledge-platform-landscape.md:121-126 and the spec feat-1 AC1. Use z.number().int().min(1).max(5) for urgency/severity, z.enum for kind and status, z.string().datetime() for surfacedAt/dueBy. Create src/hub/finding-source.ts with a FindingSource interface { read(): Finding[] } and a FactStoreFindingSource implementation that takes a FactStore (or db path) and scope string, calls getActiveFacts(scope, undefined, 'finding') (src/state/facts.ts:222), JSON.parses each row.value, runs FindingSchema.safeParse, and collects successes (skip failures). Follow the FactStore finding convention in src/fleet/shared-blackboard.ts:84-105. Create src/cli/commands/hub.ts registering `hub` with a `list` subcommand; mirror the handler discipline in src/cli/commands/blackboard.ts and src/cli/commands/memory.ts (resolve project root, loadConfig, set process.exitCode on error, never throw). Register the command wherever blackboard/memory commands are registered in the CLI entrypoint. Keep the finding scope/namespace string a small constant for now (e.g. 'hub').",
+      "evaluatorNotes": "Verify FindingSchema rejects urgency 6 and kind 'todo' and accepts a complete valid finding. Verify FactStoreFindingSource skips a row with non-JSON or schema-invalid value and still returns the valid ones (no throw). Drive `bober hub list` against an in-memory or temp FactStore seeded with two finding facts and assert both titles plus their kind/urgency/severity appear in stdout. Confirm npm run build is green and no second definition of the Finding schema exists in the hub module.",
+      "estimatedFiles": [
+        "src/hub/finding.ts",
+        "src/hub/finding-source.ts",
+        "src/hub/finding.test.ts",
+        "src/hub/finding-source.test.ts",
+        "src/cli/commands/hub.ts",
+        "src/cli/commands/hub.test.ts",
+        "src/cli/index.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "completedAt": "2026-06-28T23:22:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260628-priority-hub-2",
+      "specId": "spec-20260628-priority-hub",
+      "sprintNumber": 2,
+      "title": "Cross-repo read-only collector with sibling resolution and dedup",
+      "description": "Add an additive readonly open flag to FactStore, a sibling-repo resolver that turns hub.repos config (or discovered kb-* siblings) into absolute paths, and a collector that opens each sibling's derived FactStore read-only and pools their findings into one deduplicated Finding[] following the fleet synthesis.collect pattern. Extend `bober hub list` to aggregate across all resolved siblings.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260628-priority-hub-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "FactStore accepts an optional { readonly?: boolean }; when true it opens better-sqlite3 with the readonly flag and skips the CREATE TABLE bootstrap, and when absent the constructor behaviour is unchanged from the prior version.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "The collector pools findings from two distinct sibling FactStores into a single Finding[] whose length equals the number of distinct finding ids across both stores.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "When the same Finding.id appears in two sibling stores the collector returns exactly one pooled entry for that id (dedup by id).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "A collect over a sibling store opened through the collector leaves that sibling's facts.db file byte-unchanged (size and mtime stable) and a write attempt through the readonly handle is rejected.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "The sibling resolver returns absolute paths from hub.repos config entries and, when that config is absent, discovers directories named kb-* beside the project root; a configured path that does not exist is skipped rather than throwing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "npm run build completes with zero TypeScript errors after the collector, resolver, and FactStore readonly flag are added.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not change FactStore behaviour for callers that omit the readonly flag; the default path stays byte-identical.",
+        "Do not implement scope parsing, the lens judge, or ranking (Sprint 3).",
+        "Do not write priority.md or add the priority/decide commands (Sprint 4).",
+        "Do not open sibling stores writable or run any migration against them.",
+        "Do not add a vault-markdown source; aggregation reads derived FactStores only."
+      ],
+      "stopConditions": [
+        "The readonly FactStore flag, the sibling resolver, and the collector exist; `bober hub list` aggregates across resolved siblings; and all six success criteria pass evaluation.",
+        "npm run build exits zero and the existing FactStore tests plus the new collector tests pass."
+      ],
+      "definitionOfDone": "The hub can resolve sibling kb-* repos to absolute paths, open each one's derived FactStore read-only, and pool their findings into one Finding[] deduplicated by id, without ever mutating a sibling file. `bober hub list` now reflects findings aggregated across every resolved sibling. The additive FactStore readonly flag leaves existing callers byte-identical, the build is green, and the new tests pass.",
+      "assumptions": [
+        "Sibling repos are sibling clones next to the project root, resolved to absolute paths (research:109-112; resolveBlackboardPath ABSOLUTE discipline from fleet memory).",
+        "The collector mirrors fleet synthesis.collect (src/fleet/synthesis.ts:29-39): pure data shaping, no LLM, no network.",
+        "better-sqlite3 supports a readonly open flag, so the additive FactStore change is small and safe (src/state/facts.ts:139-167).",
+        "Each sibling's derived FactStore exposes findings at predicate 'finding' (Sprint 1 source contract)."
+      ],
+      "outOfScope": [
+        "Judge, scope, ranking (Sprint 3).",
+        "priority.md and decide (Sprint 4).",
+        "chat hub surface (Sprint 5).",
+        "Reading the canonical vault markdown (owned by obsidian-vault-store)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "FactStore change (src/state/facts.ts): add readonly?: boolean to the opts type at line 140; when true call new Database(dbPath, { readonly: true }) and skip the this.db.exec(CREATE TABLE...) block (lines 150-166); leave the WAL/busy_timeout branches and the no-flag path untouched. Add src/hub/repo-resolver.ts: read config.hub?.repos (string[]) if present, else readdir the parent of projectRoot and keep entries matching /^kb-/ that are directories; resolve all to absolute paths via path.resolve; filter to existing facts.db locations; skip non-existent. Reuse factsDbPath (src/state/facts.ts:77) to locate each sibling's derived store. Add src/hub/collector.ts exporting collectFindings(repoPaths, scope) that opens each store with new FactStore(dbPath, { readonly: true }), wraps it in the Sprint 1 FactStoreFindingSource, concatenates all Findings, then dedups by Finding.id (keep first; stable order). Model the pooling shape on src/fleet/synthesis.ts:29-39 and the readAll convention in src/fleet/shared-blackboard.ts:103-105. Extend src/cli/commands/hub.ts `list` to resolve siblings and collect across them. Guard every store open in try/catch so a missing or corrupt sibling is skipped, not fatal.",
+      "evaluatorNotes": "Confirm the no-flag FactStore constructor still creates the table (existing tests green) and that { readonly: true } both skips CREATE TABLE and opens readonly. Seed two temp FactStores with overlapping and distinct finding ids; assert pooled length equals distinct-id count and the overlapping id appears once. Snapshot a sibling facts.db size+mtime before and after a collect and assert unchanged; assert a write through the readonly handle throws. Point the resolver at a temp parent dir containing kb-a and kb-b plus a non-kb dir and a non-existent configured path; assert only the existing kb-* absolute paths are returned. Confirm npm run build is green.",
+      "estimatedFiles": [
+        "src/state/facts.ts",
+        "src/state/facts.test.ts",
+        "src/hub/repo-resolver.ts",
+        "src/hub/repo-resolver.test.ts",
+        "src/hub/collector.ts",
+        "src/hub/collector.test.ts",
+        "src/cli/commands/hub.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "completedAt": "2026-06-28T20:41:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260628-priority-hub-3",
+      "specId": "spec-20260628-priority-hub",
+      "sprintNumber": 3,
+      "title": "Query scope parsing and two-pass prioritization judge",
+      "description": "Add scope parsing (general | decision{a,b} | filtered{domain?,dueWithinDays?,tag?}) and a two-pass judge: pass 1 relevance-filters the pooled findings against the stated scope via an injected LLM client, pass 2 scores survivors through hub prioritization lenses, and a deterministic JS step produces the final ordering. Reuses the eval-lenses fan-out shape and the lens-panel majority/fail-closed reconcile semantics.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260628-priority-hub-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "src/hub/scope.ts parses a scope into a discriminated union of general, decision (with two option strings), or filtered (with optional domain, dueWithinDays, tag), and applies the filtered structural narrowing with pure JS and no LLM call.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "Given fixed pass-1 relevance verdicts and fixed pass-2 lens scores from an injected fake LLM client, the judge returns an identical ranked Finding[] across repeated runs, ordered by aggregate lens score then urgency then severity then earliest dueBy then id.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "When the prioritization lens panel reaches no strict-majority consensus on a finding's inclusion, that finding is returned tagged flagged-for-review rather than dropped, matching the lens-panel fail-closed-on-tie rule.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "Under decision scope the judge keeps only findings the pass-1 filter marks relevant to either named option and ranks them within that frame, dropping findings marked relevant to neither.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "The judge accepts an injected LLMClient so tests run with a deterministic fake and no real network call is made during the unit tests.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "npm run build completes with zero TypeScript errors after scope parsing and the judge are added.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not render priority.md or wire the priority/decide CLI commands (Sprint 4).",
+        "Do not let the LLM emit the final ordered list; ordering is computed by deterministic JS over LLM-produced scores.",
+        "Do not add per-lens multi-provider routing; v1 runs all lenses against the one injected client.",
+        "Do not persist the scope; it is ephemeral per call.",
+        "Do not change the Finding schema or the collector from earlier sprints."
+      ],
+      "stopConditions": [
+        "scope.ts and the two-pass judge exist, the judge takes an injected LLMClient, and all six success criteria pass evaluation.",
+        "npm run build exits zero and the new scope and judge unit tests pass with the fake client."
+      ],
+      "definitionOfDone": "The hub can take a pooled Finding[] plus an ephemeral scope and produce a ranked Finding[]: filtered scope narrows structurally in pure JS, decision and general scopes relevance-filter via pass 1, prioritization lenses score survivors in pass 2, no-consensus findings are surfaced flagged-for-review, and the final order is deterministic JS over the lens scores. The LLMClient is injected so tests are deterministic and offline, the build is green, and the new tests pass.",
+      "assumptions": [
+        "Prioritization is query-scoped and ephemeral (research:115-119).",
+        "The LLM-ranks / deterministic-JS-arranges boundary mirrors the calendar planner (research:135) and the medical deterministic-numerics discipline.",
+        "Reconcile is strict-majority, fail-closed-on-tie (skills/shared/lens-panel.md:73-89).",
+        "The lens fan-out shape mirrors src/orchestrator/eval-lenses.ts:1-31 but with hub-specific prioritization lenses (e.g. urgency, impact, effort/ROI, deadline-risk).",
+        "LLMClient.chat is the call surface, injected for testability like the Answerer (src/chat/answerer.ts:11-17)."
+      ],
+      "outOfScope": [
+        "priority.md and the priority/decide commands (Sprint 4).",
+        "chat hub surface (Sprint 5).",
+        "Multi-provider per-lens model diversity (deferred)."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "src/hub/scope.ts: export a Scope discriminated union { mode: 'general' } | { mode: 'decision'; optionA: string; optionB: string } | { mode: 'filtered'; domain?: string; dueWithinDays?: number; tag?: string } and a parseScope helper plus a pure applyFilter(findings, scope) that, for filtered mode, keeps findings matching domain and/or tag and/or dueBy within dueWithinDays of a passed-in now (no LLM). src/hub/lenses.ts: define the hub prioritization lens catalog as a Record<string,string> of focus fragments, mirroring the LENS_CATALOG/resolveLensFocus shape in src/orchestrator/eval-lenses.ts:1-31 (do NOT reuse the eval lenses themselves). src/hub/judge.ts: export rankFindings(findings, scope, llm, now) — pass 1: for decision/general, ask the injected llm for a per-finding relevance verdict against the scope; for filtered, use applyFilter first. pass 2: for each surviving finding fan out the prioritization lenses, collect per-lens scores/votes, and reconcile with strict-majority + fail-closed-on-tie (port the semantics documented in skills/shared/lens-panel.md:73-89 — passCount>failCount, tie => not-included => flagged-for-review). Then deterministic stable sort: aggregate score desc, urgency desc, severity desc, dueBy asc (undefined last), id asc. Inject LLMClient (src/providers/types.js) exactly as src/chat/answerer.ts:11-17 does so tests pass a fake returning canned JSON. Keep all parsing of LLM output defensive (safeParse / try-catch) and treat unparseable verdicts as no-vote (contributes to fail-closed).",
+      "evaluatorNotes": "Drive the judge with a fake LLMClient returning fixed relevance verdicts and fixed lens scores; run twice and assert identical ranked output, and assert the tie-break order (score, urgency, severity, dueBy, id). Construct a finding for which the lenses split evenly and assert it is returned flagged-for-review, not dropped. Under decision scope, give one finding relevant to optionA, one to optionB, one to neither, and assert only the first two survive. Assert no real network call occurs (fake client only). Confirm filtered mode narrows with no LLM call. Confirm npm run build is green.",
+      "estimatedFiles": [
+        "src/hub/scope.ts",
+        "src/hub/scope.test.ts",
+        "src/hub/lenses.ts",
+        "src/hub/judge.ts",
+        "src/hub/judge.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "completedAt": "2026-06-29T00:29:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260628-priority-hub-4",
+      "specId": "spec-20260628-priority-hub",
+      "sprintNumber": 4,
+      "title": "priority.md renderer and `bober hub priority` / `bober hub decide`",
+      "description": "Render a ranked Finding[] into a priority.md note (YAML frontmatter + Dataview-friendly table + per-finding rationale) written into the kb-hub sibling vault, and wire the full collect to scope to judge to render pipeline behind `bober hub priority` (general/filtered) and `bober hub decide` (decision). Resolve the kb-hub output path to an absolute path with a documented default.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260628-priority-hub-3"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "src/hub/priority-md.ts renders a ranked Finding[] into markdown with a YAML frontmatter block and one table row per finding containing rank, title, domain, kind, urgency, severity, and dueBy.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "Running `bober hub priority` against two seeded sibling stores writes priority.md to the resolved kb-hub vault path and prints a ranked summary listing each finding's rank and title to stdout.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "Running `bober hub decide \"X vs Y\"` writes a priority.md whose findings are limited to those the decision-scope filter marked relevant to X or Y, ranked within that frame.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "The kb-hub output path resolves to an absolute path from config with a documented default beside the project root, and when the kb-hub directory is missing the command prints a clear error and sets a non-zero exit code instead of throwing an uncaught stack trace.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "npm run build completes with zero TypeScript errors after the renderer and the priority/decide commands are added.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the do-bridge that acts on Finding.promotesTo (owned by do-bridge spec).",
+        "Do not implement calendar slot-fill or write to any calendar connector (owned by calendar-planner spec).",
+        "Do not add the chat hub surface or new slash commands (Sprint 5).",
+        "Do not write into any sibling repo other than the kb-hub output vault.",
+        "Do not let the renderer re-rank; it consumes the order the judge produced."
+      ],
+      "stopConditions": [
+        "priority-md.ts plus the `bober hub priority` and `bober hub decide` commands exist, run the collect-scope-judge-render pipeline end to end, and all five success criteria pass evaluation.",
+        "npm run build exits zero and the renderer and command unit tests pass."
+      ],
+      "definitionOfDone": "Running `bober hub priority` collects findings across resolved siblings, ranks them under general/filtered scope, writes a Dataview-friendly priority.md into the kb-hub vault at a resolved absolute path, and prints a ranked summary; `bober hub decide \"X vs Y\"` does the same under decision scope. A missing kb-hub directory yields a clear error and non-zero exit, the build is green, and the new tests pass.",
+      "assumptions": [
+        "priority.md is a browsable Obsidian/Dataview note in the kb-hub sibling vault and writing it is a local filesystem operation (research:146-159).",
+        "The judge from Sprint 3 produces the order; the renderer only formats it.",
+        "The kb-hub path comes from config (e.g. hub.outVault) with a kb-hub-beside-project-root default, resolved absolute (research:112).",
+        "CLI handlers set process.exitCode and never throw, mirroring src/cli/commands/medical.ts."
+      ],
+      "outOfScope": [
+        "chat hub surface (Sprint 5).",
+        "do-bridge, calendar, telegram, scheduler (sibling specs).",
+        "Editing findings or writing back to source sibling repos."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "src/hub/priority-md.ts: export renderPriorityMd(ranked, scopeLabel, now) returning a string with a YAML frontmatter block (generatedAt, scope, count) and a markdown table (| rank | title | domain | kind | urgency | severity | dueBy |) plus a short per-finding rationale/evidence section below the table for Dataview readers (research:159). Keep it pure (no IO). Add path resolution (src/hub/hub-config.ts or extend repo-resolver): read config.hub?.outVault if present else default to <parentOfProjectRoot>/kb-hub, resolve absolute; the priority.md target is <outVault>/priority.md. Extend src/cli/commands/hub.ts with `priority` (options --domain --due --tag select filtered scope, otherwise general) and `decide <expr>` (parse 'X vs Y' into decision scope via Sprint 3 parseScope). Each command: resolve siblings (Sprint 2 collector) -> collectFindings -> build Scope -> rankFindings(..., llm via createClient from src/providers/factory.js using config chat/planner provider like src/cli/commands/chat.ts:33-39) -> renderPriorityMd -> ensureDir + write file -> print ranked summary. If the kb-hub directory does not exist, print a clear message and set process.exitCode=1 (do not auto-create another repo's vault root; only ensure the file's own parent if outVault exists). Use the medical.ts handler error pattern (src/cli/commands/medical.ts:43-86).",
+      "evaluatorNotes": "Snapshot renderPriorityMd output and assert frontmatter keys and one table row per finding with the seven columns. Run `bober hub priority` against two temp sibling stores under a temp parent that also contains a kb-hub dir; assert priority.md is written at <kb-hub>/priority.md (absolute) and stdout lists ranks+titles. Run decide with 'X vs Y' and a fake/seeded judge and assert only X/Y-relevant findings appear. Remove the kb-hub dir and assert a clear error message plus non-zero exit, no uncaught throw. Assert no sibling source store file is modified. Confirm npm run build is green.",
+      "estimatedFiles": [
+        "src/hub/priority-md.ts",
+        "src/hub/priority-md.test.ts",
+        "src/hub/hub-config.ts",
+        "src/cli/commands/hub.ts",
+        "src/cli/commands/hub.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "completedAt": "2026-06-29T00:50:45.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260628-priority-hub-5",
+      "specId": "spec-20260628-priority-hub",
+      "sprintNumber": 5,
+      "title": "`bober chat hub` surface with scoped /priority and /decide",
+      "description": "Register a hub team (data) so `bober chat hub` routes to the hub memory namespace, and add additive /priority and /decide slash commands to the chat session that delegate to the Sprint 3-4 hub judge and return a ranked summary while writing priority.md. Pre-existing slash commands are left unchanged.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260628-priority-hub-4"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "A hub team is registered as data such that `bober chat hub` starts a chat session whose memory namespace resolves to the hub team's namespace.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "Inside a hub chat session, the /priority slash command returns a ranked summary of the collected findings (rank and title per line) using the hub judge.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "Inside a hub chat session, /decide X vs Y returns the decision-scoped ranking limited to findings relevant to X or Y.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "The pre-existing chat slash commands (/runs, /stop, /careful, /approve, /reject, /tell, /pause, /resume, /help, /exit) return the same output they did before this sprint when dispatched.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "npm run build completes with zero TypeScript errors after the hub team registration and the new slash commands are added.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not alter the dispatch result of any existing slash command.",
+        "Do not route raw sensitive content through chat; the summary lists findings only as already permitted by the source store.",
+        "Do not implement the Telegram adapter or its button mapping (owned by telegram-frontend spec).",
+        "Do not add new collector, judge, or renderer logic; delegate to the Sprint 2-4 functions.",
+        "Do not change the default (non-hub) chat team behaviour."
+      ],
+      "stopConditions": [
+        "The hub team is registered, `bober chat hub` selects it, /priority and /decide delegate to the hub judge, existing slash commands are unchanged, and all five success criteria pass evaluation.",
+        "npm run build exits zero and the chat hub unit tests plus the existing slash-command tests pass."
+      ],
+      "definitionOfDone": "`bober chat hub` opens a chat session bound to the hub team's memory namespace, where /priority returns a ranked summary of the pooled findings and /decide X vs Y returns the decision-scoped ranking, both delegating to the Sprint 3-4 hub functions and writing priority.md. Every previously existing slash command still returns its prior output, the build is green, and the new tests pass.",
+      "assumptions": [
+        "`bober chat [team]` already selects a team via loadTeam and threads memoryNamespace (src/cli/commands/chat.ts:23-56).",
+        "Slash commands are dispatched through src/chat/slash-commands.ts from ChatSession (src/chat/chat-session.ts:200-230); new commands are added additively to that dispatch.",
+        "Teams are data not code (team-abstraction memory), so the hub team is a config/registry entry.",
+        "The richer Telegram /today|/priority|/decide mapping is owned by the telegram-frontend spec (research:140)."
+      ],
+      "outOfScope": [
+        "Telegram adapter and inline buttons (telegram-frontend spec).",
+        "do-bridge, calendar, scheduler, task-inbox (sibling specs).",
+        "Per-lens multi-provider routing (deferred)."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Register a hub team as data: follow the team-as-data registry used by loadTeam (src/teams/registry.ts, imported in src/cli/commands/chat.ts:19) and add a hub team with memoryNamespace 'hub' and the default pipelineShape — mirror the example team referenced in the team-abstraction work. `bober chat hub` then resolves through the existing chat command with no command change beyond the team existing. Add /priority and /decide to src/chat/slash-commands.ts dispatch and ChatSession (src/chat/chat-session.ts:200-230): extend the dispatch signature with two new callbacks and add handleHubPriority / handleHubDecide on ChatSession that call the Sprint 2-4 functions (collectFindings -> rankFindings -> renderPriorityMd) and return the ranked summary string. Gate the new commands so they are meaningful only in the hub namespace (e.g. no-op informative message when not the hub team) to avoid coupling other teams. Keep all existing dispatch branches byte-identical. Reuse createClient (src/providers/factory.js) for the judge's LLMClient as elsewhere.",
+      "evaluatorNotes": "Assert `bober chat hub` constructs a ChatSession whose memoryNamespace equals the hub team's namespace. Drive ChatSession.handleTurn('/priority') with seeded sibling stores and a fake judge client; assert the returned string lists ranks+titles. Drive '/decide X vs Y' and assert decision-scoped output. Re-run the existing slash-command tests (or dispatch each existing command) and assert identical outputs to before. Confirm the new commands do not fire for a non-hub team. Confirm npm run build is green.",
+      "estimatedFiles": [
+        "src/teams/registry.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/slash-commands.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/chat-session.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "completedAt": "2026-06-29T01:07:45.000Z"
+    }
+  ]
+}

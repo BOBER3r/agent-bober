@@ -1,0 +1,1814 @@
+{
+  "entryId": "sprintContracts-spec-20260805-pge-graph-engineering",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-1.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-2.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-3.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-4.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-5.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-6.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-7.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-8.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-9.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-10.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-11.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-12.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-13.json",
+      ".bober/contracts/sprint-spec-20260805-pge-graph-engineering-14.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-1",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 1,
+      "title": "TopologySpec Zod contract, 30-code structural validator, and the module-graph execution boundary",
+      "description": "Add the topology data contract and its validator as net-new modules with zero wiring into any existing execution path. Defines the discriminated node union (llm|tool|gate|router|subgraph), edges, closed router outcome labels, ports, channels, loop bounds, effect tags, cache policies, model tiers and subgraph declarations as Zod. Implements validateTopology with 30 distinct named diagnostic codes plus one malformed fixture per code, canonicalize and checksumTopology. Installs an ESLint no-restricted-imports boundary so src/pge/topology/** cannot import any executor, making zero-execution-during-validation a property of the module graph rather than of an assertion.",
+      "status": "proposed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "TopologySpecSchema parses a well-formed fixture carrying formatVersion, graphId, graphVersion, description, provenance, entry, defaults, channels, nodes, edges, subgraphs and a sha256 checksum, and rejects each field's malformed variant with a Zod issue path.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "NodeSchema is a discriminated union on kind; a table-driven test enumerates every node of a fixture graph and asserts each llm node carries a promptRef, no tool node carries a promptRef, and every router node declares at least one entry in targets.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "validateTopology returns ok:false with exactly the expected DiagnosticCode for each of 30 malformed fixtures under src/pge/topology/__fixtures__/, covering at minimum EmptyGraph, DuplicateNodeId, DanglingEdge, UnreachableNode, NoTerminalPath, UndeclaredPort, PortTypeMismatch, UnboundedCycle, BoundaryNotGated, NestedCheckpointer, SubgraphDepthExceeded, SubgraphExitNotSupervisor, CacheOnEffectfulNode, InterruptInsideFanOut, ModelTierMismatch, UndeclaredRouteLabel and RouterTargetNotDeclared.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "validateTopology never throws for any input including non-object, null and deeply malformed JSON; a fuzz-style table asserts it always returns a ValidationReport with an ok boolean and a diagnostics array.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "PortTypeMismatch names both the source and target node ids and the offending field path, asserted against a fixture whose edge connects a producer output schema to an incompatible consumer input schema.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "A static walk over a fixture topology enumerates every cycle via Tarjan strongly-connected components and asserts each cycle contains a node declaring counterKey and maxIterations; a fixture adding a cyclic edge without one produces UnboundedCycle.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "Structural rules covering supervisor topology hold: max subgraph nesting depth is at most 2, every subgraph exit edge targets the supervisor node, every edge crossing a subgraph boundary passes through a node of kind gate, and subgraphs[].persistence is the literal 'inherit' so a nested checkpointer is unrepresentable.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "canonicalize produces a stable string with sorted keys, arrays ordered by id and the checksum field elided, and checksumTopology over that string yields a value matching the sha256:<64 hex> pattern; two structurally identical specs with different key order produce the identical checksum.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-9",
+          "description": "Running `npm run lint` fails when a test file placed under src/pge/topology/ imports from src/pge/runtime/, src/pge/nodes/, src/orchestrator/ or src/providers/, proving the no-restricted-imports boundary is active for that directory.",
+          "verificationMethod": "lint",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-10",
+          "description": "npm run typecheck, npm run typecheck:tests and npm run build all complete with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-11",
+          "description": "The full Vitest suite passes with no failures versus the pre-sprint baseline of approximately 5,083 tests.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not author the real CODING_GRAPH literal for agent-bober's pipeline — that is sprint 2 and would make this sprint's fixtures indistinguishable from production data.",
+        "Do not register a `bober pge` CLI command or touch src/cli/index.ts; nothing in this sprint is reachable from a user-invocable entry point.",
+        "Do not add 'pge' to the pipeline.engine enum or touch src/config/schema.ts.",
+        "Do not implement render, diff, docs-drift, state-audit or optimize — sprint 3 owns the toolkit.",
+        "Do not create src/pge/runtime/, src/pge/nodes/ or src/pge/registry/ even as empty placeholders.",
+        "Do not modify src/orchestrator/pipeline.ts, src/orchestrator/workflow/** or any provider adapter."
+      ],
+      "stopConditions": [
+        "All 30 diagnostic codes have a dedicated malformed fixture and an assertion pinning that exact code.",
+        "The ESLint boundary is proven by a deliberately violating fixture that makes `npm run lint` exit non-zero.",
+        "A required criterion cannot be met without wiring the new modules into an existing execution path.",
+        "A rule would require importing an executor into src/pge/topology/, which the boundary forbids by design."
+      ],
+      "definitionOfDone": "src/contracts/topology.ts and src/pge/topology/{validate,canonical}.ts exist with paired test files and 30 malformed fixtures, the ESLint boundary block for src/pge/topology/** is in eslint.config.js and demonstrably fires, and the repository is shippable: npm run typecheck, npm run typecheck:tests, npm run build and npm run lint are clean and the full Vitest suite is green. No existing execution path changed — a diff of src/orchestrator/, src/cli/, src/config/ and src/providers/ is empty apart from a single additive export line in src/contracts/index.ts.",
+      "assumptions": [
+        "The 30 diagnostic codes are exactly those enumerated in the architecture's TopologyValidator section; adding a 31st is allowed only with a fixture.",
+        "validateTopology ships both modes now: 'structural' uses the artifact alone, 'full' additionally resolves schemaRef and promptRef through an injected SchemaCatalog and PromptRefSet. The CI diff gate will use 'structural' because a base-branch artifact may name refs absent on head."
+      ],
+      "outOfScope": [
+        "Any runtime execution of a topology.",
+        "Prompt store implementation — 'full' mode takes an injected PromptRefSet in this sprint."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Copy the ESLint boundary idiom verbatim from eslint.config.js:46-48 (telemetry local-only) and :75-77 (medical zero-egress) — a files-scoped block with no-restricted-imports patterns. Reuse the existing __fixtures__ directory convention already used by src/orchestrator/__fixtures__ and src/orchestrator/workflow/__fixtures__. Model tiers are 'light' and 'frontier'; ModelTierMismatch fires when a router, classifier or syntax node declares the frontier tier or a planner, architect, generator or terminal-evaluator node declares the light tier. RouteTargetSchema is { label, to } and the router body is structurally unable to name a node id — this is what makes the structural diff of routing meaningful (ADR-3), so do not add an escape hatch that accepts an arbitrary node id. subgraphs[].persistence must be z.literal(\"inherit\") so ADR-5's single-checkpointer rule is unrepresentable rather than merely checked; NestedCheckpointer exists only to catch hand-edited JSON. Channel writers and readers are DERIVED from nodes[].writes/reads and must NOT be stored on channels[] — ChannelDeclMismatch guards the single remaining cross-reference.",
+      "evaluatorNotes": "Verify the boundary is real, not aspirational: temporarily add an import of src/orchestrator/pipeline.js inside src/pge/topology/ and confirm `npm run lint` exits non-zero, then remove it. Confirm no file under src/pge/topology/ transitively reaches an executor by inspecting the import graph, not by trusting the lint rule alone. Confirm validateTopology has no side effects at all — no fs writes, no process spawn, no network. Check that the 30 fixtures are genuinely 30 distinct codes and not duplicates with different names. Confirm src/contracts/index.ts gained only an export line.",
+      "estimatedFiles": [
+        "src/contracts/topology.ts",
+        "src/contracts/topology.test.ts",
+        "src/contracts/index.ts",
+        "src/pge/topology/validate.ts",
+        "src/pge/topology/validate.test.ts",
+        "src/pge/topology/canonical.ts",
+        "src/pge/topology/canonical.test.ts",
+        "src/pge/topology/__fixtures__/",
+        "eslint.config.js"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-2",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 2,
+      "title": "Authored CODING_GRAPH literal, `bober pge` CLI, and the committed checksummed topology artifact",
+      "description": "Author the shipped coding pipeline as a plain typed object literal (export const CODING_GRAPH: TopologySpec) covering every node in the architecture blueprint — research subgraph, planner with clarification loop, supervisor, sprint subgraph, gates, routers, evaluation, synthesis, documenter, gated commit, graceful failure and context compaction. Add the `bober pge` CLI with dump, validate and hash verbs, and commit the serialized artifact to .bober/topology/coding.json so it becomes the load-bearing contract the runtime will later read. Proves topology/content separation: a prompt edit leaves the checksum untouched, an edge addition changes it, and swapping model profiles produces an identical hash.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-1"
+      ],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "src/pge/topology/coding.graph.ts exports CODING_GRAPH typed as TopologySpec, it parses through TopologySpecSchema, and validateTopology in structural mode returns ok:true with zero error-severity diagnostics.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "The authored graph contains every node named in the architecture mermaid blueprint, asserted by a pinned node-id list covering the research, plan, sprint, evaluation, terminal and context-compaction regions, so a silently dropped node fails the test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "`bober pge dump` writes .bober/topology/coding.json containing graphId, graphVersion matching the semver pattern, provenance 'authored', every node id, every node kind and every edge, and the file parses back through TopologySpecSchema.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "`bober pge dump --check` exits 0 when the committed artifact matches the canonicalised literal byte for byte and exits non-zero after a single-character mutation of the committed file.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "`bober pge validate` exits non-zero and prints the diagnostic code name for each of the 30 malformed fixtures from sprint 1, and exits 0 for the committed artifact.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "A test substitutes a spy for every node executor lookup and asserts zero invocations across dump, validate and hash, complementing the sprint-1 lint boundary with a behavioural assertion.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "Mutating a prompt body under the prompt store and recomputing `bober pge hash` leaves the topology checksum unchanged, while adding one edge to the literal changes it.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "Running dump under two different model configurations produces identical topology checksums while the resolved model ids recorded for the run differ, proving a model-profile swap is not a structural change.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-9",
+          "description": "checksumTopology recomputed from the committed artifact's canonicalised node and edge list equals the checksum field stored in that artifact, and a stale checksum surfaces as the ChecksumStale diagnostic rather than silently passing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-10",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement any node body, node registry or executor — this sprint produces data and a reader, nothing runnable.",
+        "Do not add render, diff, docs or audit-state verbs to the CLI; sprint 3 owns them and adding stubs now creates dead command surface.",
+        "Do not call EffectRegistry.seal() from dump in this sprint — the registry does not exist yet, and importing it would violate the sprint-1 boundary. Sprint 5 adds the seal call.",
+        "Do not add .bober/topology/ to .gitignore — this directory is deliberately version-controlled.",
+        "Do not change pipeline.engine, the engine seam, or any orchestrator file."
+      ],
+      "stopConditions": [
+        "The committed artifact round-trips: literal to canonical form to file to parse to identical checksum.",
+        "`bober pge dump --check` fails on a mutated artifact and passes on an untouched one.",
+        "A node in the architecture blueprint cannot be expressed under the sprint-1 schema without widening Goto to accept an arbitrary node id, which ADR-3 forbids.",
+        "Authoring the literal would require importing a runtime module."
+      ],
+      "definitionOfDone": "The coding pipeline exists as a typed literal, is serialized to a committed and checksummed .bober/topology/coding.json, and `bober pge dump|validate|hash` operate on it without any executor in the module graph. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the only user-visible change is a new `pge` subcommand that reads and writes topology data.",
+      "assumptions": [
+        "The CLI verb is `bober pge` and the directory is .bober/topology/, because `bober graph` and .bober/graph/ are already the code-graph namespace (cli/commands/graph.ts:39). A thin `bober graph topology <verb>` alias may be added later; both rename cleanly now and expensively after the CI job exists.",
+        "graphVersion starts at 1.0.0 and is bumped by hand; the CI gate that enforces the bump lands in sprint 14.",
+        "The authored literal describes the pipeline agent-bober already runs imperatively, so it is a description of shipped behaviour rather than a proposal for new behaviour."
+      ],
+      "outOfScope": [
+        "Optimiser-provenance variants under .bober/topology/variants/ — sprint 3.",
+        "Documenting the nodes in docs/pge-graph.md — sprint 14."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Register the command in src/cli/index.ts following the existing pattern used by cli/commands/graph.ts. Keep src/cli/commands/pge.ts thin: parse args, call into src/pge/topology/**, map ValidationReport to an exit code and a printed code name. The literal must carry, per node: id, kind, promptRef for llm nodes, effects[], modelTier, optional cache policy, inputPorts/outputPorts with schemaRef, writes/reads channel lists, and for routers a closed targets[] of {label,to}. Loop-bearing routers (research_route, sprint_route, rework_route) must each declare counterKey, maxIterations and onExhausted or sprint 1's UnboundedCycle rule will fire. Every supervisor-to-subgraph transition needs a gate node on both sides (gate_research_in/out, gate_plan_in/out, gate_sprint_in/out, gate_eval_in) or BoundaryNotGated fires. The fan-out edge from fanout_sprints targets the single sprint subgraph with runtime-determined cardinality, so the checksum stays invariant to contract count.",
+      "evaluatorNotes": "Confirm .bober/topology/coding.json is committed to git and not ignored. Confirm the runtime-loads-JSON rule is respected in spirit: nothing outside src/pge/topology/ and the CLI imports coding.graph.ts. Verify the zero-execution assertion is a spy over the executor lookup path and not a tautology. Verify the two-model-configuration test genuinely varies resolved model ids rather than asserting on the same value twice. Confirm the mutated-artifact case for dump --check exits non-zero rather than silently rewriting the file.",
+      "estimatedFiles": [
+        "src/pge/topology/coding.graph.ts",
+        "src/pge/topology/coding.graph.test.ts",
+        "src/pge/topology/dump.ts",
+        "src/pge/topology/dump.test.ts",
+        "src/cli/commands/pge.ts",
+        "src/cli/commands/pge.test.ts",
+        "src/cli/index.ts",
+        ".bober/topology/coding.json"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-3",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 3,
+      "title": "Topology toolkit — mermaid/dot render, structural diff with route labels, doc-drift check, state audit, optimisation hook",
+      "description": "Complete Layer A by deriving every inspection artifact from the committed topology alone. Adds renderTopology for mermaid and dot, diffTopology reporting node, edge, channel and router-outcome-label additions, removals, renames and field changes, checkDocDrift comparing documented node ids to artifact node ids, generateStateAudit deriving every state key's writers and readers from nodes[].writes/reads, and optimizeTopology which applies a caller-supplied mutation, re-validates the result and records a per-variant score. Surfaces all five through the `bober pge` CLI. This is the sprint that makes the graph a versionable, diffable, optimisable engineering artifact.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-2"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "`bober pge render --format mermaid` emits text that a mermaid parser accepts without error, pinned by a snapshot of the committed coding topology; adding one node to a fixture graph changes the snapshot.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "renderTopology with format 'dot' emits a digraph whose node count equals spec.nodes.length and whose edge count equals spec.edges.length, so the diagram is derived from the artifact rather than hand-drawn.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "`bober pge diff a.json b.json` emits structured JSON; a fixture pair differing by one added node and one added edge yields exactly one entry in nodesAdded, exactly one in edgesAdded and empty nodesRemoved and edgesRemoved.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "Diffing a file against itself produces empty:true and exit code 0, and diffing two files that differ only in key ordering also produces empty:true because both are canonicalised first.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "Adding one outcome label to a router's targets produces exactly one routeLabelsAdded entry naming the router and the label, so a change to routing behaviour can never present as an empty structural diff.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "diffTopology reports graphVersion.from, graphVersion.to and a bumped boolean, and a fixture pair with structural changes and an unchanged graphVersion sets bumped:false.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "checkDocDrift returns the symmetric difference between node ids in a markdown doc and node ids in the artifact, returning an empty array only when the two sets are equal.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "`bober pge audit-state` writes .bober/topology/state-audit.json in which every channel key has at least one declared writer, no writer id exists outside spec.nodes, and running the command twice produces byte-identical output.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-9",
+          "description": "optimizeTopology applied to a mutator that swaps one node's promptRef and drops one optional gate returns a spec that passes validateTopology, sets provenance to 'optimizer', writes a per-variant score record under .bober/topology/variants/, and performs zero node executions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-10",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add any CI workflow job — sprint 14 owns the blocking gate; wiring it now would gate merges on tooling that has no golden dataset behind it.",
+        "Do not author docs/pge-graph.md; this sprint delivers the drift checker, sprint 14 delivers the document it checks.",
+        "Do not implement an automated search strategy, scoring model or variant-promotion command for the optimiser — the mutation and re-validation hook only.",
+        "Do not let the optimiser's variant output participate in `dump --check`, which applies only to provenance 'authored'.",
+        "Do not import any runtime, node or orchestrator module; the sprint-1 boundary still governs this directory."
+      ],
+      "stopConditions": [
+        "All five derivations run against the committed .bober/topology/coding.json and produce deterministic output.",
+        "The route-label diff case is proven with a fixture whose only change is inside a router's targets array.",
+        "A derivation would require executing a node or resolving a live prompt body to produce its output."
+      ],
+      "definitionOfDone": "renderTopology, diffTopology, checkDocDrift, generateStateAudit and optimizeTopology exist with paired tests, all five are reachable through `bober pge`, and every one derives its result from the artifact with no executor in the module graph. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no existing execution path changed.",
+      "assumptions": [
+        "The state audit derives writers and readers from nodes[].writes/reads because ADR-4 forbids storing them a second time on channels[], so there is exactly one encoding to read.",
+        "The per-variant score record is a placeholder schema whose score field may be null until a golden dataset exists in sprint 14; the hook exists so an optimiser can be written offline.",
+        "diffTopology throws TypeError when either input fails TopologySpecSchema.parse rather than returning a partial diff."
+      ],
+      "outOfScope": [
+        "Rendering runtime traces or executed paths — this renders topology, not history.",
+        "Any diff of prompt bodies; prompt content is deliberately outside the topology."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Keep each derivation in its own small module under src/pge/topology/ per the repo's small-utility-module principle: render.ts, diff.ts, docs.ts, audit.ts, optimize.ts. Canonicalise both inputs before diffing so key ordering never produces a spurious diff. Node renames are detected by matching an added and a removed node whose full field set is identical apart from id; anything else is reported as add plus remove rather than a guessed rename. For mermaid, node shapes should follow the architecture blueprint's convention (subgraph as {{...}}, hitl as [[...]], terminals as (...)), because the snapshot in sprint 14's documentation is compared against this output. state-audit.json must include generatedFrom { graphId, checksum } so a stale audit is detectable.",
+      "evaluatorNotes": "Confirm the diff is genuinely structural and not textual — reorder the nodes array in one input and assert the diff is still empty. Confirm route-label detection is not conflated with edge detection: a label added to an existing router with no new edge must still be reported. Confirm audit-state determinism by running it twice in one test and comparing bytes, not by comparing parsed objects. Confirm optimizeTopology returns a NEW spec and does not mutate its input. Confirm the variants directory is written under .bober/topology/variants/ and is excluded from dump --check.",
+      "estimatedFiles": [
+        "src/pge/topology/render.ts",
+        "src/pge/topology/render.test.ts",
+        "src/pge/topology/diff.ts",
+        "src/pge/topology/diff.test.ts",
+        "src/pge/topology/docs.ts",
+        "src/pge/topology/docs.test.ts",
+        "src/pge/topology/audit.ts",
+        "src/pge/topology/audit.test.ts",
+        "src/pge/topology/optimize.ts",
+        "src/pge/topology/optimize.test.ts",
+        "src/cli/commands/pge.ts",
+        ".bober/topology/state-audit.json"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-4",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 4,
+      "title": "Engine-seam hardening, single terminal side-effect owner, and enforced loop bounds on the live imperative path",
+      "description": "Prepare the shipped path before any graph code depends on it. Exports PIPELINE_ENGINE_NAMES as the single source for both Zod engine enums and adds 'pge' as a fifth name with no implementation behind it. Replaces the ad-hoc opts object with a named RunOptions and widens the pipelineFn signatures in mcp/run-manager.ts and orchestrator/worktree.ts that currently pass fields the interface does not declare. Extracts finalizePipelineRun from pipeline.ts so the pipeline-complete history event and the <runId>.completed.json marker have exactly one emitter shared by TsPipelineEngine and RunResultFlusher, repairing the pre-existing divergence where the flusher writes neither. Finally retrofits enforced retry counters and maximum-iteration bounds onto the currently live cyclic paths so runaway budget burn is bounded today rather than after the port.",
+      "status": "proposed",
+      "dependsOn": [],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "PIPELINE_ENGINE_NAMES is exported once from src/orchestrator/workflow/engine.ts as a const tuple including 'pge', PipelineEngineName is derived from it, and both the pipeline.engine enum at config/schema.ts and the teams[].pipelineShape enum are constructed from that same tuple rather than repeating string literals.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "A test asserts config.pipeline.engine still defaults to 'ts', that 'pge' parses as a valid enum value, and that resolveEngineName downgrades 'pge' to 'ts' with a logged line while no PgeEngine implementation exists.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "PipelineEngine.run declares a named RunOptions type covering runId, teamId, now, signal and resume, and the pipelineFn parameter types in mcp/run-manager.ts and orchestrator/worktree.ts accept it, so passing teamId or now no longer relies on structural widening that the interface does not declare.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "finalizePipelineRun is exported from src/orchestrator/finalize.ts, PIPELINE_COMPLETE_EVENT and COMPLETION_MARKER_SUFFIX are exported constants, and src/chat/completion-tailer.ts imports the marker suffix constant instead of matching an inline string literal.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "An end-to-end test drives a run through TsPipelineEngine and asserts CompletionTailer.poll() yields the runId, and a second test drives RunResultFlusher.flush and asserts it emits the identical history event and completion marker that the TS engine emits.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "The PipelineResult object returned by finalizePipelineRun has the same field set as the one previously built inline in pipeline.ts, asserted by a key-set snapshot so the frozen shape cannot drift during extraction.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "The sprint retry path in runSprintCycle and the pure-sprint iteration loop both read a configured maximum and emit a bounded-exit event when reached; a test injecting an always-failing evaluator terminates within max+1 iterations and the test's own hard ceiling is never reached.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-8",
+          "description": ".gitignore gains no runtime directories in this sprint, and a test asserts the .bober/ paths that sprints 6 and 8 will create are still absent, so the ignore additions land alongside the code that creates them.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-9",
+          "description": "The full Vitest suite passes with no failures versus the pre-sprint baseline, specifically including src/orchestrator/pipeline.test.ts, pipeline.pause.test.ts, pipeline-run-id.test.ts, workflow/selector.test.ts, workflow/flusher.test.ts and chat completion-tailer tests.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-10",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement PgeEngine — 'pge' is a reserved enum value that downgrades to 'ts' until sprint 13 supplies an implementation.",
+        "Do not flip src/orchestrator/workflow/eligibility.ts away from returning false or make WorkflowEngine.invoke stop throwing; the dormant workflow path stays dormant.",
+        "Do not change the runPipeline signature at pipeline.ts:1074 or add, remove or rename any PipelineResult field.",
+        "Do not change what a run does — this sprint moves the terminal side-effect block and bounds loops; the sequence of stages, the agents spawned and the artifacts written stay identical.",
+        "Do not re-point bober sprint or bober_sprint; their disposition is decided in sprint 14.",
+        "Do not import anything from src/pge/ — this sprint is deliberately independent of the topology layer."
+      ],
+      "stopConditions": [
+        "finalizePipelineRun has exactly one definition and three callers, and no other site emits the pipeline-complete event or writes a completion marker.",
+        "A grep for the raw string 'pipeline-complete' and for '.completed.json' finds only the two exported constants and their imports.",
+        "The always-failing-evaluator test terminates by bound rather than by the test's own ceiling.",
+        "A required change would alter the observable stage sequence of a run."
+      ],
+      "definitionOfDone": "The private engine seam accepts a named RunOptions, engine names come from one exported tuple, the terminal side-effect set has a single owner that both the TS engine and the flusher call, the tailer matches an imported constant rather than a literal, and every live cyclic path is bounded by a configured maximum that emits an event on exhaustion. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and a run started before this sprint produces the same artifacts as a run started after it.",
+      "assumptions": [
+        "This sprint is genuinely independent of sprints 1 to 3: it touches only src/orchestrator/, src/mcp/, src/chat/ and src/config/, and imports nothing from src/pge/.",
+        "The flusher currently writing neither the completion marker nor the terminal event is a latent defect rather than intended behaviour, so extracting the shared owner repairs it. If any consumer depends on the flusher NOT writing them, that consumer must be identified before the change lands.",
+        "The configured maximum for the sprint retry path is the existing evaluator maxIterations value and the pure-sprint loop already accepts maxIterations at pure-sprint.ts:106; this sprint enforces and instruments them rather than inventing a new knob."
+      ],
+      "outOfScope": [
+        "Any graph, topology or superstep concept.",
+        "Deleting the dormant src/orchestrator/workflow/ subtree."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "The extraction target is the terminal block at src/orchestrator/pipeline.ts:1015-1054. Move it verbatim into src/orchestrator/finalize.ts with an explicit args object; do not take the opportunity to change its behaviour. src/chat/completion-tailer.ts:181 currently matches by untyped string literal — importing COMPLETION_MARKER_SUFFIX there is the whole point of the constant, because no type error and no test outside that module would catch a divergence. For the engine tuple use `export const PIPELINE_ENGINE_NAMES = [\"ts\",\"skill\",\"workflow\",\"medical-sop\",\"pge\"] as const` and derive both z.enum calls with a spread so adding a sixth name is a one-place edit. For the loop bounds, follow the existing Scheduler.maxAgents to AgentCapError pattern (scheduler.ts:23,118) — a named error and an emitted event, not a silent break. Emit the bounded-exit event through the existing emit() telemetry helper rather than writing to history.jsonl directly.",
+      "evaluatorNotes": "This is the only sprint before 13 that can regress a shipping run, so weight regression evidence heavily. Verify the PipelineResult key-set snapshot was taken from the pre-change code rather than written to match the post-change code. Verify the flusher change does not double-emit when both the flusher and the TS engine run in the same process — assert exactly one history event and exactly one marker file per runId. Verify the tailer still matches markers produced by an older run whose filename was written before this sprint. Confirm resolveEngineName's downgrade for 'pge' logs once and does not throw. Confirm no src/pge/ import appeared anywhere in the diff.",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/engine.ts",
+        "src/orchestrator/workflow/selector.ts",
+        "src/orchestrator/workflow/selector.test.ts",
+        "src/orchestrator/finalize.ts",
+        "src/orchestrator/finalize.test.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/orchestrator/pipeline.test.ts",
+        "src/orchestrator/workflow/flusher.ts",
+        "src/orchestrator/workflow/flusher.test.ts",
+        "src/orchestrator/workflow/pure-sprint.ts",
+        "src/chat/completion-tailer.ts",
+        "src/mcp/run-manager.ts",
+        "src/orchestrator/worktree.ts",
+        "src/config/schema.ts",
+        "src/config/schema.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-5",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 5,
+      "title": "Three-scope state split, closed join-semilattice reducer registry, node/effect registries and the topology compiler",
+      "description": "Define OverallState as a small snapshot-pinned set of public Zod keys bound to the existing PlanSpec and SprintContract contracts with a compile-time drift guard, declare per-node input and output port schemas resolved through a SchemaCatalog, and confine node-local data to a NodeContext.priv map that is never a channel. Implement the closed six-reducer registry whose signature is merge(current, updates[]) called once per channel per superstep, with all four join-semilattice flags as literal true so a non-conforming reducer is unregisterable at the type level. Add NodeRegistry, EffectRegistry with a seal() that closes the effect channel during topology production, and the compiler that turns a validated artifact plus registries into a CompiledGraph with proven port assignability, failing on both unregistered node implementations and orphan implementations.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-2"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "A snapshot test pins the exact OverallState key set as a sorted list; adding or removing any key fails the test until the whitelist and the pinned key-count budget are amended in the same change.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "A compile-time Exact guard asserts OverallState['sprintContracts'] element type is exactly z.infer<typeof SprintContractSchema> and OverallState['spec'] is PlanSpec or null, so a parallel contract type fails npm run typecheck rather than failing at runtime.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "Each of the six reducers appendById, maxNumber, lastWriteWinsByKey, setUnion, replaceIfNewer and mergeLedger passes a property test over at least 200 randomized input pairs asserting merge(merge(s,xs),ys) equals merge(s,[...xs,...ys]) exactly.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "The same property suite asserts shuffle invariance of the canonicalised merged result and idempotence, so merge(s,xs) equals merge(merge(s,xs),xs) for every reducer.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "A property test applies 100 randomized concurrent merges to the messages channel and asserts the list length is monotonically non-decreasing and every previously present message id survives every merge.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "Attempting to register a reducer object whose associative, batchingInvariant, orderInvariant or idempotent flag is not the literal true fails npm run typecheck, proven by a type-level negative fixture.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "compile() throws TopologyCompileError with an UnregisteredNodeImpl diagnostic when the artifact names a node with no registered implementation, and an OrphanNodeImpl diagnostic when a registered implementation is absent from the artifact.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-8",
+          "description": "compilerFidelity compiles a fixture artifact with fixture registries and asserts CompiledGraph.nodes keys equal spec.nodes ids and CompiledGraph.adjacency equals spec.edges, with the spec authoritative in both directions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-9",
+          "description": "compile() asserts each registered NodeImpl's declared inputSchema and outputSchema match the schemaRef declared on that node's ports, and a mismatch produces a diagnostic naming the node id and the port key.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-10",
+          "description": "EffectRegistry.invoke throws EffectNotDeclaredError when an effect's tags exceed the calling node's declared effects array, and throws EffectChannelClosed after seal(); `bober pge dump` calls seal() and a test asserts an effect invocation during dump throws rather than performing the effect.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-11",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the interpreter, the frontier planner, the commit boundary or any checkpointer — this sprint produces the type substrate they consume.",
+        "Do not implement any production node body; register only fixture implementations for the compiler tests.",
+        "Do not compile the real .bober/topology/coding.json in this sprint — most of its node implementations do not exist yet and compile() correctly throws UnregisteredNodeImpl. The first full-graph compile is sprint 13.",
+        "Do not add a seventh reducer or an escape hatch that accepts an arbitrary merge function; the registry is deliberately closed.",
+        "Do not put raw tool stdout, workspace diffs or bulk payloads into any OverallState key.",
+        "Do not modify src/contracts/sprint-contract.ts or src/contracts/spec.ts — OverallState binds to them, it does not redefine them."
+      ],
+      "stopConditions": [
+        "All six reducers pass associativity, batching invariance, shuffle invariance and idempotence at 200 or more randomized pairs.",
+        "compile() fails in both directions — unregistered artifact node and orphan implementation.",
+        "The 14-key snapshot is pinned and the Exact drift guard fails typecheck when deliberately broken.",
+        "A required channel needs a merge that is genuinely order-dependent, in which case the channel must be modelled as an offloaded artifact referenced by refs rather than adding a non-conforming reducer."
+      ],
+      "definitionOfDone": "src/pge/state/overall.ts, src/pge/registry/{nodes,reducers,effects}.ts and src/pge/compile/compiler.ts exist with paired tests, OverallState is a snapshot-pinned key whitelist bound to the existing contracts by a typecheck-enforced guard, the six reducers are proven join-semilattices by property tests, and the compiler resolves every string reference or fails loudly. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and nothing outside src/pge/ changed except the seal() call added to the dump path.",
+      "assumptions": [
+        "OPEN — the architecture text says 'Exactly 14 keys' but its OverallStateSchema enumerates 15: runId, projectRoot, featureRequest, specId, currentPhase, spec, sprintContracts, evaluations, messages, refs, counters, branchStatus, testAnchors, verdict, ledger. This sprint pins the enumerated set (15) and records the count in the snapshot; a human must confirm whether a key was intended to be dropped before the snapshot is treated as the whitelist.",
+        "PrivateState is a fresh Map per task on NodeContext.priv, never registered as a channel, and therefore structurally incapable of reaching the commit boundary.",
+        "ModelBinder resolving a node's declared modelTier to a concrete provider and model id lives with the registries in this sprint, so a model-profile swap is a binder concern and not a topology change."
+      ],
+      "outOfScope": [
+        "Executing a compiled graph.",
+        "Scratch, archive, cache, trace and ledger implementations — sprint 6 supplies them behind the NodeContext type declared here."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "OverallState must reuse PlanSpecSchema (src/contracts/spec.ts:124) and SprintContractSchema (src/contracts/sprint-contract.ts:82) directly — the source documents' SprintContract shape with sprint_id, goals, files_to_edit and verification_commands, and their OverallState trip_goal field, are document errata and must not appear anywhere. Reducer bindings per the architecture table: appendById for messages, evaluations and refs (union by intrinsic id then sort by seq then id); maxNumber for counters; lastWriteWinsByKey for branchStatus over disjoint per-branch keys; setUnion for testAnchors; replaceIfNewer for the single-writer spec channel; mergeLedger keyed by (nodeId, attempt, callIndex) replacing rather than adding. NodeContext declares scratch, archive, cache, trace, ledger, prompts and models as interface types only — sprint 6 supplies the implementations, so declare the interfaces here and keep them dependency-free. The seal() call in the dump path is the one edit outside src/pge/ and it must not make cli/commands/pge.ts import anything that transitively reaches a provider.",
+      "evaluatorNotes": "Verify the property tests use genuinely randomized inputs with a recorded seed rather than a fixed table dressed up as a property test, and that the associativity assertion compares canonicalised forms rather than reference equality. Verify the Exact guard actually fails typecheck by temporarily changing the sprintContracts element type. Verify NodeContext.priv is not reachable from any commit path — grep for priv outside the registry and interpreter modules. Verify the effect seal test proves the effect did NOT happen, not merely that a throw occurred after it happened. Confirm the OverallState snapshot is a key-set snapshot and not a full-value snapshot, so it stays stable across unrelated changes.",
+      "estimatedFiles": [
+        "src/pge/state/overall.ts",
+        "src/pge/state/overall.test.ts",
+        "src/pge/registry/nodes.ts",
+        "src/pge/registry/nodes.test.ts",
+        "src/pge/registry/reducers.ts",
+        "src/pge/registry/reducers.test.ts",
+        "src/pge/registry/effects.ts",
+        "src/pge/registry/effects.test.ts",
+        "src/pge/compile/compiler.ts",
+        "src/pge/compile/compiler.test.ts",
+        "src/pge/compile/compilerFidelity.test.ts",
+        "src/cli/commands/pge.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-6",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 6,
+      "title": "Runtime substrate — content-addressed scratch, sealed archives, semantic cache, span trace, budget ledger, sandbox runner",
+      "description": "Implement the six leaf services the interpreter will inject into every NodeContext, all as plain files under .bober/ with no database and no daemon. ScratchStore content-addresses bulk payloads so a 5 MB diff never reaches state. ArchiveWriter writes a per-node-run directory with snapshot, stdout and outputs and seals it so nothing downstream can rewrite it. SemanticCache is keyed on the exact six mandated components with a per-entry expiry driven by an injectable clock. TraceWriter appends one span per node execution to a JSONL file that is the source of truth for debugging. BudgetLedger accumulates replay-idempotent per-node cost with an enforceable ceiling. SandboxRunner executes generated code and generated tests under a command allowlist, cwd confinement and a wall-clock bound — entirely net-new, since no allowlist exists in the shipped tool layer today.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-5"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "ScratchStore.put writes .bober/scratch/<runId>/<sha256>.<ext> and returns a ScratchRef carrying uri, sha256, bytes and kind; a 5 MB payload round-trips through put and get byte-identically and putting identical content twice yields one file.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "A test writes a 5 MB diff through the offload path and asserts the serialized state carrying only its ScratchRef stays under 4 KB, and that a second consumer reading the referenced path receives byte-identical content.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "ArchiveWriter.open creates .bober/archive/<runId>/<nodeId>[.<branchKey>]/ containing snapshot.json, stdout.log and outputs.json, and after seal() every one of writeSnapshot, appendStdout and writeOutputs rejects with ArchiveImmutableError naming the directory.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "seal() writes a .sealed sidecar under the default marker mode and sets file mode 0o444 only under the opt-in chmod mode; prune restores writable mode before unlink under both settings so worktree cleanup and git clean still succeed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "SemanticCache.key hashes exactly systemPrompt, userPrompt, contextFilesHash, model, temperature and toolsMask; an identical call yields one provider invocation and one hit, and six further assertions each vary exactly one component and assert a miss.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-6",
+          "description": "With an injected fake clock, a cache entry hits inside its ttlSeconds and misses after expiry, prune removes expired entries and returns the count removed, and a call made with no declared policy never writes a cache file at all.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-7",
+          "description": "TraceWriter appends one JSONL span per node execution to .bober/traces/<runId>.jsonl carrying nodeId, parentSpanId, superstep, startedAt, endedAt, inputHash, outputHash, tokens, costUsd, cache status, toolOutputRef, route, status and errorClass; a test reconstructs the spans into a tree and asserts the tree is well formed with exactly one root.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-8",
+          "description": "BudgetLedger.charge keyed by nodeId, attempt and callIndex REPLACES rather than adds, so charging the same key twice leaves per-node sums equal to run totals for calls, tokens and USD; assertWithinCeiling throws a typed BudgetExceededError when a configured ceiling is passed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-9",
+          "description": "SandboxRunner returns status 'denied' naming the binary when a command outside the allowlist is invoked, status 'timeout' when a non-terminating command exceeds timeoutMs rather than hanging the test, and status 'output-truncated' beyond maxOutputBytes; all three are recorded as spans and none of them throws.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-10",
+          "description": ".gitignore gains .bober/scratch/, .bober/traces/, .bober/cache/, .bober/archive/ and .bober/logs/ in the same change that creates them, asserted by a test that reads .gitignore and checks each entry is present.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-11",
+          "description": "Every store takes projectRoot as a required constructor argument and no module in src/pge/runtime/ exports a module-level singleton instance; a worktree-style test with two roots asserts zero writes under the root that was not passed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-12",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the interpreter, the commit boundary or the state-size guard that rejects oversized channel values — sprint 7 enforces offloading; this sprint only makes offloading possible.",
+        "Do not wire SandboxRunner into src/orchestrator/tools/handlers.ts or change the behaviour of the existing unguarded execa call; retrofitting the shipped tool layer is separate work and would change live agent behaviour.",
+        "Do not claim or implement container, seccomp, namespace or network-namespace isolation. Document explicitly that a generated test can still read within cwd.",
+        "Do not add a database, an index or a daemon for the cache or the scratch store; content-addressed files only, with better-sqlite3 named as the sanctioned escalation if measured lookup cost ever dominates.",
+        "Do not export traces anywhere off the machine; the OTLP exporter is sprint 13 and is off by default.",
+        "Do not implement the digest, handoff or compression logic that consumes archives — sprint 10 owns the Engram layer."
+      ],
+      "stopConditions": [
+        "All six services are constructed per invocation with an explicit projectRoot and none holds module-level state.",
+        "The archive immutability guarantee holds under the default marker mode without relying on filesystem permissions.",
+        "The sandbox denial and timeout paths return a typed outcome rather than throwing or hanging.",
+        "A store would need a network daemon or a native module to meet a criterion."
+      ],
+      "definitionOfDone": "ScratchStore, ArchiveWriter, SemanticCache, TraceWriter, BudgetLedger and SandboxRunner exist under src/pge/runtime/ with paired tests, all six write only plain files under .bober/, all six take projectRoot explicitly, and the directories they create are ignored by git in this same change. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path calls any of them yet.",
+      "assumptions": [
+        "Archive sealing defaults to sealMode 'marker' because chmod 0o444 breaks rm -rf, git clean and the worktree cleanup at worktree.ts:152-160, which may hold the only copy of a run's work. Immutability is therefore a platform-uniform API guarantee rather than a filesystem permission.",
+        "Retention pruning reuses the bounded-size mechanism already applied to .bober/memory/ rather than inventing a second policy engine.",
+        "SandboxRunner's allowlist is the containment mechanism; the denylist exists for defence in depth. redis-cli at environment.ts:38 is a PATH probe inside CANDIDATE_TOOLS, not an existing guard, so nothing in the repo can be reused here."
+      ],
+      "outOfScope": [
+        "Replacing the existing telemetry emit path in src/telemetry/emit.ts; spans are a new stream, not a replacement.",
+        "Trace replay and the OTLP exporter — sprint 13."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Keep each service in its own module under src/pge/runtime/: scratch.ts, archive.ts, cache.ts, trace.ts, ledger.ts, sandbox.ts. The cache file name is the sha256 of the six-part key and the file body carries the value plus expiresAt plus the key parts for debugging; TTL is compared against an injected now rather than Date.now(). The ledger's replace-by-key semantics are what make per-node sums equal run totals across crash-resume and retried supersteps — an additive ledger silently double-charges on replay, so do not 'simplify' charge() into an accumulator. For the sandbox use execa with an explicit argv array and never a shell string, set cwd from the policy, pass an explicit env allowlist, and use the abort/kill path with a timer rather than relying on the child exiting. Spans are append-only JSONL written through a stream that is flushed on close(); do not buffer the whole trace in memory.",
+      "evaluatorNotes": "The sandbox timeout test must genuinely spawn a non-terminating process and assert the runner kills it, not simulate a timeout with a fake clock — a simulated timeout proves nothing about the kill path. Verify the denial check happens before spawn, not after. Verify the cache miss assertions vary exactly one key component each and that temperature and toolsMask are genuinely part of the hash. Verify the ledger replace semantics with a test that charges the same (nodeId, attempt, callIndex) twice and asserts the total did not double. Verify the sealed archive rejects writes even when the process holds an open handle from before seal(). Confirm the .gitignore entries were added in this diff.",
+      "estimatedFiles": [
+        "src/pge/runtime/scratch.ts",
+        "src/pge/runtime/scratch.test.ts",
+        "src/pge/runtime/archive.ts",
+        "src/pge/runtime/archive.test.ts",
+        "src/pge/runtime/cache.ts",
+        "src/pge/runtime/cache.test.ts",
+        "src/pge/runtime/trace.ts",
+        "src/pge/runtime/trace.test.ts",
+        "src/pge/runtime/ledger.ts",
+        "src/pge/runtime/ledger.test.ts",
+        "src/pge/runtime/sandbox.ts",
+        "src/pge/runtime/sandbox.test.ts",
+        ".gitignore"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-7",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 7,
+      "title": "Superstep interpreter, dependency- and file-conflict-aware admission, unified Command routing, single commit boundary",
+      "description": "Deliver executable graph semantics (G3). GraphInterpreter runs a compiled graph as a Pregel loop: plan frontier, admit, execute under the shipped Scheduler and Semaphore, barrier, commit once, route. Nodes return a single Command combining a state delta and a destination — a declared route label, a node, a runtime fan-out, or the parent scope — replacing exhaustive static conditional-edge maps. FrontierPlanner becomes the first consumer of SprintContract.dependsOn anywhere in the repo and additionally serializes contracts whose declared file sets intersect, recording the reason in the trace. CommitBoundary is the sole writer of .bober/ domain artifacts and the sole clock source, applying each channel reducer exactly once per superstep with the whole batch and rejecting any channel value above its inline byte limit so bulk offloading is enforced rather than advised. Ships with the determinism and exactly-once invariant suites.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-5",
+        "sprint-spec-20260805-pge-graph-engineering-6"
+      ],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "One integration test compiles a golden fixture topology, runs it against stub providers, and asserts from a single recorded trace the scheduled node order, at least one dynamic route taken, at least one loop re-entry and at least one shared-state merge.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "Node returns validate against a Command Zod type with optional update and required goto; a test asserts a node returning both produces exactly one state commit and one routing decision in the trace, and a structural assertion confirms no static conditional-edge map exists for that node.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "A nested node returning goto with scope 'parent' resumes control at the parent supervisor, while the same goto without the parent scope fails with UnknownNodeInScope.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "A planner emitting 5 contracts produces 5 branch dispatches from a single routing decision, and re-running the same graph with 3 contracts leaves the topology checksum unchanged, proving fan-out cardinality is runtime-determined rather than encoded as a static edge per contract.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "With B.dependsOn set to A, B is never dispatched before A completes; with two contracts sharing an entry in estimatedFiles, the two never run concurrently and the trace records status 'serialized' with serializedReason 'fileConflict' and both contract ids.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-6",
+          "description": "With deliberately staggered branch completion, the evaluator stage's first invocation timestamp is after the last branch completion and it observes exactly N results, proving the fan-in barrier holds.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-7",
+          "description": "A write-counter spy on CommitBoundary across 8 concurrent branches asserts writesPerChannel is exactly 1 for every touched channel per superstep, and the final artifacts are byte-identical to a sequential run of the same inputs.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-8",
+          "description": "The determinism suite runs the same golden fixture at concurrency 1 and concurrency 8 and asserts the resulting .bober/ artifact trees are byte-identical after canonicalisation.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-9",
+          "description": "Committing a channel value that serialises above the channel's maxInlineBytes is rejected with StateBloatError naming the channel and the byte count, and a node feeding a 5 MB diff must offload and pass a ScratchRef for the commit to succeed.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-10",
+          "description": "After a node returns, none of that node's private keys appear in merged state, while the trace shows those keys existed during that node's execution.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-11",
+          "description": "The trace's currentPhase sequence for the golden run equals a pinned expected sequence and no routing decision leaves the phase unset.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-12",
+          "description": "A fully blocked frontier returns an empty admit list and the interpreter treats it as deadlock and routes to the graceful-failure terminal rather than spinning or hanging.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-13",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement checkpoint persistence, resume or HITL interrupts — sprint 8 owns durability; this sprint's interpreter runs to completion or fails in one process.",
+        "Do not implement retry policy, per-branch backoff, branch-result caching or the graceful-failure node body — sprint 9 owns resilience; this sprint only routes to the terminal on deadlock.",
+        "Do not implement any production node body; the invariant suites use fixture nodes with deterministic stub providers.",
+        "Do not raise the default fan-out concurrency above 1. Higher concurrency is opt-in per spec and always subordinate to dependsOn and file-conflict serialization.",
+        "Do not write any acceptance test that asserts a wall-clock speedup or compares elapsed time between concurrency settings.",
+        "Do not modify src/orchestrator/pipeline.ts or select the PGE engine anywhere; nothing in this sprint is reachable from a shipped run.",
+        "Do not add a second write site for .bober/ domain artifacts; CommitBoundary is the only writer and the only new Date() source."
+      ],
+      "stopConditions": [
+        "The determinism suite is green at concurrency 1 and 8 with byte-identical artifacts.",
+        "The exactly-once write-counter spy reports one write per channel per superstep across 8 branches.",
+        "dependsOn and file-set intersection both demonstrably gate admission with the reason recorded in the trace.",
+        "An invariant cannot hold without making a reducer order-dependent, in which case the channel must be modelled as an offloaded artifact instead."
+      ],
+      "definitionOfDone": "src/pge/runtime/{interpreter,frontier,commit}.ts execute a compiled graph as a superstep loop with unified Command routing, admission that honours dependsOn and serializes file conflicts, and a single commit boundary that applies each reducer once per superstep and enforces the inline byte limit. Two of the three blocking invariant suites — determinism and exactly-once — are green. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches the interpreter.",
+      "assumptions": [
+        "Scheduler gains exactly one new method, settle, of roughly 25 lines, so a rejecting branch does not reject the whole batch the way Scheduler.parallel's Promise.all does at scheduler.ts:140. This is the only edit to a shipped runtime file in this sprint.",
+        "taskKey is sha256 of nodeId plus branchKey plus inputHash; sprint 8 uses it for resume, this sprint uses it for identity and for the file-conflict ledger.",
+        "The evaluator barrier is implicit in the superstep model: the evaluator stage is simply the next superstep after the last branch commits.",
+        "File sets come from SprintContract.estimatedFiles, which is the only declared file information available; contracts with an empty estimatedFiles are treated as conflicting with everything at concurrency above 1."
+      ],
+      "outOfScope": [
+        "Context compression at superstep boundaries — sprint 10 hooks into the boundary this sprint creates.",
+        "Any conformance comparison against the TS engine — sprint 13."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Reuse rather than reimplement: Scheduler and Semaphore (workflow/scheduler.ts:54-165) for bounded execution, Budget (budget.ts:40) for the ceiling, and the flusher's single-commit-boundary and single-clock discipline (flusher.ts:23-104) generalised from one-shot to per-superstep. The interpreter loop order is fixed: plan frontier, admit, execute, barrier, commit once, checkpoint (sprint 8), route. Reducers are invoked once per channel per superstep with the whole batch — never folded update by update, because pairwise folding is order-dependent and breaks the concurrency-1-versus-8 criterion. Goto has kinds label, node, fanout and parent; the label kind resolves through the compiled adjacency, and a label outside the router's declared targets is UndeclaredRouteLabel. The empty-admit deadlock path must be distinguishable in the trace from a normal completion. Keep the interpreter free of any direct fs write — every artifact write goes through CommitBoundary.",
+      "evaluatorNotes": "This sprint carries the highest silent-corruption risk in the plan; weight the invariant suites above feature completeness. Verify the determinism suite compares canonicalised bytes of the artifact tree, not parsed objects, and that it genuinely runs at two different concurrency settings rather than reading a cached result. Verify the write-counter spy counts reducer invocations at the commit boundary and not node returns. Verify the file-conflict test uses two contracts with a genuine intersection and asserts the trace reason, not merely that they did not overlap by luck. Verify no test anywhere in the diff asserts elapsed time. Verify CommitBoundary is the only new Date() call site in src/pge/runtime/ by inspection.",
+      "estimatedFiles": [
+        "src/pge/runtime/interpreter.ts",
+        "src/pge/runtime/interpreter.test.ts",
+        "src/pge/runtime/frontier.ts",
+        "src/pge/runtime/frontier.test.ts",
+        "src/pge/runtime/commit.ts",
+        "src/pge/runtime/commit.test.ts",
+        "src/pge/runtime/__tests__/determinism.invariant.test.ts",
+        "src/pge/runtime/__tests__/exactly-once.invariant.test.ts",
+        "src/pge/runtime/__fixtures__/",
+        "src/orchestrator/workflow/scheduler.ts",
+        "src/orchestrator/workflow/scheduler.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-8",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 8,
+      "title": "Filesystem checkpointer, cross-process resume, superstep-boundary HITL interrupts and fail-closed gating of git and deploy",
+      "description": "Make a run survivable and pausable. FsCheckpointer writes .bober/checkpoints/<runId>/<superstep>.json temp-file-plus-rename so a partial checkpoint is never readable, carrying state, pending tasks, completed task keys, an optional interrupt record and the graph identity so a resume against a changed topology fails loudly rather than replaying task keys into a different graph. InterruptController evaluates interrupts BEFORE a node executes, at a superstep boundary, so no node body ever re-runs on resume and the double-execution class simply does not exist. It delegates to the shipped checkpoint mechanism registry and audit writer rather than inventing a second approval path, so bober approve and bober reject keep working. Git commits and deploy actions are reachable only through a HITL gate and block fail-closed with an audit entry when no approval record exists. Ships the third blocking invariant suite (cross-process durability) plus an adversarial checkpointer conformance suite with kill-mid-write fault injection.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-7"
+      ],
+      "features": [
+        "feat-7"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-8-1",
+          "description": "A run is terminated after node 3 and restarted from the persisted checkpoint in a FRESH process; executor spies for nodes 1 to 3 record zero new invocations and the final artifact equals the uninterrupted run's artifact.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-2",
+          "description": "An adversarial checkpointer suite exercises put, get, latest, list and prune including kill-mid-write fault injection, and asserts no partially written checkpoint is ever readable and that list never yields a ref whose get fails.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-3",
+          "description": "A checkpoint carries graphId, graphVersion and checksum, and resume against an artifact whose checksum differs throws ChecksumMismatch rather than replaying completed task keys against a changed graph.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-4",
+          "description": "Resume skips dispatch of every taskKey present in completedTaskKeys before dispatch rather than after, asserted by a spy that records dispatch attempts and not merely executions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-5",
+          "description": "Triggering an interrupt returns a result with status 'interrupted', the persisted checkpoint contains the pending payload, no further node executed, and resuming continues from exactly that node with the supplied human decision present in state.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-6",
+          "description": "A test asserts the interrupt is evaluated before the node handler is entered — the handler spy records zero invocations for the interrupted node before resume and exactly one after — proving no node body re-runs.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-7",
+          "description": "A commit node and a deploy node in non-interactive mode with no recorded approval are both blocked fail-closed and written to the audit log; with an approval record present both proceed, and the audit entry names the checkpoint id in both cases.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-8",
+          "description": "InterruptController resolves its mechanism through the shipped getCheckpointMechanismFor registry and records outcomes through runWithAudit, asserted by a test that configures the disk mechanism and observes the audit file the existing subsystem writes.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-9",
+          "description": "A positive nesting test asserts a nested child subgraph resolves the parent's checkpointer handle identity, and a hand-edited artifact declaring its own persistence handle is rejected by validation with NestedCheckpointer.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-10",
+          "description": "With durability set to 'superstep' a checkpoint file exists per superstep and with 'exit' only at phase boundaries; both settings produce the same final artifact for the same golden fixture.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-11",
+          "description": ".gitignore gains .bober/checkpoints/ in the same change that creates it, and prune(runId, keep) retains exactly the requested number of most recent checkpoints.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-12",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement an in-process or in-memory checkpointer, not even as a test double alternative that could be selected in production; the cross-process criterion is the discriminator and an in-memory store cannot satisfy it.",
+        "Do not use better-sqlite3 or any database for checkpoints; a checkpoint must remain readable with cat and diffable with git diff, which is the debugging affordance the whole design rests on.",
+        "Do not allow an interrupt inside a fan-out branch; InterruptInsideFanOut must reject it at validation time, and per-branch approvals batch at the fan-in barrier so one interrupt covers N branches.",
+        "Do not create a second approval path, a second audit file or a second set of checkpoint ids; delegate to the shipped subsystem so bober approve, bober reject and the nine documented checkpoint ids keep working unchanged.",
+        "Do not implement retry, backoff or partial-failure recovery — sprint 9.",
+        "Do not implement the planner clarification loop node itself; sprint 11 builds the node on top of this interrupt mechanism."
+      ],
+      "stopConditions": [
+        "The fresh-process kill-and-resume test is green with zero re-invocations of completed nodes.",
+        "The adversarial checkpointer suite including kill-mid-write is green.",
+        "Every HITL path resolves through the existing mechanism registry and audit writer.",
+        "A criterion would require resuming inside a node body rather than at a superstep boundary."
+      ],
+      "definitionOfDone": "A run can be killed and resumed in a separate CLI process without re-executing a completed node, an interrupt freezes a single consistent snapshot and resumes with the human decision in state, and git and deploy actions are unreachable without an approval record. The third blocking invariant suite is green alongside an adversarial checkpointer conformance suite. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches the checkpointer.",
+      "assumptions": [
+        "The HITL round trip spans separate CLI invocations, which is why src/orchestrator/checkpoints/mechanisms/disk.ts already exists; the graph checkpointer complements it rather than replacing it.",
+        "durability defaults to 'superstep' for crash-safety parity with the per-contract flush discipline at flusher.ts:46-76, on the assumption that one JSON write per node is negligible against LLM latency. If measurement disagrees, 'exit' is the fallback at the cost of coarser resume.",
+        "Modelling every pause point as its own node inflates node count and forces some node-local values into refs; where an approval depends on a large intermediate result, that result is offloaded to ScratchStore rather than inlined, or the inline byte guard rejects the commit."
+      ],
+      "outOfScope": [
+        "Resuming a run whose topology artifact changed — that is a deliberate ChecksumMismatch failure, not a supported migration.",
+        "Multi-run concurrent HITL; the existing one-careful-run-at-a-time limitation is unchanged."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "createFsCheckpointer takes projectRoot as a required argument and there is no module-level instance, so worktree runs stay isolated. put() writes to a temp name in the same directory then renames, which is atomic on the same filesystem — do not write in place and do not write to the OS temp directory. CompiledGraph deliberately has no checkpointer field, so a nested checkpointer is unrepresentable in the compiled form; NestedCheckpointer exists only to catch hand-edited JSON. Generalise the skip-before-dispatch discipline at workflow/resume-cursor.ts:12 from sprint numbers to task keys rather than writing a new mechanism. InterruptController.maybeInterrupt is called by the interpreter BEFORE Scheduler.settle dispatches, and raiseSuspend throws GraphInterrupted which the interpreter converts into the interrupted result — the node handler must never see it. Model the adversarial suite on the published @langchain/langgraph-checkpoint-validation contract semantics for put, get, list and delete, without taking that package as a dependency.",
+      "evaluatorNotes": "Verify the kill-and-resume test genuinely uses a separate process (child process or spawned CLI) rather than a same-process simulation; a same-process test cannot distinguish this design from MemorySaver and would make the whole criterion vacuous. Verify the kill-mid-write injection truncates a real file rather than mocking the filesystem. Verify the interrupt-before-execution assertion inspects handler invocation counts rather than trace ordering alone. Verify the fail-closed test asserts the git operation did NOT happen, not merely that an error was returned. Verify no new checkpoint mechanism, audit path or approval CLI verb was introduced. Confirm .bober/checkpoints/ is in .gitignore in this diff.",
+      "estimatedFiles": [
+        "src/pge/runtime/checkpointer.ts",
+        "src/pge/runtime/checkpointer.test.ts",
+        "src/pge/runtime/__tests__/checkpointer.conformance.test.ts",
+        "src/pge/runtime/interrupt.ts",
+        "src/pge/runtime/interrupt.test.ts",
+        "src/pge/runtime/interpreter.ts",
+        "src/pge/runtime/__tests__/durability.invariant.test.ts",
+        "src/orchestrator/checkpoints/registry.ts",
+        "src/orchestrator/checkpoints/audit.ts",
+        ".gitignore"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-9",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 9,
+      "title": "Partial-failure resilience — branch result caching, failed-branch-only jittered retry, enforced loop counters, graceful failure terminal and qualified synthesis",
+      "description": "Make one failing branch a bounded local event rather than a run-ending exception. Successful branch results are cached and preserved so a re-run reuses them without re-invoking their executors; only the failed branch is retried, spaced by the decorrelated jittered exponential policy the repo already ships. Every cyclic edge's loop counter is enforced at runtime against the maxIterations declared in the topology, using the idempotent counter reducer so a replayed superstep cannot double-count. When retries are exhausted the graph routes to a graceful failure terminal that writes a failure artifact and terminates cleanly, and the synthesis node enumerates every branch with an explicit status naming failed branches and their error classes, so the run's terminal verdict is 'partial' rather than a success claim or an uncaught exception.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-7"
+      ],
+      "features": [
+        "feat-7"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-9-1",
+          "description": "In a 3-branch fan-out where branch 2 throws, branches 1 and 3 results are persisted and the run continues; a re-run reuses the cached branch 1 and 3 results and their executor spies record zero additional invocations.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-2",
+          "description": "Only branch 2 is retried, successive retry timestamps match the configured jittered exponential policy within tolerance, and the branch 1 and branch 3 executors are invoked exactly once in total across the whole run.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-3",
+          "description": "A permanently failing node attempts exactly MAX_RETRIES times with a default of 3, then routes to the graceful-failure terminal, writes a failure artifact under .bober/failures/<runId>.json, and terminates cleanly with the test's own hard iteration ceiling never reached.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-4",
+          "description": "The runtime enforces each cycle's declared counterKey and maxIterations from the topology artifact, and a fixture graph whose loop would otherwise run forever exits by bound with a recorded bounded-exit span rather than by timeout.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-5",
+          "description": "The counter channel uses the idempotent maxNumber reducer, so replaying a superstep after a crash leaves the counter unchanged; a test replays a superstep and asserts the loop neither exhausts early nor gains an extra iteration.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-6",
+          "description": "The final synthesis output enumerates every branch with an explicit status and names each failed branch plus its error class, and the run's terminal verdict is 'partial' — not 'success' and not an uncaught exception.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-7",
+          "description": "branchStatus in state carries state, attempts and errorClass per branch key and merges through the lastWriteWinsByKey reducer over disjoint per-branch key domains, asserted by a concurrent-branch merge test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-8",
+          "description": "A transient provider failure classified by the existing classifyTransient helper is retried while a non-transient failure is not, asserted by a table of error shapes covering HTTP 408, 429 and 5xx alongside a schema-validation failure.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-9",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not retry a whole superstep or a whole fan-out batch when one branch fails; retry scope is the failed branch only.",
+        "Do not swallow a failure into a success verdict. A run with any exhausted branch terminates 'partial' or 'failed', never 'success'.",
+        "Do not write a new retry or backoff implementation; reuse withRetry and classifyTransient from src/orchestrator/workflow/retry.ts:61,103.",
+        "Do not implement the evaluator, critique or rework node bodies — sprint 12 builds those on top of this terminal and retry machinery.",
+        "Do not implement checkpoint persistence or interrupts; this sprint depends on sprint 7 only and must not duplicate sprint 8's work.",
+        "Do not let the graceful-failure terminal emit the pipeline-complete event directly; it produces a failure artifact and a verdict, and the single terminal side-effect owner from sprint 4 still emits the completion event."
+      ],
+      "stopConditions": [
+        "The 3-branch partial-failure and cached-reuse assertions are both green.",
+        "The permanently failing node terminates by bound with a written failure artifact.",
+        "The counter replay test shows neither early exhaustion nor an extra iteration.",
+        "Meeting a criterion would require a non-idempotent counter reducer, which ADR-4 forbids."
+      ],
+      "definitionOfDone": "A failing branch is retried in isolation on a jittered exponential schedule while its siblings' results are preserved and reused, every cyclic edge is bounded by the counter declared in the topology, exhausted retries route to a graceful terminal that writes a failure artifact, and synthesis reports per-branch status with a 'partial' verdict. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches this code.",
+      "assumptions": [
+        "Scheduler.settle from sprint 7 is the mechanism by which a rejecting branch no longer rejects the whole batch; this sprint builds the policy on top of it rather than changing Scheduler again.",
+        "The branch result cache is the checkpoint's completedTaskKeys plus the committed branch outputs; it is not a second persistence store.",
+        "MAX_RETRIES defaults to 3 and is configurable; the topology's per-cycle maxIterations governs loop re-entry while MAX_RETRIES governs transient-failure retry, and the two are deliberately separate knobs."
+      ],
+      "outOfScope": [
+        "Cross-run retry or resumption of a failed run from a previous invocation — sprint 8 owns resume.",
+        "Any latency or throughput assertion about retry scheduling; timestamps are asserted against the policy, not against wall-clock targets."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Reuse workflow/retry.ts (withRetry at :61, classifyTransient at :103) and workflow/synthesizer.ts rather than writing new ones — both are green with near-zero live callers and this sprint gives them production callers. The retry timestamp assertion must be tolerant of jitter by construction: assert each interval falls inside the policy's min and max envelope rather than pinning exact values, and inject the clock so the test does not actually sleep. The graceful-failure terminal is a node in the topology (graceful_failure) whose body writes .bober/failures/<runId>.json and returns a terminal Command; it must not perform any other effect. Branch failure records carry branchKey, contractId, attempts and errorClass so synthesis can name them without reading the trace file.",
+      "evaluatorNotes": "Verify the cached-reuse assertion counts executor invocations across BOTH runs, not just the second. Verify the retry test injects a clock and does not actually wait, and that it still asserts the interval envelope rather than merely counting attempts. Verify the terminal verdict for a partially failed run is 'partial' and that no code path can produce 'success' with a failed branch present. Verify the counter replay test replays a genuine superstep rather than calling the reducer twice in isolation. Confirm no new retry implementation was added alongside the existing one.",
+      "estimatedFiles": [
+        "src/pge/runtime/retry-planner.ts",
+        "src/pge/runtime/retry-planner.test.ts",
+        "src/pge/runtime/interpreter.ts",
+        "src/pge/runtime/graceful-failure.ts",
+        "src/pge/runtime/graceful-failure.test.ts",
+        "src/pge/runtime/__tests__/partial-failure.test.ts",
+        "src/orchestrator/workflow/retry.ts",
+        "src/orchestrator/workflow/synthesizer.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-10",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 10,
+      "title": "Engram context layer — phase digests with non-scalar diagnoses, clean-context handoff, and threshold-driven compression with an auditable transcript",
+      "description": "Implement the persistent-archive-to-digest-to-fresh-context loop the source documents call Engram, mapped into the project-local .bober/ convention. On phase termination the terminating agent distills high-level insights, successful modelling choices, recommended next steps and specific failure diagnoses into one compact digest at .bober/handoff/<phase>-digest.md, validated by a schema that rejects a missing or empty section and requires at least one diagnosis carrying a hypothesis and its evidence — so a strategically better but temporarily regressing direction survives selection instead of being pruned by a bare score. The successor node launches with a fresh context that reads the digest first and imports no message id from the predecessor transcript. At superstep boundaries, message tokens above the configured fraction of the model's maximum input capacity trigger exactly one compression step producing a summary of active goals, completed tasks and the current workspace path, after which the baseline is that summary plus roughly the most recent tenth of the cap, with the full uncompressed transcript written to disk for auditability.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-7"
+      ],
+      "features": [
+        "feat-8"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-10-1",
+          "description": "On phase termination a digest is written to .bober/handoff/<phase>-digest.md containing all four required sections, and a validator test fails the run when any section is missing or empty.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-2",
+          "description": "The digest is asserted to be under a pinned token ceiling using the injected TokenEstimator, with the fixture sized well clear of the boundary so the assertion does not depend on estimator precision.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-3",
+          "description": "The digest schema requires at least one diagnosis entry carrying a non-empty hypothesis and non-empty evidence; a payload supplying only a numeric score fails validation with the failing Zod path reported.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-4",
+          "description": "A run whose score regressed but whose digest records a rationale is not auto-pruned by the selection logic, asserted against a fixture pair where the lower-scoring run carries a diagnosis and the higher-scoring one does not.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-5",
+          "description": "The successor's assembled prompt is captured in the trace; a test asserts it contains the digest text, contains zero message ids from the predecessor's transcript, and its estimated token count is at most the configured fraction of the predecessor's final context.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-6",
+          "description": "Driving message tokens to 84 percent of the configured cap fires no compression; driving to 86 percent fires exactly one compression step, and that step occurs at a superstep boundary rather than mid-node, asserted from the span ordering.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-7",
+          "description": "The emitted summary validates against a schema requiring non-empty activeGoals, completedTasks and workspacePath, and a fixture summary missing workspacePath fails validation.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-8",
+          "description": "The post-compression baseline token count is within tolerance of the summary plus one tenth of the cap, and .bober/logs/<runId>/messages-<n>.jsonl contains the pre-compression transcript recoverable byte for byte.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-9",
+          "description": "Archive directories under .bober/archive/<runId>/ exist per executed node and the set of directories equals the set of node ids in the trace, with each containing snapshot.json, stdout.log and outputs.json.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-10",
+          "description": "Every token threshold in this sprint is computed through an injectable TokenEstimator interface, and swapping the estimator implementation in a test changes the computed threshold, proving no threshold is hardcoded against a specific estimator.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-11",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add a tokenizer dependency. Estimation stays behind the TokenEstimator interface with a chars-based default, and every acceptance band is set well clear of its boundary so estimator error cannot flip a test.",
+        "Do not use the absolute paths from the source documents. /Archive/agent_N/ maps to .bober/archive/<runId>/<nodeId>/, /research_digest.md maps to .bober/handoff/<phase>-digest.md and /workspace/scratch/ maps to .bober/scratch/<runId>/, because the CLI is symlinked into arbitrary projects and repo-external absolute paths would collide across them.",
+        "Do not make the archive grow without bound; wire it into the existing bounded retention mechanism, with immutability preserved within the retention window.",
+        "Do not replace or modify the existing src/orchestrator/compaction.ts used by the live imperative path; this is a second, graph-scoped compaction that fires at superstep boundaries.",
+        "Do not let compression fire mid-node or inside a fan-out branch.",
+        "Do not import the predecessor's raw transcript into the successor's context under any fallback path, including when the digest is missing — a missing digest is a failure, not a reason to fall back to the transcript."
+      ],
+      "stopConditions": [
+        "The digest schema rejects a score-only payload and a section-missing payload.",
+        "The 84-versus-86 percent pair demonstrates a single compression at a superstep boundary.",
+        "The pre-compression transcript is byte-recoverable from disk.",
+        "A criterion would require a real tokenizer to distinguish pass from fail, in which case the tolerance band must be widened rather than a dependency added."
+      ],
+      "definitionOfDone": "Phase digests carrying insights, choices, next steps and evidence-backed diagnoses are written and validated, successors launch from the digest with zero predecessor message ids, and compression fires exactly once at a superstep boundary above the configured threshold while the full transcript stays recoverable on disk. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative path's own compaction is untouched.",
+      "assumptions": [
+        "The 85 percent compression trigger, the 15 percent successor-context ratio and the 10 percent re-injection ratio come from the source documents and are configurable, with defaults set to those values.",
+        "The existing src/orchestrator/context-handoff.ts Zod-typed ProjectContext and Decision shapes are the model for the digest's structured sections rather than a new vocabulary.",
+        "The archive written in sprint 6 is the raw material the digest distills; this sprint reads sealed archives and never rewrites them."
+      ],
+      "outOfScope": [
+        "Cross-run memory or a long-term knowledge base; digests are per phase within a run.",
+        "Summarisation quality benchmarking — the tests assert schema conformance, ratios and auditability, not summary quality."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Compression is a node in the topology (context_compact) reached from the supervisor at a superstep boundary, exactly as the architecture blueprint shows, so the ordering assertion is available from the span sequence without instrumenting node internals. Write the pre-compression transcript BEFORE compressing and assert recoverability from the written file, not from memory. The successor's clean context is constructed by building its prompt from the digest plus the node's declared input ports only — never by filtering the predecessor's message list, because a filter can leak and a construction cannot. Follow the existing compaction module's fail-open posture only for the summarisation call itself; a missing or invalid digest must fail closed. Diagnosis entries need hypothesis, evidence and optionally a pointer to a ScratchRef for the raw evidence, so large evidence never inflates the digest past its ceiling.",
+      "evaluatorNotes": "Verify the zero-predecessor-message-ids assertion inspects the actual assembled prompt captured in the trace rather than the intended construction. Verify the 84 and 86 percent cases both use the same estimator and cap so the pair is a genuine boundary test. Verify the transcript recoverability assertion compares bytes, not parsed JSON. Verify the archive-set equality assertion uses the trace's executed node set rather than the topology's declared node set, since skipped and serialized nodes must not produce archive directories. Confirm src/orchestrator/compaction.ts is unmodified in the diff.",
+      "estimatedFiles": [
+        "src/pge/runtime/digest.ts",
+        "src/pge/runtime/digest.test.ts",
+        "src/pge/runtime/handoff.ts",
+        "src/pge/runtime/handoff.test.ts",
+        "src/pge/runtime/compactor.ts",
+        "src/pge/runtime/compactor.test.ts",
+        "src/pge/runtime/token-estimator.ts",
+        "src/pge/runtime/token-estimator.test.ts",
+        "src/pge/runtime/archive.ts",
+        "src/orchestrator/context-handoff.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-11",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 11,
+      "title": "Node library part 1 — research subgraph with bounded reflexion, planner clarification loop, supervisor router and fail-closed schema gates",
+      "description": "Implement the first half of the node library by wrapping the existing agent functions unmodified as node bodies. The Researcher emits a structured bullet-point problem reflection validated against a Zod schema with explicit goal, inputs, outputs, rules and constraints, and may critique and re-run itself a bounded number of times before collecting findings, with each re-entry receiving the prior critique. The Planner drafts, and when it needs clarification it surfaces questions, the run suspends through the sprint-8 interrupt mechanism, and supplying answers resumes the same planner node with those answers in its input — with no sprint contract materialised before the loop exits. The supervisor router coordinates phases as a two-level tree. Verification gates at every supervisor-to-subgraph boundary validate the traversing payload against the strict artifact schema and, on failure, do not merge the invalid payload into state, so bad intermediate data cannot propagate.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-7",
+        "sprint-spec-20260805-pge-graph-engineering-8"
+      ],
+      "features": [
+        "feat-9"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-11-1",
+          "description": "Researcher output validates against a ProblemReflection Zod schema requiring a non-empty goal and non-empty inputs, outputs, rules and constraints arrays; a prose-only fixture is rejected with the failing Zod path reported in the diagnostic.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-2",
+          "description": "The researcher re-enters itself at most maxReflexions times, each re-entry receives the prior critique in its declared input, and exceeding the bound routes to the collect-findings node rather than to the failure terminal.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-3",
+          "description": "Given an ambiguous feature request the planner emits clarification questions and the run suspends; supplying answers resumes the same planner node with those answers present in its input, and a test asserts zero sprint contracts were materialised before the loop exited.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-4",
+          "description": "A gate fed a sprint contract missing successCriteria returns a typed failure, the downstream node's executor is never invoked, and the failure record contains the Zod issue path naming the missing field.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-5",
+          "description": "A snapshot of OverallState before and after a gate failure is identical apart from the appended failure record, and the invalid payload appears nowhere in the merged state.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-6",
+          "description": "A structural test on the compiled research and plan subgraphs asserts maximum nesting depth is at most 2 and every subgraph exit edge targets the supervisor node.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-7",
+          "description": "The research subgraph and the plan subgraph each compile independently against the registries populated in this sprint and execute end to end against stub providers, producing the artifacts the existing pipeline produces for those phases.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-8",
+          "description": "The node bodies call the existing runResearch and runPlanner functions with no modification to those functions, asserted by a diff check that src/orchestrator/research-agent.ts and src/orchestrator/planner-agent.ts are unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-9",
+          "description": "The materialised sprint contracts produced by the plan subgraph parse through the existing SprintContractSchema with no parallel contract type introduced anywhere, enforced by the compile-time Exact guard from sprint 5.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-11-10",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement any sprint-subgraph node — curator, generator, syntax gate, evaluator, anchors, correction, review, documenter and commit are sprint 12.",
+        "Do not modify runResearch, runPlanner or any other existing agent function; node bodies are thin adapters over them, and changing an agent would change the live imperative path's behaviour too.",
+        "Do not introduce a second SprintContract, PlanSpec or clarification-question type. The source documents' sprint_id, goals, files_to_edit, verification_commands and trip_goal fields are errata and must not appear.",
+        "Do not place an interrupt inside a fan-out branch; the planner clarification interrupt is at the supervisor level between supersteps.",
+        "Do not wire the PGE engine into any shipped entry point; the subgraphs are exercised by tests only.",
+        "Do not allow a gate to merge a payload it rejected, not even partially, and not into a quarantine key inside OverallState."
+      ],
+      "stopConditions": [
+        "The research and plan subgraphs each compile and run standalone against stub providers.",
+        "The clarification loop suspends and resumes with answers in the planner's input and no contracts materialised.",
+        "Every boundary gate rejects an invalid payload without merging it and without invoking the downstream node.",
+        "A node cannot be expressed without modifying an existing agent function."
+      ],
+      "definitionOfDone": "The research subgraph with bounded reflexion, the planner with a suspend-and-resume clarification loop, the supervisor router and the schema-validating boundary gates are registered node implementations that compile and execute as independent subgraphs against stub providers, reusing existing agent functions unmodified. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative path is unchanged.",
+      "assumptions": [
+        "compile() throws UnregisteredNodeImpl for the full coding artifact until every node has an implementation, so this sprint compiles the research and plan subgraphs individually using the subgraphs declared in the artifact. The first full-graph compile happens in sprint 13.",
+        "ProblemReflection is a new Zod schema in src/contracts/ because no equivalent exists; it is additive and does not replace any existing research artifact shape.",
+        "maxReflexions is declared in the topology as the research_route loop bound, so sprint 1's UnboundedCycle rule already guarantees it exists."
+      ],
+      "outOfScope": [
+        "Improving research or planning output quality; this sprint changes where those agents run, not what they produce.",
+        "Selective verification gates keyed on risk — sprint 12."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Gate node bodies are pure validators plus a Command: they parse the payload with the artifact's real Zod schema from src/contracts/, and on failure they return a Command whose update appends only a failure record and whose goto routes to the rework or critique target — never to the downstream node. Because a gate returns a Command rather than throwing, the fail-closed behaviour is expressible in the topology and visible in the diff. The planner clarification loop uses the existing PlanSpec clarification vocabulary (ClarificationQuestionSchema, ResolvedClarificationSchema, resolveClarification, isPipelineReady at src/contracts/spec.ts) rather than inventing a parallel question type, and the suspend is raised through InterruptController at the supervisor boundary. Node bodies invoke providers through NodeContext.effects.invoke rather than importing a provider module directly, so the effect tags on the node stay meaningful.",
+      "evaluatorNotes": "Verify the gate failure test snapshots OverallState before and after and compares them structurally, not by asserting the absence of one known key. Verify the clarification test asserts contract materialisation count is zero BEFORE resume, not merely that contracts appear after. Verify the reflexion bound test asserts the exact re-entry count and the routing destination on exhaustion. Verify no existing agent file appears in the diff. Verify the subgraphs are compiled from the committed artifact's subgraph declarations rather than from a hand-built fixture graph, otherwise the artifact is not load-bearing.",
+      "estimatedFiles": [
+        "src/pge/nodes/research.ts",
+        "src/pge/nodes/research.test.ts",
+        "src/pge/nodes/plan.ts",
+        "src/pge/nodes/plan.test.ts",
+        "src/pge/nodes/supervisor.ts",
+        "src/pge/nodes/supervisor.test.ts",
+        "src/pge/nodes/gates.ts",
+        "src/pge/nodes/gates.test.ts",
+        "src/contracts/problem-reflection.ts",
+        "src/contracts/problem-reflection.test.ts",
+        "src/pge/registry/index.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-12",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 12,
+      "title": "Node library part 2 — sprint subgraph with curator mock-test gate, syntax gate, test anchors, correction loop, selective verification and gated documenter/commit",
+      "description": "Implement the sprint subgraph as the topology declares it. The Curator explains each provided test's expected behaviour in natural language and generates 6 to 8 additional diverse mock tests covering boundary, empty, large and negative categories, enforced by a gate. Generated code passes a syntax and typecheck gate before reaching any downstream node, with compiler diagnostics attached verbatim to the rework payload on failure. The Evaluator maintains a registry of previously passed tests as anchors and rejects a self-healing edit that breaks an anchor even when it fixes the targeted test. On failure the correction payload carries raw stderr verbatim plus a brief critique and routes back to the generator, whose next prompt contains that payload, with the rework loop bounded by the topology's maxIterations. An evaluator that errors or returns malformed output routes to critique and never to success. Expensive suites run only when high-risk paths change or an intermediate quality score falls below threshold. A passing sprint reaches the documenter and produces a conventional commit behind the human-approval gate. Generated code and generated tests execute only through the sandbox runner.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-8",
+        "sprint-spec-20260805-pge-graph-engineering-9",
+        "sprint-spec-20260805-pge-graph-engineering-11"
+      ],
+      "features": [
+        "feat-9"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-12-1",
+          "description": "Curator output contains one expectedBehavior string per provided or existing test; a test asserts the explanation count equals the input-test count and each explanation exceeds a configured minimum length.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-2",
+          "description": "The mock-test gate asserts the generated count is within [6,8] and that the set covers at least the boundary, empty, large and negative categories; a 5-case fixture and a fixture missing one category both fail the gate.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-3",
+          "description": "A gate fed code that does not typecheck blocks traversal, the evaluator node is never reached, and the compiler diagnostics are attached verbatim to the rework payload.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-4",
+          "description": "An integration test injects a failing implementation and asserts raw stderr appears verbatim in the correction payload, a non-empty critique accompanies it, the trace shows a route back to the generator node, and the second iteration's prompt contains that payload.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-5",
+          "description": "State carries testAnchors and an iteration that fixes the targeted test while breaking a previously passed anchor is flagged as a regression and rejected by the evaluator rather than accepted.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-6",
+          "description": "An evaluator that throws and an evaluator that returns malformed output both route to the critique node and never to the success node, with failClosed true recorded in the trace for each case.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-7",
+          "description": "A failing sprint re-enters the sprint subgraph at most maxIterations times with the critique present in each re-entry's input, then terminates via the graceful-failure path from sprint 9.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-8",
+          "description": "Three selective-verification cases hold: a docs-only diff skips the expensive suite node, a diff touching a declared high-risk path runs it, and a low-risk diff whose intermediate quality score is below threshold runs it anyway.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-9",
+          "description": "A passing sprint reaches the documenter node, a sprint doc file is written, and a conventional commit of the form bober(sprint-N): ... is produced only when the approval gate from sprint 8 has an approval record; a failing sprint produces no commit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-10",
+          "description": "A generated test invoking a denied binary is rejected by the sandbox and recorded, and a non-terminating generated test is killed by the configured timeout rather than hanging the run; both route to correction and never to pass.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-11",
+          "description": "A fixture suite of model outputs containing multiline TypeScript with embedded double quotes parses at or above the pinned recovery rate in src/providers/structured.test.ts, and a control run of the same fixtures through a strict escape-sensitive path reproduces the failure mode the offloading discipline removes.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-12",
+          "description": "The sprint subgraph compiles independently from the committed artifact's subgraph declaration and executes end to end against stub providers, producing the same .bober/ artifact shapes the imperative sprint cycle produces.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-12-13",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not mandate YAML for structured output and do not add a YAML parser dependency. JSON stays canonical on the wire and on disk; the escape problem is removed structurally by writing generated source to the scratch store and carrying paths plus content hashes in the payload. A vendored block-scalar normaliser behind the existing Validator seam is the only fallback and adds no dependency.",
+        "Do not modify runCurator, runGenerator, runEvaluatorAgent, runCodeReviewer or runDocumenter; node bodies adapt them.",
+        "Do not re-point bober sprint or bober_sprint at this subgraph. Both re-implement the sprint loop without the security, curator, review and documenter stages; their disposition is decided in sprint 14, and changing them here would alter observable behaviour for workflows that depend on the leaner path.",
+        "Do not let the commit node run without an approval record in non-interactive mode, and do not add a bypass flag.",
+        "Do not execute generated code or generated tests outside SandboxRunner, including through the existing unguarded tool handler.",
+        "Do not change the security gate's fail-closed semantics while wiring the security node into the subgraph."
+      ],
+      "stopConditions": [
+        "The subgraph compiles from the committed artifact and runs end to end against stub providers.",
+        "Every gate in the subgraph rejects its negative fixture without invoking the downstream node.",
+        "The anchor regression case rejects an iteration that trades a fixed test for a broken one.",
+        "A criterion would require putting generated source code inside a JSON string field.",
+        "A criterion would require modifying an existing agent function."
+      ],
+      "definitionOfDone": "The sprint subgraph runs curate, mock-test gate, generate, syntax gate, security, evaluate, anchor-regression gate, route, correct, review, documenter and gated commit as registered node implementations compiled from the committed artifact, with generated code executing only in the sandbox and generated source travelling by scratch reference rather than inside JSON strings. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative sprint cycle is unchanged.",
+      "assumptions": [
+        "The existing SprintContract successCriteria verificationMethod enum is the vocabulary for selective verification; high-risk paths are declared in config rather than inferred.",
+        "The security node reuses the shipped fail-closed security gate rather than reimplementing it.",
+        "Test anchors are criterion ids or test names that previously passed within the same sprint's iteration history, stored in the setUnion testAnchors channel so concurrent branches cannot lose one."
+      ],
+      "outOfScope": [
+        "Improving generation quality; this sprint changes where the generator runs and what guards surround it.",
+        "Cross-sprint anchor persistence beyond a run."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "The syntax gate and the evaluator both shell out through SandboxRunner from sprint 6 with an explicit allowlist covering the project's configured typecheck, build, lint and test commands — never through orchestrator/tools/handlers.ts. Raw stderr goes to the scratch store and the correction payload carries the ScratchRef plus a bounded inline excerpt, so the verbatim assertion reads the scratch file while the inline state stays under the byte guard. The rework loop bound comes from the topology's sprint_route and rework_route loop declarations, so the counter is the same one sprint 9 enforces. The commit node declares effects git, which sprint 1's EffectfulNodeContainsHitl rule plus an inbound-edge rule already force to sit behind hitl_commit at the fan-in barrier. For the structured-output criterion, extend the existing fixture suite in src/providers/structured.test.ts rather than creating a parallel one, and add the block-scalar normaliser behind the existing Validator seam in src/providers/structured.ts as a tolerant inbound path only.",
+      "evaluatorNotes": "This sprint has the widest gate surface; check each negative fixture actually reaches the gate rather than failing earlier for an unrelated reason. Verify the verbatim stderr assertion compares the exact bytes captured from the failing process, not a reformatted message. Verify the anchor regression test constructs a genuine trade — target test fixed AND anchor broken in the same iteration — rather than only breaking an anchor. Verify the commit test asserts no git object was created in the fail-closed case. Verify the sandbox is the only execution path for generated code by grepping the sprint node modules for execa and child_process. Verify no existing agent file and no security-gate file appears in the diff except as an import.",
+      "estimatedFiles": [
+        "src/pge/nodes/sprint-curate.ts",
+        "src/pge/nodes/sprint-curate.test.ts",
+        "src/pge/nodes/sprint-generate.ts",
+        "src/pge/nodes/sprint-evaluate.ts",
+        "src/pge/nodes/sprint-evaluate.test.ts",
+        "src/pge/nodes/sprint-correct.ts",
+        "src/pge/nodes/sprint-review.ts",
+        "src/pge/nodes/documenter.ts",
+        "src/pge/nodes/commit.ts",
+        "src/pge/nodes/commit.test.ts",
+        "src/pge/nodes/gates.ts",
+        "src/pge/nodes/anchors.ts",
+        "src/pge/nodes/anchors.test.ts",
+        "src/providers/structured.ts",
+        "src/providers/structured.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-05T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-13",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 13,
+      "title": "PgeEngine behind the seam, ts-versus-pge artifact equivalence via EngineConformanceHarness, offline trace replay and an off-by-default exporter",
+      "description": "Wire the graph runtime into the private PipelineEngine seam as the fifth engine, default-off, with a downgrade path that logs one line and re-dispatches the TypeScript engine when the topology fails to compile so a broken artifact cannot brick a run. This is the first sprint in which the full committed artifact compiles, because every node implementation now exists. Point EngineConformanceHarness — built for exactly this comparison and never yet aimed at a real engine — at 'ts' and 'pge' with a deterministic client, a frozen clock and a fixed run id, widened to an eleven-field artifact set with an order-tolerant structured diff. Add offline trace replay that re-executes a recorded run from its span file with the network stubbed to throw, reproducing byte-identical artifacts after volatile-key stripping. Add an OTLP exporter that is off by default and performs zero network calls when unconfigured.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-4",
+        "sprint-spec-20260805-pge-graph-engineering-10",
+        "sprint-spec-20260805-pge-graph-engineering-11",
+        "sprint-spec-20260805-pge-graph-engineering-12"
+      ],
+      "features": [
+        "feat-10"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-13-1",
+          "description": "loadCompiledGraph reads .bober/topology/coding.json, validates it and compiles it with the full production registries, throwing neither UnregisteredNodeImpl nor OrphanNodeImpl, so the committed artifact and the registered implementations are proven to be the same graph.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-2",
+          "description": "EngineConformanceHarness reports equivalent true for 'ts' versus 'pge' across eleven artifact fields — contracts, history, specs, evalResults, briefings, reviews, audits, progress, runState, completionMarker and pipelineResult — on the golden spec, with any diff reported as a structured ConformanceDiff naming artifact, path and engines.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-3",
+          "description": "Both engines emit the pipeline-complete history event and the completion marker through the single owner from sprint 4, and an end-to-end test asserts CompletionTailer.poll() yields the runId for a pge-engine run exactly as it does for a ts-engine run.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-4",
+          "description": "A TopologyCompileError during PgeEngine.run logs exactly one downgrade line and re-dispatches TsPipelineEngine, and the resulting PipelineResult is indistinguishable from a direct TS run for the same input.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-5",
+          "description": "config.pipeline.engine still defaults to 'ts' and the entire existing suite passes with the PGE engine unselected, asserted by a test that loads the shipped default config and resolves the engine name.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-6",
+          "description": "`bober trace replay <runId>` re-executes from .bober/traces/<runId>.jsonl using the recorded provider responses with the network stubbed to throw, and reproduces byte-identical artifacts after volatile-key stripping using the existing conformance comparator.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-7",
+          "description": "The run manifest's per-node sums equal the run totals for calls, tokens and USD, and exceeding a configured ceiling aborts the run with a typed budget error rather than continuing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-8",
+          "description": "A pge run's trace contains zero frontier-tier model calls attributable to routing, classification or syntax nodes, asserted from the span model tier field against the node kinds.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-9",
+          "description": "The OTLP exporter converts a local trace file into an OTLP-compatible payload accepted by a local sink in test, and a second test asserts the exporter is off by default and performs zero network calls when unconfigured.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-10",
+          "description": "A worktree-style test runs the pge engine with a substituted project root and asserts zero writes under the original root, proving no store holds a module-level singleton.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-13-11",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not change the default engine away from 'ts'. Selecting pge stays an explicit opt-in for the whole of this sprint and beyond.",
+        "Do not delete, deprecate or stop maintaining TsPipelineEngine; it is retained permanently as the conformance oracle and is the only thing that gives a future conformance failure a single interpretation.",
+        "Do not change the runPipeline signature or any PipelineResult field while wiring the new engine.",
+        "Do not make the OTLP exporter on by default, and do not let it become the source of truth for traces; the local JSONL span file is authoritative.",
+        "Do not modify the committed topology artifact to make conformance pass; a conformance diff is evidence about the runtime, not a reason to edit the graph.",
+        "Do not author the golden dataset here — sprint 14 owns the 20 to 50 curated cases; this sprint uses the single golden spec fixture."
+      ],
+      "stopConditions": [
+        "The full committed artifact compiles with production registries.",
+        "EngineConformanceHarness reports equivalent true across all eleven fields for the golden spec.",
+        "Trace replay reproduces byte-identical artifacts with the network stubbed to throw.",
+        "Conformance does not converge, in which case the pre-authorised end state applies: pge ships as a permanently opt-in engine, the default stays 'ts', nothing is deleted, and the divergences are recorded rather than papered over."
+      ],
+      "definitionOfDone": "PgeEngine runs the committed topology behind the private seam with a safe downgrade, the conformance harness proves artifact equivalence against the TypeScript engine across eleven fields on the golden spec, a recorded trace replays offline to byte-identical artifacts, and cost accounting reconciles per node against the run total. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, pipeline.engine still defaults to 'ts', and every existing consumer — run, MCP RunManager, worktree runner, fleet children, chat-spawned runs and team routing — behaves as before.",
+      "assumptions": [
+        "EngineConformanceHarness needs a real runnerFor with a deterministic client, a frozen clock and a fixed run id; its current shape (conformance.ts:64-153) supports this and needs widening from two artifact fields to eleven plus an order-tolerant diff.",
+        "Volatile keys stripped by the harness already cover createdAt, runId and duration; any new volatile key introduced by the graph runtime must be added to that list in this sprint rather than tolerated as a diff.",
+        "Trace replay uses the recorded provider responses in the span file, so it regression-tests runtime and artifact shape rather than model output quality."
+      ],
+      "outOfScope": [
+        "Any CI wiring — sprint 14 owns the blocking jobs.",
+        "Deleting the dormant src/orchestrator/workflow/ subtree — sprint 14 records the disposition."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Mirror the downgrade pattern at workflow/selector.ts:29-31 exactly: catch TopologyCompileError, log one info line, construct TsPipelineEngine and re-dispatch. PgeEngine's constructor takes optional deps (interpreterFactory, registries, graphId) so tests can inject without touching production wiring. CommitBoundary.finalize must call the sprint-4 finalizePipelineRun rather than emitting the terminal side effects itself, so all three engines converge on one owner. For replay, the network stub must throw rather than return a canned value, so a missed recording surfaces as a failure instead of silently degrading. The budget ceiling abort must surface as a typed BudgetExceededError propagated to the PipelineResult, not as a generic failure string.",
+      "evaluatorNotes": "The conformance result is the central claim of this sprint — verify it is a genuine comparison of two real engine runs against a fresh project root each, not two invocations of the same runner. Verify the eleven fields are all populated for both engines rather than empty on both sides, which would make equivalence vacuous. Verify the volatile-key stripping list did not grow to hide a real divergence; inspect every key added to it in this diff and justify each. Verify replay's network stub throws. Verify the default-engine test loads the real shipped default config rather than a fixture. Verify the trace tier assertion maps spans to node kinds from the artifact rather than from a hardcoded list.",
+      "estimatedFiles": [
+        "src/pge/engine/pge-engine.ts",
+        "src/pge/engine/pge-engine.test.ts",
+        "src/pge/runtime/replay.ts",
+        "src/pge/runtime/replay.test.ts",
+        "src/pge/runtime/otlp-exporter.ts",
+        "src/pge/runtime/otlp-exporter.test.ts",
+        "src/orchestrator/workflow/conformance.ts",
+        "src/orchestrator/workflow/conformance.test.ts",
+        "src/orchestrator/workflow/selector.ts",
+        "src/orchestrator/workflow/selector.test.ts",
+        "src/pge/runtime/commit.ts",
+        "src/cli/commands/trace.ts",
+        "src/cli/index.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260805-pge-graph-engineering-13-1",
+          "result": "pass",
+          "timestamp": "2026-08-06T22:07:03.374Z"
+        }
+      ],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-06T22:07:03.374Z",
+      "completedAt": "2026-08-06T22:07:03.374Z"
+    },
+    {
+      "contractId": "sprint-spec-20260805-pge-graph-engineering-14",
+      "specId": "spec-20260805-pge-graph-engineering",
+      "sprintNumber": 14,
+      "title": "Golden dataset, blocking CI structural-diff and regression gates, node-level documentation with drift enforcement, and the recorded engine migration disposition",
+      "description": "Close the loop that makes the whole design pay: an artifact nobody gates on is an artifact nobody maintains. Commit a curated dataset of 20 to 50 golden cases with pinned provider responses and expected artifacts. Add one blocking pull-request CI job that runs the graph regression suite against that dataset behind a minimum pass-rate threshold, and in the same job runs pge dump --check, pge validate --mode full, pge docs --check, pge diff --require-version-bump against the base-branch artifact, and pge audit-state followed by git diff --exit-code — none with continue-on-error, so a stale artifact, an undocumented node or an unversioned structural change cannot merge regardless of review attention. Write docs/pge-graph.md covering every node, edge, gate and loop bound, kept in sync by the drift checker. Finally record the migration disposition in writing: PgeEngine remains opt-in with 'ts' as default, TsPipelineEngine is retained permanently as the oracle, the dormant src/orchestrator/workflow/ subtree's retention or conditional retirement is decided against the stated criteria, and the divergence of bober sprint and bober_sprint from the full sprint cycle is either resolved or formally documented as a deliberate escape hatch.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260805-pge-graph-engineering-3",
+        "sprint-spec-20260805-pge-graph-engineering-13"
+      ],
+      "features": [
+        "feat-11"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-14-1",
+          "description": "A test asserts the count of files under .bober/golden/ is within [20,50] and that each validates against a GoldenCase Zod schema containing input, pinned provider responses and expected artifacts.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-2",
+          "description": "Unit tests drive the regression runner at 79, 80 and 81 percent against a threshold of 80 and assert exit codes fail, fail and pass respectively.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-3",
+          "description": "A test parses .github/workflows/ci.yml and asserts a job exists that triggers on pull_request, invokes the graph regression runner, and does not set continue-on-error true.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-4",
+          "description": "The same workflow-parsing test asserts the blocking job also invokes pge dump --check, pge validate --mode full, pge docs --check, pge diff --require-version-bump and pge audit-state with git diff --exit-code, each without continue-on-error.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-5",
+          "description": "Both branches of the structural-diff rule are driven in unit tests: a non-empty topology diff without a graphVersion bump exits non-zero, and the same diff with a bump plus a changelog entry exits zero.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-6",
+          "description": "The diff gate uses structural mode so a base-branch artifact naming schema or prompt refs absent on head does not produce a spurious failure, asserted with a base fixture carrying an unknown promptRef.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-7",
+          "description": "docs/pge-graph.md exists and a doc-drift test asserts the set of node ids documented equals the set of node ids in the committed topology artifact; adding a node to a fixture artifact without documenting it fails the test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-8",
+          "description": "docs/pge-graph.md documents, for every gate, what schema it validates and what it routes to on failure, and for every cyclic edge its counterKey, maxIterations and onExhausted target, asserted by a test that cross-checks those fields against the artifact rather than merely checking headings exist.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-9",
+          "description": "A test asserts config.pipeline.engine still defaults to 'ts' and that TsPipelineEngine is still constructible and still exercised by the conformance job, so the oracle is provably retained.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-10",
+          "description": "The migration disposition is recorded in docs/pge-graph.md with an explicit decision for the dormant src/orchestrator/workflow/ subtree and for bober sprint and bober_sprint; if any workflow module is deleted, its assertions are first proven green against the graph runtime and the deletion is reflected in the test count with no net loss of covered invariants.",
+          "verificationMethod": "agent-evaluation",
+          "required": true
+        },
+        {
+          "criterionId": "sc-14-11",
+          "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add continue-on-error to any new job, and do not follow the precedent of the existing informational kpi-gate job — an informational structural gate is decorative and defeats the purpose of the whole design.",
+        "Do not delete src/orchestrator/workflow/ modules that gained production callers: Scheduler, Semaphore, mapBounded, Budget, retry.ts, reconciler.ts, synthesizer.ts and conformance.ts are retained permanently.",
+        "Do not delete any test to make a gate pass. Deletion of the dormant subtree is conditional on its assertions being green on the graph runtime first.",
+        "Do not change the default engine to 'pge' in this sprint, and do not remove TsPipelineEngine.",
+        "Do not treat a permanently-green golden dataset as evidence of generation quality; the pinned provider responses regression-test runtime and artifact shape only, and the documentation must say so.",
+        "Do not implement bober sprint / bober_sprint re-pointing here; this sprint records the decision, and re-pointing would change observable behaviour for two of three entry points."
+      ],
+      "stopConditions": [
+        "The blocking CI job runs all six checks plus the regression suite with no continue-on-error anywhere.",
+        "Both branches of the version-bump rule are proven by unit tests rather than by trusting the workflow file.",
+        "The doc-drift test fails when a node is added without documentation.",
+        "The golden dataset count is within [20,50] and every case validates.",
+        "A decision recorded in the disposition would require deleting a test whose invariant is not yet covered on the graph runtime."
+      ],
+      "definitionOfDone": "A curated golden dataset is committed, one blocking pull-request job gates merges on graph regression pass rate plus artifact freshness, validity, documentation, structural version bumping and state-audit determinism, docs/pge-graph.md documents every node, gate and loop bound with a drift test enforcing it, and the engine migration disposition is written down. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, pipeline.engine still defaults to 'ts', and no test was removed to satisfy a gate.",
+      "assumptions": [
+        "Authoring 20 to 50 cases with pinned provider responses is substantial hand-written content and is the largest non-code effort in the plan; the count may be delivered at the low end of the range with a documented plan to grow it.",
+        "The CI job checks out the base branch artifact to diff against; structural mode is required because a base artifact may name refs absent on head.",
+        "The changelog entry required alongside a graphVersion bump is a section in docs/pge-graph.md rather than a separate file, so documentation and version history stay in one place the drift test already reads."
+      ],
+      "outOfScope": [
+        "A quality benchmark measuring generation output against human judgement.",
+        "Flipping the default engine, which is a separate decision requiring sustained green conformance across real runs."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Add the new job to the existing .github/workflows/ci.yml alongside build-and-test rather than creating a second workflow file, and make it need build-and-test so it runs on a built tree. The golden-case schema should reuse the existing conformance normalisation so expected artifacts are stored already stripped of volatile keys. For the diff gate, fetch the base artifact with git show <base>:.bober/topology/coding.json rather than a network call, so the gate works on forks and offline. The doc-drift checker already exists from sprint 3 — this sprint supplies the document and wires the check, it does not rewrite the checker. When recording the disposition, state the evidence: which workflow assertions are now green on the graph runtime, whether conformance is blocking, and what the pre-authorised end state is if conformance never converges.",
+      "evaluatorNotes": "The central risk here is a gate that exists but does not bite. Verify each of the six checks by deliberately breaking its precondition in a test and asserting a non-zero exit: mutate the committed artifact, add an undocumented node to a fixture, change a fixture topology without bumping graphVersion, and stale the state audit. Verify the workflow-parsing test reads the real ci.yml and would fail if continue-on-error were added. Verify the golden dataset count assertion reads the directory rather than a hardcoded list. Verify no test file was deleted in this diff, and if a workflow module was deleted, verify the corresponding invariant has a passing counterpart on the graph runtime. Verify the documentation states the golden dataset's limitation explicitly.",
+      "estimatedFiles": [
+        ".github/workflows/ci.yml",
+        "docs/pge-graph.md",
+        "src/pge/golden/case-schema.ts",
+        "src/pge/golden/case-schema.test.ts",
+        "src/pge/golden/runner.ts",
+        "src/pge/golden/runner.test.ts",
+        "src/pge/golden/dataset.test.ts",
+        "src/pge/topology/docs.test.ts",
+        "src/cli/commands/pge.ts",
+        "src/cli/commands/pge.test.ts",
+        ".bober/golden/",
+        "scripts/"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260805-pge-graph-engineering-14-1",
+          "result": "pass",
+          "timestamp": "2026-08-07T00:14:08.407Z"
+        }
+      ],
+      "createdAt": "2026-08-05T00:00:00Z",
+      "updatedAt": "2026-08-07T00:14:08.407Z",
+      "completedAt": "2026-08-07T00:14:08.407Z"
+    }
+  ]
+}

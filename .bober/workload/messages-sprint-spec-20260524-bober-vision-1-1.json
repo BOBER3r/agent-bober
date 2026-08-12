@@ -1,0 +1,16 @@
+{
+  "entryId": "messages-sprint-spec-20260524-bober-vision-1-1",
+  "channel": "messages",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/handoffs/gen-report-sprint-spec-20260524-bober-vision-1-1.json"
+  },
+  "value": {
+    "id": "sprint-spec-20260524-bober-vision-1:generator:1",
+    "seq": 6,
+    "role": "assistant",
+    "nodeId": "sprint_generate",
+    "text": "Hook completes ~456ms warm. bash startup dominates (~450ms). All 14 catalog skills named (with planned annotations for future-sprint skills). Domain skills (anchor, brownfield, graph, impact, onboard, playwright, react, solidity) in a separate section.",
+    "tokens": 252
+  }
+}

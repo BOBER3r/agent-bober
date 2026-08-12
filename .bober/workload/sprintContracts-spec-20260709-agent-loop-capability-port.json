@@ -1,0 +1,915 @@
+{
+  "entryId": "sprintContracts-spec-20260709-agent-loop-capability-port",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-1.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-2.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-3.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-4.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-5.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-6.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-7.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-8.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-9.json",
+      ".bober/contracts/sprint-spec-20260709-agent-loop-capability-port-10.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 1,
+      "title": "Refusal detection end-to-end (stopReason 'refusal' + fail-closed generator)",
+      "description": "Surface a model refusal as a first-class outcome instead of a silent success. Add an explicit 'refusal' StopReason mapping in the Anthropic and OpenAI-family adapters, detect it at the loop's completion branch, return refused:true on AgenticLoopResult (never throw), and make parseGeneratorResult fail closed: a refusal overrides the filesWritten-implies-success path. Advisory/read-only roles surface the refusal text without failing the run (ADR-5).",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The Anthropic adapter's normalizeStopReason maps the raw 'refusal' stop reason to StopReason 'refusal' via an explicit case (not the default branch), and the open StopReason union documents 'refusal' as a known value.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The OpenAI-family adapter maps its refusal surface (refusal content / content_filter finish reason) to StopReason 'refusal'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "runAgenticLoop returns { refused: true, stopReason: 'refusal' } with a resolved (not rejected) promise when the client returns a refusal, including when tool results from earlier turns exist.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "parseGeneratorResult returns success:false with a refusal note when loopResult.refused === true, even when filesWritten.size > 0 (the refusal guard runs before the filesWritten check).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "When no refusal occurs, AgenticLoopResult carries no refused key and all pre-existing loop/generator tests pass unchanged (byte-identical non-refusal path).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "npm run build and npm run typecheck pass with the extended types.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add budget, effort, or parallel-tool behavior (later sprints).",
+        "Do not throw from the loop on refusal (ADR-5: return, never throw — no catcher exists around runGenerator in pipeline.ts).",
+        "Do not change advisory roles' success semantics — they surface refusal text as output.",
+        "Do not touch the claude-code adapter's text-only boundary."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: adapter refusal mapping (both families), loop refused flag without throwing, generator fail-closed override of filesWritten, and byte-identical non-refusal behavior.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "A provider refusal propagates as StopReason 'refusal' through the adapters, sets refused:true and stopReason 'refusal' on AgenticLoopResult without throwing, and a generator sprint that refuses after partial writes is reported success:false. Non-refusal runs are byte-identical. Build, typecheck, lint, and the full suite are green.",
+      "assumptions": [
+        "The Anthropic SDK's raw StopReason already includes 'refusal' (node_modules/@anthropic-ai/sdk .../messages.d.ts) and currently passes through normalizeStopReason's default branch as a raw string; the substantive bug is the loop's completion branch treating any non-tool_use stop as done. Evidence: src/providers/anthropic.ts:32-45, src/orchestrator/agentic-loop.ts:301.",
+        "StopReason (src/providers/types.ts:207) is an open union ('end' | 'tool_use' | 'max_tokens' | 'error' | string) so adding 'refusal' is additive.",
+        "No code outside providers/ and agentic-loop.ts reads AgenticLoopResult.stopReason (verified at architecture Checkpoint 4), so the new value cannot break existing consumers."
+      ],
+      "outOfScope": [
+        "USD budget, effort, parallel tools (sprints 2-4).",
+        "Refusal-triggered retries or automatic re-prompting."
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) src/providers/anthropic.ts normalizeStopReason (~:32-45): add an explicit case mapping 'refusal' → 'refusal' with a one-line comment that the value is part of the open union. (2) src/providers/openai.ts normalizeStopReason (~:164-175): map the OpenAI refusal surface (message.refusal content and/or finish_reason 'content_filter') → 'refusal'; openai-compat shares this path. (3) src/providers/types.ts: document 'refusal' in the StopReason union comment; add optional refused?: boolean is NOT needed on ChatResponse — the loop derives it. (4) src/orchestrator/agentic-loop.ts completion branch (~:301, the stopReason !== 'tool_use' return): when response.stopReason === 'refusal', return the normal result shape plus refused: true (spread-conditional so the key is absent otherwise). (5) src/orchestrator/generator-agent.ts parseGeneratorResult (~:181-260): accept the loop result (it already receives it or thread it), and FIRST check refused === true → return success:false with a clear note ('model refused: <finalText excerpt>') before any filesWritten logic. Follow existing test file collocation (*.test.ts next to source) and use fake LLMClient objects returning scripted ChatResponses like existing agentic-loop tests do.",
+      "evaluatorNotes": "Use a fake client whose chat() returns stopReason 'refusal' (with and without prior tool_use turns) and assert the loop resolves with refused:true, stopReason 'refusal' (sc-1-3). Unit-test normalizeStopReason in both adapters directly (sc-1-1, sc-1-2). For sc-1-4 call parseGeneratorResult with a loop result where refused=true and a non-empty filesWritten set; assert success:false and the note mentions refusal. For sc-1-5 assert a normal completion result has no 'refused' key (use Object.hasOwn) and run the FULL existing suite. Confirm build + typecheck + lint all pass.",
+      "estimatedFiles": [
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/openai.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/orchestrator/generator-agent.ts",
+        "src/orchestrator/generator-agent.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T20:29:01.000Z",
+      "completedAt": "2026-07-09T20:29:01.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 2,
+      "title": "Cost substrate: CostMeter price table, ChatResponse.costUsd, Budget maxUsd",
+      "description": "Build the money layer with no loop changes. A new pure CostMeter maps (provider, model, tokenUsage) to a USD estimate via a static all-provider price table (longest-prefix match, unknown → undefined). Every adapter populates optional ChatResponse.costUsd — claude-code returns its real, currently-discarded total_cost_usd and never estimates (ADR-3); anthropic/openai/openai-compat (and google where usage is normalized) use the CostMeter. Budget gains an optional maxUsd ceiling alongside tokens/agents.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "estimateCostUsd({provider, model, usage}) returns the correct USD for known models via longest-prefix match on `${provider}:${modelPrefix}` keys and undefined for unknown models; the table carries rows for anthropic, openai, openai-compat (DeepSeek, xAI/Grok) and google with an as-priced date comment.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "The claude-code adapter returns costUsd equal to the CLI's parsed total_cost_usd (vendor-authoritative), never a CostMeter estimate, and omits the field when the CLI output lacks it.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "The anthropic and openai/openai-compat adapters set costUsd from estimateCostUsd when a price row matches and omit the field entirely when it returns undefined.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "Budget accepts maxUsd (null/omitted = unlimited): chargeUsd accumulates into usdSpent; remainingUsd() returns Infinity when uncapped; exceeded() and assertWithinBudget() honor the USD axis with BudgetExceededError kind 'usd'; NaN/negative/undefined charges are treated as 0.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "All pre-existing Budget token/agent tests and provider adapter tests pass unchanged (byte-identical when maxUsd/costUsd are absent).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not wire Budget into the agentic loop or any role (sprint 3).",
+        "Do not add config schema fields (sprint 3).",
+        "Do not make the price table config-overridable (explicitly declined in planning Q1).",
+        "Do not fetch prices at runtime — the table is static and in-repo."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: prefix matching + undefined for unknown, claude-code real-cost passthrough, adapter estimate-or-omit behavior, and the full USD Budget axis including error kind 'usd'.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "A pure src/providers/cost-meter.ts exposes estimateCostUsd with a dated all-provider PriceTable; every API adapter populates optional ChatResponse.costUsd (real for claude-code); Budget enforces an optional maxUsd with chargeUsd/usdSpent/remainingUsd and BudgetExceededError kind 'usd'. Nothing consumes these yet; omitting them is byte-identical. Build and full suite green.",
+      "assumptions": [
+        "claude-code.ts already parses total_cost_usd (~:55) and discards it in the return block (~:182-190); this sprint threads it into the return.",
+        "ChatResponse (src/providers/types.ts:212-224) gains optional costUsd — LLMClient.chat signature unchanged.",
+        "Budget lives at src/orchestrator/workflow/budget.ts (BudgetOptions ~:19-24, BudgetExceededError ~:27-36); its existing workflow-interpreter callers must remain source-compatible.",
+        "ProviderName union comes from src/providers/factory.ts (~:13); DeepSeek/Grok run through openai-compat so their price keys use model-prefix distinctions (e.g. 'openai-compat:deepseek', 'openai-compat:grok').",
+        "Price values are best-known list prices at build time with an as-priced date comment; guardrail-not-billing semantics (approved planning answer Q1)."
+      ],
+      "outOfScope": [
+        "Loop charging and stop behavior (sprint 3).",
+        "History/report persistence of cost (sprint 3)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/providers/cost-meter.ts: export type PriceRow { inputPerMillion: number; outputPerMillion: number }, type PriceTable = Record<string, PriceRow> keyed `${provider}:${modelPrefix}`, and estimateCostUsd(input: {provider, model, usage}): number | undefined implementing longest-prefix match (sort matching keys by prefix length desc). Include a '// Prices as of 2026-07 (list prices; guardrail semantics, not billing)' comment. Populate rows for anthropic (claude-fable-5, claude-opus-4, claude-sonnet-5, claude-haiku-4-5 prefixes), openai, openai-compat:deepseek, openai-compat:grok, google:gemini — verify current list prices before hardcoding; if a price cannot be confirmed, omit the row (undefined is the safe fail-open) rather than guessing. Return undefined for provider 'claude-code' unconditionally. Extend budget.ts additively: maxUsd on BudgetOptions, chargeUsd (guard !Number.isFinite(usd) || usd < 0 → 0), usdSpent getter, remainingUsd() (Infinity when uncapped), extend exceeded()/assertWithinBudget(), add 'usd' to the kind union. In each adapter, compute costUsd right where the normalized ChatResponse is assembled (anthropic ~:348 return, openai usage normalize ~:455-457, openai-compat mirrors openai, claude-code return block ~:182-190) using conditional spread so the key is absent when undefined. Do NOT import cost-meter in claude-code.ts.",
+      "evaluatorNotes": "Test estimateCostUsd: exact prefix, longer-prefix-wins (e.g. 'anthropic:claude-sonnet' vs 'anthropic:claude'), unknown model → undefined, claude-code → undefined, arithmetic correctness (tokens/1e6 * price summed for input+output) (sc-2-1). Mock the claude CLI JSON with and without total_cost_usd and assert passthrough/omission (sc-2-2). For adapters, stub the SDK response and deep-assert the returned ChatResponse: costUsd present with expected value for a priced model, key ABSENT (Object.hasOwn false) for an unpriced one (sc-2-3). Budget: charge sequences crossing the ceiling, remainingUsd Infinity uncapped, assertWithinBudget throws BudgetExceededError with kind 'usd', NaN/negative → 0 (sc-2-4). Run the FULL suite for sc-2-5 and build/typecheck for sc-2-6.",
+      "estimatedFiles": [
+        "src/providers/cost-meter.ts",
+        "src/providers/cost-meter.test.ts",
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/openai.ts",
+        "src/providers/openai-compat.ts",
+        "src/providers/claude-code.ts",
+        "src/orchestrator/workflow/budget.ts",
+        "src/orchestrator/workflow/budget.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T20:56:32.000Z",
+      "completedAt": "2026-07-09T20:56:32.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 3,
+      "title": "Loop wiring: per-role effort, USD ceiling enforcement, config schema, cost persistence",
+      "description": "Drive the sprint-2 substrate from config through the loop. Per-role Zod fields effort and budget.maxUsd; AgenticLoopParams gains effort and budget; the loop forwards effort to ChatParams (spread like maxTokens), charges the Budget per turn (tokens + costUsd), and on a hit ceiling breaks gracefully with stopReason 'budget_exceeded' — never throwing (ADR-4). AgenticLoopResult gains cumulative costUsd, persisted additively into history.jsonl sprint events.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260709-agent-loop-capability-port-2"
+      ],
+      "features": [
+        "feat-2",
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "Per-role config sections accept optional effort (enum low|medium|high|xhigh|max) and budget { maxUsd: positive number | null }; every existing bober.config.json fixture parses unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "config.<role>.effort reaches the Anthropic request as output_config.effort; when unset, the rendered request payload is deep-equal to the pre-change payload (no output_config key) and non-Anthropic adapters never carry effort on the wire.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "With a Budget on AgenticLoopParams, the loop charges tokens and costUsd once per turn and, when exceeded(), returns a partial result with stopReason 'budget_exceeded' via a resolved promise (mirrors the max-turns return; assertWithinBudget is never called).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "AgenticLoopResult.costUsd equals the sum of per-turn response costUsd values when any were present and the key is absent when none were.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "Sprint-completion history.jsonl events carry an optional costUsd field when the run produced one and are byte-identical (no new key) when it did not.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "A role entry point (generator at minimum) constructs Budget from config.<role>.budget.maxUsd and passes effort/budget into runAgenticLoop; with neither key set, its loop invocation arguments are unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not throw BudgetExceededError from the loop (ADR-4: no catcher exists around runGenerator in pipeline.ts).",
+        "Do not enable any effort/budget value in this repo's own bober.config.json (dogfooding declined).",
+        "Do not map effort to non-Anthropic reasoning params.",
+        "Do not add mid-turn cost interruption (ceiling fires between turns; sprint 9 adds abort)."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: schema round-trip compatibility, effort on-wire only when configured, graceful budget_exceeded stop without throwing, cumulative costUsd, and additive history persistence.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "Setting config.<role>.effort and config.<role>.budget.maxUsd drives real behavior: Anthropic requests carry output_config.effort, spend is charged per turn, a hit ceiling ends the run gracefully with stopReason 'budget_exceeded', and per-run cost lands on AgenticLoopResult.costUsd plus optional history.jsonl fields. Omitting both keys is byte-identical end-to-end. Build and full suite green.",
+      "assumptions": [
+        "ChatParams.effort already exists (types.ts:155) and anthropic.ts already forwards it (~:310 output_config conditional spread) — this sprint only creates callers.",
+        "Per-role Zod sections live at src/config/schema.ts (~:83-129); the additive-optional pattern used by research/fleet sections applies.",
+        "Role entry points construct loop params in src/orchestrator/<role>-agent.ts (generator ~:115-145); wiring the generator plus a shared helper the other roles can adopt satisfies sc-3-6.",
+        "The loop accumulates usage after chatWithRetry (~:293) — budget charging inserts there; the max-turns return (~:406) is the convention the budget_exceeded return mirrors.",
+        "History events are appended as JSON lines; adding an optional key is additive (approved planning answer Q2)."
+      ],
+      "outOfScope": [
+        "Fleet child config plumbing beyond what buildChildConfig already inherits from the shared schema.",
+        "Cost display in chat/telegram UIs."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Schema: add EffortSchema = z.enum(['low','medium','high','xhigh','max']).optional() and BudgetSectionSchema = z.object({ maxUsd: z.number().positive().nullable().optional() }).optional() in src/config/schema.ts, attach both to each per-role section (planner/curator/generator/evaluator; follow how existing optional fields sit in those sections). Loop: extend AgenticLoopParams with effort?: Effort and budget?: Budget (import type from workflow/budget.ts); spread effort into the chatWithRetry params exactly where maxTokens is spread (~:264-266); after the usage accumulation (~:293) call budget?.chargeTokens(response.usage) and budget?.chargeUsd(response.costUsd ?? 0), then if (budget?.exceeded()) return the partial-result shape used by the max-turns path with stopReason 'budget_exceeded'. Result: track a running cost sum (only when at least one response carried costUsd) and attach via conditional spread. Generator wiring (~generator-agent.ts:115-145): read config values, construct Budget only when maxUsd != null, pass both conditionally so absent config → identical params object. Persistence: where the sprint-completion history event is appended (grep for \"sprint-completed\" or the history append helper in src/utils or orchestrator/pipeline.ts), conditionally include costUsd. Keep BudgetExceededError untouched for the workflow interpreter's existing fail-fast use.",
+      "evaluatorNotes": "sc-3-1: parse every config fixture in the repo plus a config with the new keys; assert old fixtures produce deep-equal parsed output vs the pre-change schema behavior (no defaults injected). sc-3-2: spy on the Anthropic SDK create call — with effort set assert output_config.effort; without, deep-equal the request object to the baseline and assert no output_config key; assert openai adapter request never contains effort. sc-3-3: fake client with fixed per-turn costUsd and a Budget maxUsd crossed on turn 2 → assert resolved result, stopReason 'budget_exceeded', turnsUsed 2, and that chat was not called a third time. sc-3-4: runs with and without costUsd-bearing responses; Object.hasOwn checks. sc-3-5: temp .bober dir, run the history append with and without cost; parse lines and assert key presence/absence. sc-3-6: invoke the generator entry with a config lacking the new keys and spy on runAgenticLoop params (no effort/budget keys). Build + full suite.",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/config/schema.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/orchestrator/generator-agent.ts",
+        "src/orchestrator/generator-agent.test.ts",
+        "src/orchestrator/pipeline.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T21:27:53.000Z",
+      "completedAt": "2026-07-09T21:27:53.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 4,
+      "title": "Parallel read-only tool execution (ToolDef.readOnly + executeToolBatch + per-role flag)",
+      "description": "Replace the loop's strictly serial tool execution with a delegating executor that runs contiguous runs of read-only-annotated tool calls concurrently while everything else stays serial. Classification is a ToolDef.readOnly annotation (ADR-2, conservative allow-list: read_file/glob/grep only — bash never). Results preserve original order, per-tool failures become in-slot error results, and the batch never rejects. Enabled by a per-role parallelReadOnlyTools config flag, default false → byte-identical serial semantics.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "ToolDef supports optional readOnly?: boolean; exactly read_file, glob and grep are annotated readOnly:true in the tool schemas; bash, write_file and edit_file are unmarked.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "With parallel enabled, a turn requesting multiple read-only tools executes them concurrently — proven by delayed fake handlers where total elapsed is less than the sum of individual delays — and the returned ToolResult[] preserves the original tool-call order by toolUseId.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "A throwing handler or unknown tool inside a parallel batch produces an isError ToolResult in its original slot with the same shape as the serial path's error results, and executeToolBatch resolves (never rejects).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "With the flag off, or for any unmarked tool, execution order and results are byte-identical to the pre-change serial for-await loop (all existing loop/tool tests pass unchanged).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "A per-role parallelReadOnlyTools boolean config field (optional, default false) reaches AgenticLoopParams; existing configs parse unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not annotate bash as read-only under any circumstance (a shell command can mutate state).",
+        "Do not parallelize write tools or mixed batches beyond contiguous read-only runs.",
+        "Do not hard-code a tool-name allow-list inside the loop (ADR-2: classification travels with the ToolDef).",
+        "Do not enable the flag by default anywhere."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: annotation coverage, proven concurrency with order preservation, in-slot error containment without batch rejection, byte-identical serial fallback, and the config flag path.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "Tool execution is delegated to executeToolBatch; with the per-role flag on, independent read-only calls overlap in time while results keep their original order and failures stay in-slot; with the flag off or annotations absent, behavior is byte-identical to the serial loop. Build and full suite green.",
+      "assumptions": [
+        "The serial loop lives at src/orchestrator/agentic-loop.ts ~:353-388 with the unknown-tool error path (~:362-369) and per-tool catch (~:379-387) whose result shapes the executor must mirror exactly.",
+        "Tool schemas live in src/orchestrator/tools/schemas.ts (~:9-162) and handlers in src/orchestrator/tools/handlers.ts (ToolHandler ~:21-23).",
+        "graph_* tools (src/graph/prompts.ts context) are NOT annotated this sprint — they can opt in later per ADR-2's self-declaration model.",
+        "onToolUse callback timing may shift for parallel batches (fired at dispatch); existing tests observe presence/args, not strict wall-clock interleaving."
+      ],
+      "outOfScope": [
+        "Parallelizing MCP-bridged tools (sprint 10 tools default to serial via absent annotation).",
+        "Cross-turn pipelining or speculative tool execution."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/orchestrator/tools/executor.ts exporting executeToolBatch(batch: { toolCalls, toolHandlers, readOnlyTools: Set<string>, parallel: boolean, onToolUse? }): Promise<ToolResult[]>. Algorithm: walk toolCalls grouping maximal contiguous runs where parallel && readOnlyTools.has(name); execute such runs with Promise.all over wrapped handlers (each wrapper try/catches into the exact isError ToolResult shape used by the serial catch), everything else strictly sequential; assemble results indexed by position so order is preserved. Add readOnly?: boolean to the ToolDef type (schemas.ts) and annotate read_file/glob/grep only. In agentic-loop.ts, derive readOnlyTools once from params.tools and replace the ~:353-388 block with a call to executeToolBatch (parallel = params.parallelReadOnlyTools === true); keep the ToolResultMessage append (~:392) unchanged. Add the per-role Zod flag next to sprint 3's effort/budget fields (coordinate: if sprint 3 already landed, extend the same section; if building independently, add just this flag additively) and thread it from the generator entry point. Use fake handlers with setTimeout delays in tests; measure elapsed with performance.now().",
+      "evaluatorNotes": "sc-4-1: assert schemas' readOnly flags exactly (three true, bash/write_file/edit_file undefined). sc-4-2: three fake read-only handlers each delayed ~50ms, parallel=true → elapsed < 120ms (vs ~150ms serial) AND results array matches input order with correct toolUseIds; also verify a serial run of the same batch takes >= 140ms to prove the fixture is meaningful. sc-4-3: middle handler throws / middle tool unknown → its slot isError with message shape matching the serial path (compare against a serial-path fixture), other slots normal, promise resolves. sc-4-4: parallel=false and unmarked-tool batches → assert handler invocation order equals input order (record call order); run FULL existing suite. sc-4-5: config fixture without the flag parses unchanged; with flag, spy on runAgenticLoop params. Build + typecheck.",
+      "estimatedFiles": [
+        "src/orchestrator/tools/executor.ts",
+        "src/orchestrator/tools/executor.test.ts",
+        "src/orchestrator/tools/schemas.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/config/schema.ts",
+        "src/orchestrator/generator-agent.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T22:22:25.000Z",
+      "completedAt": "2026-07-09T22:22:25.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 5,
+      "title": "Structured loop event stream + host-style hooks (preToolUse veto, postToolUse, onStop)",
+      "description": "Give the own loop the SDK's observability and interception surface without consuming model context. A single optional onEvent callback emits a typed LoopEvent union (init, turn-start, tool-start, tool-end, turn-end, result; compact-boundary reserved for sprint 7). Optional hooks run host-side: preToolUse can veto a tool call (the model receives a rejection tool result and the loop continues), postToolUse observes results, onStop observes the final result. All absent → byte-identical.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "With onEvent set, a two-turn run (one tool turn + one completion turn) emits ordered typed events: init, then per turn turn-start / tool-start / tool-end / turn-end, then result — each carrying its documented payload (turn number, tool name/input, result summary, final stopReason).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "A preToolUse hook returning {allow:false, reason} prevents the handler from executing; the model receives an isError rejection ToolResult containing the reason, and the loop proceeds to the next turn rather than stopping.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "postToolUse receives (name, input, result) after each execution and onStop receives the final AgenticLoopResult exactly once, for every stop path (completion, max-turns, and — when present from sprint 1/3 — refusal and budget_exceeded).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "A throwing observe hook (onEvent/postToolUse/onStop) is caught and logged without crashing the loop; a throwing preToolUse counts as a deny (fail-closed veto).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "With no onEvent and no hooks, loop behavior and results are byte-identical (full existing suite passes unchanged; existing onToolUse/onTurnComplete callbacks keep working as-is).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not migrate careful-mode checkpoint gates or ToolRoleGuard onto the new hooks (existing safety machinery untouched; migration is a possible follow-up).",
+        "Do not remove or deprecate onToolUse/onTurnComplete (additive coexistence).",
+        "Do not emit text deltas (sprint 8) or compact-boundary events (sprint 7) — only reserve the type names.",
+        "Do not let hooks mutate tool inputs (veto-only this sprint; transformation is out of scope)."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: ordered typed event emission, veto semantics with in-loop continuation, per-stop-path onStop, fail-closed veto on hook throw, and byte-identical absence path.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "AgenticLoopParams accepts optional onEvent and hooks; a run emits a complete ordered typed event trace, preToolUse can block any tool call without stopping the run, observe hooks can never crash the loop, and omitting everything is byte-identical. Build and full suite green.",
+      "assumptions": [
+        "LoopEvent is an own discriminated union in src/orchestrator/agentic-loop.ts (or a sibling loop-events.ts) — no SDK types involved.",
+        "The rejection ToolResult shape reuses the loop's existing error-result shape (~:362-369 unknown-tool path) so the model-visible surface is consistent.",
+        "Hooks run host-side (plain callbacks in the orchestrating process) and add zero tokens to the conversation.",
+        "Sprints 1/3 may or may not have landed when this builds; onStop coverage for refusal/budget_exceeded applies only to stop paths that exist at build time (dependsOn is intentionally empty)."
+      ],
+      "outOfScope": [
+        "Wiring chat /careful gates or the IDE monitor onto onEvent (consumers integrate later).",
+        "Hook-based input transformation or output redaction."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Define in src/orchestrator/loop-events.ts: type LoopEvent = { type:'init', model, maxTurns } | { type:'turn-start', turn } | { type:'tool-start', turn, name, input, toolUseId } | { type:'tool-end', turn, name, toolUseId, isError } | { type:'turn-end', turn, toolsCalled } | { type:'result', stopReason, turnsUsed } (compact-boundary and text-delta reserved via comment). Define LoopHooks { preToolUse?: (call: {name, input, toolUseId}) => HookDecision | Promise<HookDecision>; postToolUse?: (call, result) => void | Promise<void>; onStop?: (result: AgenticLoopResult) => void | Promise<void> } with HookDecision = { allow: boolean; reason?: string }. Add onEvent?: (e: LoopEvent) => void and hooks?: LoopHooks to AgenticLoopParams. Emit events at the natural loop points (init before first chat, turn-start each iteration, tool events inside tool execution — coordinate with sprint 4's executor if landed: pass an emit callback into executeToolBatch or emit around it, result just before each return). Wrap ALL observe callbacks in try/catch (log via existing logger util, continue); wrap preToolUse so a throw → {allow:false, reason:'hook error (fail-closed)'}. Veto path: skip handler, push the standard isError ToolResult with the reason text. Ensure EVERY return path (completion ~:328, max-turns ~:406, error, and any sprint-1/3 paths present) fires onStop + result event exactly once — extract a single finish(result) helper to guarantee it.",
+      "evaluatorNotes": "sc-5-1: scripted 2-turn fake client; collect events; assert exact type sequence and payload fields. sc-5-2: preToolUse denying one named tool → handler spy not called for it, the ToolResult fed back is isError containing the reason (inspect the messages passed to the next chat call), loop continues to completion. sc-5-3: spies for postToolUse/onStop across completion and max-turns runs (plus refusal/budget if those paths exist in the tree) — onStop called exactly once each. sc-5-4: throwing onEvent/postToolUse → run completes normally; throwing preToolUse → tool skipped with fail-closed rejection. sc-5-5: run FULL suite; also a paired run with/without hooks asserting deep-equal AgenticLoopResult. Build + typecheck.",
+      "estimatedFiles": [
+        "src/orchestrator/loop-events.ts",
+        "src/orchestrator/loop-events.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/orchestrator/tools/executor.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T22:52:38.000Z",
+      "completedAt": "2026-07-09T22:52:38.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 6,
+      "title": "Loop session persistence, resume and fork (.bober/sessions/)",
+      "description": "Opt-in model-context continuity for the own loop. When AgenticLoopParams carries a session option, the loop persists its provider-agnostic transcript (the Message[] union) to .bober/sessions/<sessionId>.json after every turn. resumeSession loads a transcript so a new loop invocation continues with full prior context; forkSession copies a transcript to a new id so approaches can branch without mutating the original. No session option → no files, byte-identical.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "With a session option, the transcript file exists after the first turn and is updated after every subsequent turn (crash-resumable), containing the full Message[] plus metadata (sessionId, model, createdAt, updatedAt, turnsUsed).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "A loop started via resumeSession(sessionId) sends the persisted prior messages to the client before the new user message (verified by inspecting the fake client's received messages) and appends its new turns to the same session file.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "forkSession(sessionId) returns a new sessionId whose file starts as a copy; continuing the fork leaves the original transcript byte-identical while the fork diverges.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "Without a session option, no .bober/sessions/ file or directory is created and loop behavior is byte-identical (full existing suite unchanged).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "Corrupt or missing session files fail soft: resumeSession surfaces a typed error result (not a throw from the loop) and never silently starts an empty session in place of the requested one.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not auto-enable sessions for any pipeline role (opt-in surface only this sprint).",
+        "Do not implement cross-process/fleet-child session sharing.",
+        "Do not deduplicate or compact transcripts (sprint 7 owns compaction).",
+        "Do not replace the existing run-scoped chat /resume or do-bridge sessionId concepts — different layer, keep names distinct in docs."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: per-turn persistence with metadata, resume rehydration visible to the client, fork isolation, no-op absence path, and fail-soft corrupt handling.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "A SessionStore module persists loop transcripts under .bober/sessions/ per turn when opted in; resume continues a session with full prior context and fork branches a copy — original untouched. Omitting the option writes nothing and changes nothing. Build and full suite green.",
+      "assumptions": [
+        "The Message union (src/providers/types.ts:127) is JSON-serializable as-is (text/assistant/tool-result/system-update variants); if any variant carries non-serializable fields, the store normalizes them explicitly.",
+        "Filesystem-state principle applies: JSON under .bober/, async fs only, safeParse-on-read like job-store.ts (src/research/job-store.ts is the pattern).",
+        "The loop currently builds its messages array internally from systemPrompt+userMessage; resume passes an initialMessages?: Message[] param threaded ahead of the new user message.",
+        "sessionId generation follows the existing content-hash-or-injected-id pattern (no argless Date.now()/randomUUID in core; id injectable for tests)."
+      ],
+      "outOfScope": [
+        "UI/CLI surface for listing or pruning sessions (candidate follow-up: bober sessions list|rm).",
+        "Encryption of transcripts at rest."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Create src/orchestrator/session-store.ts: SessionRecord { sessionId, model, createdAt, updatedAt, turnsUsed, messages: Message[] } with a Zod schema; SessionStore { save(record), load(sessionId), fork(sessionId, newId), path(sessionId) } over .bober/sessions/<id>.json (mirror src/research/job-store.ts: ensureDir, safeParse-before-write, async-only). Extend AgenticLoopParams with session?: { store: SessionStore; sessionId: string } and initialMessages?: Message[]. In the loop: when session present, after each turn's messages are appended, save the full record (await — per-turn durability beats speed here); when initialMessages present, seed the conversation before the user message. Export resumeSession(store, sessionId): Promise<{ initialMessages, sessionId } | { error }> and forkSession(store, sessionId, newId?): Promise<string>. Fail-soft: loop-level resume errors return a typed error result consistent with the existing stopReason 'error' path. Inject clock/id at boundaries per repo convention (no argless new Date() in core).",
+      "evaluatorNotes": "Use a temp dir as project root. sc-6-1: 3-turn scripted run → file exists after turn 1 (hook into per-turn callback to check mid-run), final record has turnsUsed 3 and full messages. sc-6-2: seed a session file, resume, assert fake client's first chat() call receives the seeded messages before the new user message; after run, file contains old+new. sc-6-3: fork, continue fork with different scripted responses, byte-compare original file before/after. sc-6-4: run without session; assert .bober/sessions absent; FULL suite. sc-6-5: corrupt JSON file → resumeSession returns error variant, no throw, and no empty-session file overwrites the corrupt one. Build + typecheck.",
+      "estimatedFiles": [
+        "src/orchestrator/session-store.ts",
+        "src/orchestrator/session-store.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/providers/types.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T23:17:13.000Z",
+      "completedAt": "2026-07-09T23:17:13.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 7,
+      "title": "In-context auto-compaction (threshold-triggered summarization + compact-boundary event)",
+      "description": "Keep long runs inside the context window without the coarse sprint-boundary reset. When AgenticLoopParams.compaction is set and the last response's cumulative input tokens cross the configured threshold, the loop makes one summarization call via the SAME client/model over the older messages, replaces them with a single summary message (keeping the most recent turns verbatim), emits a compact-boundary LoopEvent, and continues the run. Absent config → never compacts, byte-identical.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260709-agent-loop-capability-port-5"
+      ],
+      "features": [
+        "feat-7"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "When cumulative input tokens exceed compaction.maxContextTokens, messages older than the configured keepRecentTurns are replaced by exactly one summary message produced via a client.chat summarization call, and the most recent turns survive verbatim (deep-equal).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "A compact-boundary LoopEvent fires with { messagesBefore, messagesAfter, inputTokensAtTrigger } when onEvent is present, and compaction still works when onEvent is absent.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "The summarization call's usage and costUsd are charged to the run's Budget (when present) and included in AgenticLoopResult.usage/costUsd totals.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "A failed summarization call fails open: the loop logs, skips compaction for that turn, and continues uncompacted (never throws, never drops messages without a summary).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "Without compaction config, no summarization call is ever made and behavior is byte-identical (full existing suite unchanged).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not replace or modify the existing sprint-boundary compaction (summarizeOlderSprints / contextReset) — this is a different, in-run layer.",
+        "Do not compact the system prompt or the pending tool-result exchange (only completed older turns).",
+        "Do not add per-provider token counting — the trigger uses the usage.inputTokens the adapters already report.",
+        "Do not enable compaction for any role by default."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: threshold-triggered replacement with recent turns preserved, event emission, budget/cost accounting of the extra call, fail-open on summarizer error, and the never-compacts absence path.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "A loop given compaction config survives past its token threshold by summarizing older turns in-run via one extra model call, preserving recent turns, accounting the extra call's cost, and emitting a compact-boundary event — while a loop without the config never changes behavior. Build and full suite green.",
+      "assumptions": [
+        "usage.inputTokens on each ChatResponse reflects the prompt size the provider saw and is the trigger signal (no independent tokenizer needed).",
+        "Sprint 5's LoopEvent union reserved 'compact-boundary'; this sprint implements it (hard dependsOn).",
+        "The summary message is a plain user-role text Message ('[Conversation summary] ...') in the own Message union so every provider accepts it.",
+        "keepRecentTurns defaults to 2 exchanges when unset; the pending turn currently being answered is never compacted away."
+      ],
+      "outOfScope": [
+        "CLAUDE.md-style summarization steering (could be a later compaction.instructions field).",
+        "Persisting pre-compaction transcripts (sprint 6 sessions already capture per-turn state when enabled)."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Extend AgenticLoopParams with compaction?: { maxContextTokens: number; keepRecentTurns?: number; instructions?: string }. Implementation point: after each turn's usage accumulation (and budget charge if sprint 3 landed), if compaction is set and response.usage.inputTokens > maxContextTokens, split messages into [head ... | tail = last keepRecentTurns*2 messages + any in-flight tool exchange]; call client.chat once with a summarization system prompt ('Summarize this conversation preserving: task objective, file paths touched, decisions made, errors seen' + optional instructions) over the head; on success replace head with one summary Message, emit compact-boundary event, charge the call's usage/costUsd to the same accumulators/Budget; on failure log via existing logger and continue uncompacted. Guard against thrash: after a compaction, do not re-trigger until inputTokens again exceeds the threshold (the shrunken prompt naturally resets this). Keep ALL logic inside agentic-loop.ts or a sibling compaction.ts pure helper (summarizeMessages(client, model, messages, instructions) → Promise<Message | undefined>) for testability.",
+      "evaluatorNotes": "Script a fake client whose responses report escalating inputTokens crossing the threshold on turn 3, and whose summarization call (recognize by system prompt) returns a fixed summary. sc-7-1: after the run, inspect messages sent on turn 4 — exactly one summary message where the head was, tail turns deep-equal. sc-7-2: collect events with onEvent; assert payload fields; re-run without onEvent asserting compaction still happened (message inspection). sc-7-3: Budget spy — chargeTokens/chargeUsd called for the summarizer call; result totals include it. sc-7-4: summarizer call rejects → run completes, messages uncompacted, no throw. sc-7-5: no compaction config → assert client.chat call count has no extra summarizer call and FULL suite passes. Build + typecheck.",
+      "estimatedFiles": [
+        "src/orchestrator/compaction.ts",
+        "src/orchestrator/compaction.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/orchestrator/loop-events.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-09T23:40:02.000Z",
+      "completedAt": "2026-07-09T23:40:02.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 8,
+      "title": "Streaming text deltas (Anthropic adapter streaming + loop passthrough)",
+      "description": "Real-time output without changing the loop's turn model. ChatParams gains an optional provider-agnostic onTextDelta callback; when set, the Anthropic adapter switches to the SDK's streaming API, invokes the callback per text delta, and still returns the exact same normalized ChatResponse (text, toolCalls, stopReason, usage, costUsd) at the end. Other adapters accept the param and never call it (documented no-op). The loop threads AgenticLoopParams.onTextDelta through and additionally emits text via the LoopEvent stream when onEvent is present. Absent callback → the existing non-streaming request path, byte-identical.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260709-agent-loop-capability-port-5"
+      ],
+      "features": [
+        "feat-8"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-8-1",
+          "description": "On the Anthropic path with onTextDelta set, the callback receives deltas whose concatenation equals the final ChatResponse.text, and the returned ChatResponse (stopReason, toolCalls, usage, costUsd) is deep-equal to what the non-streaming path returns for the same underlying response.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-2",
+          "description": "Streaming responses containing tool_use blocks normalize identically to the non-streaming path (tool calls with ids and parsed inputs), so agentic tool turns stream safely.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-3",
+          "description": "openai/openai-compat/google/claude-code adapters accept ChatParams carrying onTextDelta without error and never invoke it (no-op degradation, nothing extra on the wire).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-4",
+          "description": "runAgenticLoop threads onTextDelta to every chat call and emits a text-delta LoopEvent when onEvent is present; with no callback the adapter's non-streaming create is used (spy: stream API never called) and behavior is byte-identical.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-5",
+          "description": "A mid-stream provider error is normalized to the same error handling as the non-streaming path (chatWithRetry semantics preserved: transient retried, else stopReason 'error').",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement abort/interrupt (sprint 9).",
+        "Do not stream on openai-family or google adapters this sprint (documented no-op; own follow-up if wanted).",
+        "Do not stream through the claude-code CLI path (text-only boundary stays).",
+        "Do not wire chat/telegram UIs to deltas (consumers integrate later)."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: delta-concatenation equals final text with identical normalized response, tool_use streaming parity, no-op on other adapters, loop threading + event emission, and mid-stream error parity.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "Setting onTextDelta streams Anthropic responses token-by-token to the caller while every downstream consumer sees the identical ChatResponse and loop behavior; leaving it unset uses the exact pre-change non-streaming path everywhere. Build and full suite green.",
+      "assumptions": [
+        "The installed @anthropic-ai/sdk (0.100.1) exposes a streaming API (messages.stream or create with stream:true) that yields text deltas and a final accumulated message with usage — SDK types stay inside anthropic.ts per the provider-agnosticism law.",
+        "onTextDelta lives on ChatParams as a plain (delta: string) => void — an own type, safe for every adapter to ignore.",
+        "chatWithRetry (~agentic-loop.ts:105) wraps client.chat uniformly; streaming happens inside the adapter so retry semantics are unchanged.",
+        "Sprint 5's LoopEvent union is present for the text-delta event (hard dependsOn)."
+      ],
+      "outOfScope": [
+        "Streamed thinking/reasoning blocks (text deltas only).",
+        "Partial tool-input streaming (tool calls surface only when complete)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "types.ts: add onTextDelta?: (delta: string) => void to ChatParams with a doc comment that adapters MAY ignore it. anthropic.ts: when params.onTextDelta is set, use the SDK streaming surface (prefer client.messages.stream if available in 0.100.1 — it accumulates the final message for you; otherwise iterate create({stream:true}) events accumulating content blocks and usage manually); invoke the callback for each text delta; assemble the SAME normalized ChatResponse the non-streaming branch builds (reuse the existing normalization code by extracting a shared normalizeResponse(message) helper rather than duplicating). Wrap callback invocations in try/catch (a throwing consumer must not kill the request). Loop: add onTextDelta to AgenticLoopParams, pass into chat params alongside effort/maxTokens; when onEvent present, also emit { type:'text-delta', turn, delta } (add to the union). Other adapters: no code needed beyond the type accepting the field — add one no-op comment line in each documenting the degradation. Test with a mocked SDK stream (async iterable of events) — no live API.",
+      "evaluatorNotes": "sc-8-1: mock stream yielding 3 text deltas + final usage; collect callback output, assert join equals response.text; run the same underlying content through the non-streaming mock and deep-equal both ChatResponses. sc-8-2: mock stream with a tool_use block; assert toolCalls parity with non-streaming normalization. sc-8-3: pass onTextDelta to openai/openai-compat mocks; assert never called and request payload unchanged. sc-8-4: loop-level fake client records receipt of onTextDelta; onEvent collects text-delta events; without callback, spy asserts the streaming branch is not taken; FULL suite. sc-8-5: mock stream erroring mid-way → same retry/error classification as a non-streaming throw (assert via chatWithRetry behavior with a transient then success). Build + typecheck.",
+      "estimatedFiles": [
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/anthropic.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/orchestrator/loop-events.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-10T00:02:30.000Z",
+      "completedAt": "2026-07-10T00:02:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 9,
+      "title": "Mid-turn interrupt: AbortSignal through the loop and streaming adapter",
+      "description": "Make a running loop cancellable. AgenticLoopParams gains an optional abortSignal (standard AbortSignal); the loop checks it at every turn boundary and threads it into ChatParams so the Anthropic adapter cancels an in-flight (streaming or non-streaming) request mid-turn. An aborted run resolves gracefully with stopReason 'aborted', preserving accumulated usage/costUsd/turnsUsed — never a throw. No signal → byte-identical.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260709-agent-loop-capability-port-3",
+        "sprint-spec-20260709-agent-loop-capability-port-8"
+      ],
+      "features": [
+        "feat-8"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-9-1",
+          "description": "A signal aborted between turns stops the loop before the next chat call and resolves with stopReason 'aborted' and a partial result (never a rejected promise).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-2",
+          "description": "A signal aborted during an in-flight Anthropic request (streaming and non-streaming mocks) cancels the request; the adapter's abort surfaces to the loop as the aborted outcome, not as a retryable transient error (chatWithRetry does not retry aborts).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-3",
+          "description": "The aborted result preserves usage, costUsd and turnsUsed accumulated before the abort, and fires the onStop hook / result LoopEvent exactly once.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-4",
+          "description": "Adapters without native cancellation (openai-family/google/claude-code) degrade documented: the request completes but the loop still returns 'aborted' at the next boundary without using the response for a further turn.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-5",
+          "description": "Without abortSignal, behavior is byte-identical (full existing suite unchanged).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-9-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not wire chat /pause or telegram to the signal (consumers integrate later; loop surface only).",
+        "Do not auto-abort on budget breach mid-turn (budget stays a turn-boundary check; a consumer MAY combine Budget + AbortController externally).",
+        "Do not implement pause/resume semantics — abort is terminal for the run (sprint 6 sessions enable continuing later from the transcript).",
+        "Do not add cancellation to the claude-code CLI path."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: boundary abort, mid-flight cancel without retry, accumulated partials + single onStop, degraded-adapter path, and byte-identical absence path.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "An AbortSignal on AgenticLoopParams cleanly ends a run mid-flight on the Anthropic path and at the next boundary elsewhere, always resolving with stopReason 'aborted' plus accumulated partial telemetry, with no signal meaning no change. Build and full suite green.",
+      "assumptions": [
+        "The @anthropic-ai/sdk request options accept an abort signal (standard fetch-based SDK surface) — confirm the exact option name inside the adapter; SDK types stay in the adapter file.",
+        "ChatParams gains abortSignal?: AbortSignal — a web-standard type, acceptable in the provider-agnostic surface (not an SDK type).",
+        "chatWithRetry's transient classification must special-case abort errors (name 'AbortError' or the signal's aborted flag) so aborts are never retried.",
+        "Sprint 8's streaming branch and sprint 3's usage/cost accumulators exist (hard dependsOn both)."
+      ],
+      "outOfScope": [
+        "Graceful mid-turn tool-execution cancellation (running tool handlers finish; the loop aborts after the batch).",
+        "Timeout-based auto-abort helpers."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "types.ts: add abortSignal?: AbortSignal to ChatParams. Loop: add abortSignal to AgenticLoopParams; at the top of each turn iteration check params.abortSignal?.aborted → finish with stopReason 'aborted' (reuse the finish helper from sprint 5 so onStop/result events fire once); pass the signal into chat params. chatWithRetry: before classifying an error as transient, check signal.aborted (or err.name === 'AbortError') → rethrow a typed AbortedError immediately (no retry); the loop catches it and finishes with 'aborted' instead of 'error'. anthropic.ts: forward the signal into the SDK call options for both streaming and non-streaming branches. Other adapters: accept the field, ignore it (one-line comment); the loop's boundary check covers them. Tests: AbortController fired via setTimeout mid-mock-stream; assert resolved result. Also assert a tool batch in progress completes before the abort takes effect (document this in a test name).",
+      "evaluatorNotes": "sc-9-1: abort() after turn 1's completion in a 3-turn script → chat called exactly twice? No — abort between turns means chat NOT called again: assert call count stays at 1 completed turn + 0 further calls, stopReason 'aborted', turnsUsed 1. sc-9-2: mocked SDK whose create/stream rejects with AbortError when the passed signal fires; assert no retry attempts (call count 1) and 'aborted' result. sc-9-3: accumulate usage/cost over turn 1, abort during turn 2; assert totals equal turn-1 values and onStop fired once. sc-9-4: fake non-cancellable adapter — abort mid-request; response returns but loop result is 'aborted' and the response's tool calls were NOT executed. sc-9-5: FULL suite + paired run without signal deep-equal. Build + typecheck.",
+      "estimatedFiles": [
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/anthropic.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-10T00:25:12.000Z",
+      "completedAt": "2026-07-10T00:25:12.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260709-agent-loop-capability-port-10",
+      "specId": "spec-20260709-agent-loop-capability-port",
+      "sprintNumber": 10,
+      "title": "In-process scoped subagents (spawn_subagent tool) + opt-in MCP tool bridge",
+      "description": "The last two capability areas, both opt-in. (1) Subagents: AgenticLoopParams.subagents registers a spawn_subagent tool; its handler runs a nested runAgenticLoop with a fresh context, a scoped tool subset, optional per-agent model/effort/maxTurns, charging the SAME parent Budget, and returns the child's finalText to the parent as a tool result — the parent's context grows by the summary only. (2) MCP bridge: an off-by-default config axis exposes a configured MCP server's tools as loop ToolDefs routed through a bridge using the repo's existing MCP client transport; disabled (default) spawns nothing and changes nothing, preserving loop hermeticity.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260709-agent-loop-capability-port-3"
+      ],
+      "features": [
+        "feat-9"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-10-1",
+          "description": "With subagents configured, the parent loop exposes a spawn_subagent tool; invoking it runs a nested loop whose client sees ONLY the subagent's scoped tools and a fresh message history (no parent turns), and the child's finalText comes back as the parent's tool result.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-2",
+          "description": "The nested loop honors per-agent model, effort and maxTurns overrides and charges tokens/costUsd into the parent's Budget instance (combined spend visible; a child cannot out-spend a parent ceiling).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-3",
+          "description": "A child that refuses, exceeds budget, or errors surfaces as an isError tool result to the parent (loop continues; parent decides), never a throw.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-4",
+          "description": "Without a subagents param the spawn_subagent tool is not registered and the tool list is byte-identical; with the MCP bridge disabled (default) no MCP process/transport is created and the tool list is unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-5",
+          "description": "With the bridge enabled in config, the configured MCP server's tools appear as ToolDefs (unmarked readOnly → serial execution), calls route through the bridge to the MCP transport, and close() tears the connection down cleanly at loop end.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-10-6",
+          "description": "npm run build and npm run typecheck pass.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not allow recursive subagent nesting deeper than one level (child loops get no subagents param — hard cap, mirrors the Workflow one-level rule).",
+        "Do not register the MCP bridge on the hermetic claude-code child path or fleet children (--strict-mcp-config stays).",
+        "Do not mark bridged MCP tools readOnly (unknown side effects → serial per ADR-2's conservative default).",
+        "Do not build persona-file (.md) loading into subagent defs — SubagentDef is a programmatic surface; the existing agent-loader personas remain the role layer."
+      ],
+      "stopConditions": [
+        "npm run build passes and tests assert: scoped fresh-context spawn with summary-only return, shared-Budget accounting with overrides, fail-soft child outcomes, double off-by-default (no tool, no MCP spawn), and bridged round-trip with clean close.",
+        "Full existing suite green."
+      ],
+      "definitionOfDone": "A parent loop can delegate a bounded subtask to a fresh-context nested loop with scoped tools and per-agent model/effort under the parent's budget, and a config-enabled MCP bridge can extend the tool catalog through the existing MCP client — while both features absent leave every byte of current behavior unchanged. Build and full suite green.",
+      "assumptions": [
+        "runAgenticLoop is re-entrant (pure function over its params) so nesting is safe; the child gets its own params object and shares only the Budget reference.",
+        "The repo already has an MCP client transport (src/graph/client.ts MCP initialize + tools/call pattern, fixed 2026-06-20) the bridge can reuse or mirror — no new MCP dependency.",
+        "The bridge config lives as an optional section (e.g. config.tools.mcpBridge { enabled: false, server: { command, args } }) following the egress-axis default-off idiom used by medical/research sections.",
+        "SubagentDef = { name, description, systemPrompt, tools: string[], model?, effort?, maxTurns? } — an own type; per-agent effort rides ChatParams.effort from sprint 3 (hard dependsOn).",
+        "spawn_subagent's input schema is { name: string, task: string } — the model picks a configured subagent by name and passes the task text."
+      ],
+      "outOfScope": [
+        "Parallel subagent fan-out (one spawn per tool call; the fleet layer owns bulk fan-out).",
+        "MCP server lifecycle management beyond start/close for a single configured server.",
+        "Exposing subagents or the bridge in bober.config.json role sections for pipeline roles (a consumer wires them explicitly; config surface here is the bridge axis only)."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Subagents: create src/orchestrator/subagents.ts exporting SubagentDef and buildSubagentTool(defs, parentParams): { tool: ToolDef, handler: ToolHandler }. The handler: resolve def by name (unknown name → isError result listing valid names); build child AgenticLoopParams { client: parentParams.client (or a model-overridden client via the provider factory when def.model set — reuse how roles resolve clients), systemPrompt: def.systemPrompt, userMessage: task, tools: parentParams.tools filtered to def.tools, toolHandlers filtered likewise, maxTurns: def.maxTurns ?? 10, effort: def.effort, budget: parentParams.budget (SAME instance), subagents: undefined }; await runAgenticLoop; map result → tool result text (finalText, or isError for refused/budget_exceeded/error with the stopReason named). In agentic-loop.ts (or the entry assembling tools), when params.subagents?.length, append the built tool/handler before the loop starts. MCP bridge: create src/orchestrator/tools/mcp-bridge.ts exporting createMcpToolBridge(server: {command, args}): Promise<{ tools: ToolDef[], handlers: Map<string,ToolHandler>, close(): Promise<void> }> — initialize over stdio using the same MCP handshake/tool-call encoding as src/graph/client.ts (tools/list → ToolDefs with a 'mcp__' name prefix to avoid collisions; tools/call → result text). Config: optional ToolsSectionSchema { mcpBridge?: { enabled: z.boolean().default(false), server: {...} } } — but ONLY construct the bridge when enabled === true at the call site (never at config parse). Ensure close() runs in a finally at loop end. Inject the transport for tests (accept an optional transport factory) so no real process spawn is needed.",
+      "evaluatorNotes": "sc-10-1: parent fake client scripts a spawn_subagent tool call; child fake client (or shared scripted client distinguishing by system prompt) asserts the child's first request contains ONLY scoped tool defs and no parent messages; parent's next turn receives the child finalText as tool result. sc-10-2: shared Budget — assert usdSpent/tokensSpent include child turns; set a ceiling the child crosses → child stops with budget_exceeded and parent sees isError naming it (also covers sc-10-3 partially). sc-10-3: child scripted refusal → parent isError mentioning refusal; loop continues. sc-10-4: no subagents → tool defs deep-equal baseline; default config → assert injected transport factory never called. sc-10-5: stub transport implementing initialize/tools-list/tools-call; assert bridged ToolDefs appear prefixed, a call round-trips, readOnly is absent on them, and close() called once at loop end (finally). Build + typecheck + FULL suite.",
+      "estimatedFiles": [
+        "src/orchestrator/subagents.ts",
+        "src/orchestrator/subagents.test.ts",
+        "src/orchestrator/tools/mcp-bridge.ts",
+        "src/orchestrator/tools/mcp-bridge.test.ts",
+        "src/orchestrator/agentic-loop.ts",
+        "src/orchestrator/agentic-loop.test.ts",
+        "src/config/schema.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-09T12:10:00.000Z",
+      "updatedAt": "2026-07-10T00:57:16.000Z",
+      "completedAt": "2026-07-10T00:57:16.000Z"
+    }
+  ]
+}

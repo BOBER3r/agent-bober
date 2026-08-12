@@ -1,0 +1,212 @@
+{
+  "entryId": "spec-spec-20260804-opus5-adaptation",
+  "channel": "spec",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/specs/spec-20260804-opus5-adaptation.json"
+  },
+  "value": {
+    "specId": "spec-20260804-opus5-adaptation",
+    "version": 1,
+    "title": "Opus-5 Adaptation: Tiered Prompts, Deterministic Pre-Gate, Stronger Completion Gate",
+    "description": "Adapt agent-bober’s prompt and pipeline architecture to Opus-5-class models without weakening verification, and without degrading weaker providers that share the same prompts. Adds model-tier-aware prompt loading, a deterministic short-circuit strategy pre-gate, a completion gate that catches deferred/partial work, and removes sequential dead time from the per-sprint chain.",
+    "status": "draft",
+    "mode": "brownfield",
+    "features": [
+      {
+        "featureId": "feat-1",
+        "title": "Current model aliases and per-role effort",
+        "description": "Refresh SHORTHAND_MAP to the Claude 5 generation and set per-role output_config.effort defaults, plus stage-level timing telemetry to establish a measurable baseline.",
+        "priority": "must-have",
+        "acceptanceCriteria": [
+          "AC1: When a config names `opus` or `sonnet`, it resolves to claude-opus-5 / claude-sonnet-5 respectively.",
+          "AC2: When a config names an unmapped string, it still passes through unchanged to the anthropic provider.",
+          "AC3: When a role has an effort value, the Anthropic request body carries output_config.effort; when it does not, no output_config key is emitted.",
+          "AC4: Each pipeline stage emits a start/end timing event to .bober/history.jsonl so per-stage latency can be compared to the 18.2 min baseline."
+        ],
+        "dependencies": [],
+        "estimatedComplexity": "low"
+      },
+      {
+        "featureId": "feat-2",
+        "title": "Model-tier-aware prompt loading",
+        "description": "Resolve a prompt tier from the role’s resolved model (table + config override) and load agents/<name>.<tier>.md with fallback to agents/<name>.md.",
+        "priority": "must-have",
+        "acceptanceCriteria": [
+          "AC1: When the resolved model is absent from the tier table, the tier is \"full\".",
+          "AC2: When a role sets promptTier in config, it overrides the table.",
+          "AC3: When agents/<name>.<tier>.md does not exist, the loader falls back to agents/<name>.md.",
+          "AC4: With no .lean.md files on disk, every loaded prompt is byte-identical to the pre-change behaviour."
+        ],
+        "dependencies": [],
+        "estimatedComplexity": "medium"
+      },
+      {
+        "featureId": "feat-3",
+        "title": "Deterministic strategy pre-gate",
+        "description": "A plain strategy runner that executes the configured typecheck/lint/unit-test/build/api-check commands, wired as a short-circuiting pre-gate ahead of the evaluator LLM.",
+        "priority": "must-have",
+        "acceptanceCriteria": [
+          "AC1: When a required strategy fails, the sprint is marked needs-rework and the evaluator subagent is never spawned.",
+          "AC2: When a strategy has no configured command, it is reported skipped rather than failed.",
+          "AC3: When all required strategies pass, their output is passed into the evaluator prompt.",
+          "AC4: Iteration accounting and retry semantics are unchanged from today."
+        ],
+        "dependencies": [],
+        "estimatedComplexity": "high"
+      },
+      {
+        "featureId": "feat-4",
+        "title": "Completion gate against deferred work",
+        "description": "Generator contract clause requiring the whole task be finished, plus an evaluator criterion that fails partial implementations and deferred work which currently pass typecheck and build.",
+        "priority": "must-have",
+        "acceptanceCriteria": [
+          "AC1: When the generator defers work (“I’ll do X later”, TODO stubs, unimplemented branches) the evaluator emits a failing completeness verdict even though typecheck and build pass.",
+          "AC2: When the sprint is genuinely complete, the completeness verdict passes and does not add a false failure.",
+          "AC3: The generator prompt carries an explicit finish-the-whole-task / no-premature-done clause.",
+          "AC4: The completeness verdict appears as a distinct, addressable entry in the EvalResult."
+        ],
+        "dependencies": [
+          "feat-3"
+        ],
+        "estimatedComplexity": "medium"
+      },
+      {
+        "featureId": "feat-5",
+        "title": "Lean prompts for the hot-path agents",
+        "description": "Hand-authored lean variants of the generator, evaluator and curator prompts, selected automatically for Claude 5 models.",
+        "priority": "should-have",
+        "acceptanceCriteria": [
+          "AC1: Each lean variant preserves its agent’s output JSON contract exactly.",
+          "AC2: Each lean variant retains the feat-4 completion clause.",
+          "AC3: The corresponding full variants are unmodified.",
+          "AC4: With generator on claude-opus-5, the loader selects the lean variant."
+        ],
+        "dependencies": [
+          "feat-2",
+          "feat-4"
+        ],
+        "estimatedComplexity": "medium"
+      },
+      {
+        "featureId": "feat-6",
+        "title": "Remove sequential dead time",
+        "description": "Make the curator conditional on sprint size and run the post-evaluator review chain concurrently.",
+        "priority": "should-have",
+        "acceptanceCriteria": [
+          "AC1: When a sprint is below the configured curator threshold, the curator is skipped and the skip is logged.",
+          "AC2: Above the threshold, curator behaviour including the existing-briefing short-circuit is unchanged.",
+          "AC3: Code-reviewer, security-auditor and security-verifier run concurrently under a bounded limit.",
+          "AC4: A failure in one reviewer does not cancel the others, and the security gate verdict semantics are unchanged."
+        ],
+        "dependencies": [],
+        "estimatedComplexity": "medium"
+      }
+    ],
+    "assumptions": [
+      "`.claude/commands/*.md` is a GENERATED artifact, not hand-maintained: scripts/update-all.mjs:55 (inlineSkill) concatenates SKILL.md + sorted references, byte-identical to installClaudeCommands in src/cli/commands/init.ts. Re-derived all 46 skills; 34/46 are byte-identical today and the other 12 are absent, not divergent.",
+      "Config `model` fields accept literal model IDs, not just shorthands: src/config/schema.ts:19 (ModelChoiceSchema) and :22 (GeneratorModelSchema) are both z.string().min(1). Verified by loading the real bober.config.json through dist/config/loader.js.",
+      "`effort` is fully plumbed but never set: declared at src/providers/types.ts:162, optional on four role configs at src/config/schema.ts:109,124,151,183, emitted at src/providers/anthropic.ts:369 only when defined. bober.config.json contains no effort key, so every role runs at the API default.",
+      "agent-loader.ts has zero model/provider awareness: src/orchestrator/agent-loader.ts:108-159 resolves agents/<name>.md by project-override then bundled path only.",
+      "No deterministic strategy runner exists anywhere in src/: src/cli/commands/eval.ts:6,142 delegates straight to runEvaluatorAgent; configured strategies are executed by the LLM shelling out.",
+      "The post-evaluator review chain is sequential: src/orchestrator/pipeline.ts:431 (evaluator), :577 (runCodeReviewer), with runWithAudit wrappers at :566 and :647.",
+      "The retry loop rarely fires under the current gate: .bober/history.jsonl shows 194/213 sprints passing on iteration 1, 19 on iteration 2, 0 ever reaching iteration 3.",
+      "Latency baseline from .bober/history.jsonl (197 sprint-started -> sprint-completed pairs): median 18.2 min, mean 29.0, p75 24.5, p90 46.5, max 225.1; 95.1h total.",
+      "The tokensave code graph is enabled (bober.config.json graph.enabled=true), so the curator subagent duplicates context-gathering the graph can already serve.",
+      "Multiple non-Anthropic providers are live and share one prompt set: src/orchestrator/model-resolver.ts:22-45 maps openai/google/openai-compat/ollama, and src/fleet/tier-policy.ts:27-34 routes tiers to DeepSeek and Grok.",
+      "Prompt-tier policy (user-selected): a built-in model->tier table with an optional per-role promptTier config override, and unknown models falling back to \"full\" so nothing regresses.",
+      "Gate placement (user-selected): the strategy runner is a PRE-gate that short-circuits: a required-strategy failure marks needs-rework without spawning the evaluator LLM at all.",
+      "Lean-variant scope (user-selected): generator, evaluator and curator only, which account for ~89KB of the ~155KB per-sprint static prompt load."
+    ],
+    "outOfScope": [
+      "Lowering evaluator.maxIterations (explicitly withdrawn: a stricter completion gate should raise the retry rate, not lower it).",
+      "Blanket de-prescribing of skills/*/SKILL.md step-by-step orchestration recipes: they are shared with weaker providers and cutting them globally would degrade DeepSeek/Grok/ollama runs.",
+      "Lean prompt variants for the other 15 agents (planner, architect, documenter, code-reviewer, security-*, seo-*, design-*). Deferred to a follow-up plan once the mechanism is measured.",
+      "Adding a `thinking` parameter to the Anthropic adapter: thinking is on by default on claude-opus-5 and no need has been demonstrated.",
+      "Restructuring skills/ vs .claude/commands/: it is a generated artifact and the only real gap is running `npm run update-all` to emit the 11 missing bober.seo-* commands. Tracked as a chore, not a sprint.",
+      "Any change to the OpenAI, Google, or openai-compat provider adapters.",
+      "Cost-optimisation or model-downgrade decisions; this plan changes latency and gate strength, not spend policy."
+    ],
+    "ambiguityScore": 3,
+    "clarificationQuestions": [],
+    "resolvedClarifications": [
+      {
+        "questionId": "Q1",
+        "answer": "Built-in model->tier table plus optional per-role promptTier config override; unknown models fall back to \"full\".",
+        "resolvedAt": "2026-08-04T00:00:00Z",
+        "resolvedBy": "user"
+      },
+      {
+        "questionId": "Q2",
+        "answer": "Strategy runner is a pre-gate that short-circuits on required failure, skipping the evaluator LLM spawn entirely.",
+        "resolvedAt": "2026-08-04T00:00:00Z",
+        "resolvedBy": "user"
+      },
+      {
+        "questionId": "Q3",
+        "answer": "Hand-author lean variants for generator, evaluator and curator only.",
+        "resolvedAt": "2026-08-04T00:00:00Z",
+        "resolvedBy": "user"
+      },
+      {
+        "questionId": "gate-design-approval",
+        "answer": "Autonomous self-approval",
+        "resolvedAt": "2026-08-04T00:00:00Z",
+        "resolvedBy": "planner"
+      }
+    ],
+    "techStack": [],
+    "techNotes": {
+      "integrationPoints": [
+        "Anthropic Messages API output_config.effort (src/providers/anthropic.ts:369)",
+        "tokensave code graph (graph.enabled=true) as the curator’s replacement context source"
+      ],
+      "dataModel": "No persistent schema change. New optional config keys: <role>.promptTier, curator threshold. New history.jsonl event types for stage timing, strategy pre-gate outcome, and curator skip.",
+      "securityConsiderations": [
+        "The strategy runner executes commands from bober.config.json — it must not widen what is already executed by the evaluator agent today, and must not interpolate untrusted contract text into a shell.",
+        "Parallelising the security chain must not change the fail-closed semantics of the security gate."
+      ],
+      "existingPatterns": "Follow the existing agent-loader project-override-then-bundled resolution order, the emit() telemetry helper used at src/orchestrator/evaluator-agent.ts:59, and the runWithAudit wrapper pattern in pipeline.ts."
+    },
+    "nonFunctionalRequirements": [
+      {
+        "category": "reliability",
+        "requirement": "No behaviour change for any non-Anthropic provider; DeepSeek/Grok/ollama/OpenAI/Google roles continue to load the full prompt set.",
+        "verificationMethod": "Unit tests asserting tier resolution returns \"full\" for every non-Claude-5 model id in SHORTHAND_MAP."
+      },
+      {
+        "category": "reliability",
+        "requirement": "The verification gate must not weaken: no change may reduce the set of conditions that fail a sprint.",
+        "verificationMethod": "Fixture-based tests: an incomplete-but-compiling sprint must fail after this plan and is expected to pass before it."
+      },
+      {
+        "category": "performance",
+        "requirement": "Median sprint wall-clock should improve against the 18.2 min baseline, measured over recorded sprints after feat-3 and feat-6 land.",
+        "verificationMethod": "Compare stage-level timing events in .bober/history.jsonl before and after; report medians rather than single runs."
+      },
+      {
+        "category": "maintainability",
+        "requirement": "Every new behaviour is opt-in or defaults to current behaviour, so a bad tier table or threshold cannot silently break existing projects.",
+        "verificationMethod": "Tests asserting default-path equivalence with no new config keys present."
+      }
+    ],
+    "constraints": [],
+    "sprints": [
+      "sprint-spec-20260804-opus5-adaptation-1",
+      "sprint-spec-20260804-opus5-adaptation-2",
+      "sprint-spec-20260804-opus5-adaptation-3",
+      "sprint-spec-20260804-opus5-adaptation-4",
+      "sprint-spec-20260804-opus5-adaptation-5",
+      "sprint-spec-20260804-opus5-adaptation-6",
+      "sprint-spec-20260804-opus5-adaptation-7",
+      "sprint-spec-20260804-opus5-adaptation-8"
+    ],
+    "metadata": {
+      "estimatedTotalDuration": "12-20 hours across 8 sprints",
+      "riskLevel": "medium",
+      "riskNotes": "Sprints 3-4 (strategy pre-gate) and 8 (parallel review chain) touch the pipeline control flow that every sprint depends on. Both are gated behind default-preserving behaviour and fixture tests. Sprint 5 deliberately makes the gate stricter, which is expected to raise the retry rate."
+    },
+    "createdAt": "2026-08-04T00:00:00Z",
+    "updatedAt": "2026-08-04T00:00:00Z"
+  }
+}

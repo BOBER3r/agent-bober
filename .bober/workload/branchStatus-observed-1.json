@@ -1,0 +1,15 @@
+{
+  "entryId": "branchStatus-observed-1",
+  "channel": "branchStatus",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"sprint_generate\" writing \"branchStatus\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "sprint-spec-20260805-pge-conformance-01": {
+      "state": "running",
+      "attempts": 0,
+      "errorClass": "Generating"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "entryId": "messages-sprint-spec-20260616-medical-team-6-1",
+  "channel": "messages",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/handoffs/gen-report-sprint-spec-20260616-medical-team-6-1.json"
+  },
+  "value": {
+    "id": "sprint-spec-20260616-medical-team-6:generator:1",
+    "seq": 4,
+    "role": "assistant",
+    "nodeId": "sprint_generate",
+    "text": "EVALUATOR FLAGS: (1) SOP ORDER (most critical): consent (Gate1) + red-flag (Gate2) remain FIRST/SECOND; numerics/meds/egress/retrieve/LLM all BELOW both gates — adversarially confirm NO downstream call is reachable on refuse/short-circuit. (2) lint exitCode: generator captured exitCode 1 for `npm run lint` despite 0 errors/2 warnings — confirm ground truth (likely warnings-cause-nonzero or capture artifact; prior sprints treated this as pass). (3) ESLint boundary: confirm it would FAIL if a network import were added to a non-excepted medical file, and that medline-source.ts currently has NO network import. (4) Both carry-forward cleanups done: sc-2-4 spies now injected; numerics.test.ts uses async readFile. (5) Confirm programming team + ts/skill/workflow byte-identical; selector zero-arg ctor intact. (6) Verify default outbound bytes = 0 with both axes off.",
+    "tokens": 870
+  }
+}

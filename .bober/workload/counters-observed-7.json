@@ -1,0 +1,11 @@
+{
+  "entryId": "counters-observed-7",
+  "channel": "counters",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"reduce_sprints\" writing \"counters\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "fanoutRetries.sprint-spec-20260805-pge-conformance-01": 1
+  }
+}

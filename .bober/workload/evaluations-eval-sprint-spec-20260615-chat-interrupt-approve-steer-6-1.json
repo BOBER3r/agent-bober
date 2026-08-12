@@ -1,0 +1,18 @@
+{
+  "entryId": "evaluations-eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1",
+  "channel": "evaluations",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/eval-results/eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1.json"
+  },
+  "value": {
+    "id": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1",
+    "seq": 0,
+    "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-6",
+    "sprintNumber": 6,
+    "iteration": 1,
+    "verdict": "pass",
+    "summary": "All 7 required criteria pass (FINAL sprint). e2e chat-steer-e2e.test.ts drives the complete careful->spawn->approve->pause->resume->completion loop against a stubbed pipeline with disk+RunState asserts at every transition. cleanupTerminalRun best-effort (ENOENT-tolerant, never throws, run-isolated): deletePending for correlated runId + unlink guidance.jsonl/paused.json + clear RunState pending/paused (terminal status preserved). HELP_TEXT full set verified. Docs (README + docs/chat-steer.md) cover /careful+curated gates+approve/reject/tell/pause/resume with explicit single-careful-run limitation + runId-scoped follow-up. Protected files untouched. 2139-test suite green.",
+    "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1"
+  }
+}

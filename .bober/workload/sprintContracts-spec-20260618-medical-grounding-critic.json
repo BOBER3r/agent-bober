@@ -1,0 +1,313 @@
+{
+  "entryId": "sprintContracts-spec-20260618-medical-grounding-critic",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-1.json",
+      ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-2.json",
+      ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-3.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260618-medical-grounding-critic-1",
+      "specId": "spec-20260618-medical-grounding-critic",
+      "sprintNumber": 1,
+      "title": "Grounding-critic module (fail-closed core)",
+      "description": "Create the fail-closed grounding critic as a standalone, pure, injectable module — the risk-first crux of the feature (the fail-open -> fail-closed inversion of the fleet critic). New file src/medical/retrieval/grounding-critic.ts exports: a GroundingVerdict type {verdict:'approve'|'reject'; feedback:string} (mirrors src/fleet/critic-deep.ts:54-59 CritiqueVerdict); a zod GroundingVerdictSchema; validateGroundingVerdict(rawText) that NEVER throws (direct JSON.parse -> markdown-fence extraction -> first-brace slice -> safeParse, returning {ok,verdict}|{ok:false,error} — copy the tolerant shape from critic-deep.ts:67-115); a buildGroundingSystemPrompt(question, answerBody, passages) that pins the critic to the cited passages and instructs a faithfulness+completeness review; an internal callGroundingCritic that sends a FRESH message array (NEVER extends a prior conversation — mirror critic-deep.ts:130 LOCK1) with jsonObjectMode:true; and getGroundingVerdict({ llm, model, question, answerBody, passages }) that runs a bounded retry-with-coercion loop (1 + GROUNDING_PARSE_MAX_RETRIES attempts) and, on parse exhaustion, FAIL-CLOSED returns {verdict:'reject', feedback:'<unparseable critic output>'} — the exact inversion of critic-deep.ts:199-201 which returns approve. Export GROUNDING_PARSE_MAX_RETRIES and a GROUNDING_MAX_LLM_CALLS budget constant. This sprint adds NO engine wiring and NO config — the app builds and all existing tests pass unchanged.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The full test suite passes with zero failures including new collocated src/medical/retrieval/grounding-critic.test.ts (npm run test); no regression in the pre-existing suite.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "validateGroundingVerdict(rawText) NEVER throws for any string input — proven by a parametrized test over raw JSON, fenced JSON, JSON-with-prose, empty string, and pure garbage — returning {ok:true,verdict} for valid shapes and {ok:false,error} otherwise.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "getGroundingVerdict returns {verdict:'approve'} ONLY when the model explicitly emits an approve verdict; when a fake LLMClient returns unparseable text on every attempt, it returns verdict==='reject' (FAIL-CLOSED), asserted directly against the returned object.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "The critic call uses a fresh message array built from (question, answer body, cited passages) and passes jsonObjectMode-style structured prompting; a test inspecting the fake client's received messages asserts the array starts with a single user turn containing the passages and does NOT include any prior synthesis assistant turn.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "getGroundingVerdict makes at most GROUNDING_MAX_LLM_CALLS LLM calls (= 1 + GROUNDING_PARSE_MAX_RETRIES); a call-counting fake asserts the cap is honored on the parse-exhaustion path.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "grounding-critic.ts adds NO @anthropic-ai/sdk, openai, node:net, node:http, or fetch import (depends only on zod and the injected LLMClient type from providers/types.ts); the scoped medical ESLint boundary still passes (npm run lint).",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not wire the critic into MedicalSopEngine.run or src/medical/retrieval/literature.ts (Sprint 2).",
+        "Do not add any config.medical model/provider fields or touch EgressGuard (Sprint 3).",
+        "Do not add the criticVerdict audit field yet (Sprint 3).",
+        "Do not perform any re-synthesis here — getGroundingVerdict only judges; the loop lands in Sprint 2.",
+        "Do not import or call any real network/cloud client; the module is pure given an injected LLMClient."
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "getGroundingVerdict is fail-closed (reject on exhaustion), validateGroundingVerdict never throws, the call budget is capped, and build/typecheck/test/lint are green with no regression"
+      ],
+      "definitionOfDone": "src/medical/retrieval/grounding-critic.ts exports GroundingVerdict, GroundingVerdictSchema, validateGroundingVerdict (never-throws), buildGroundingSystemPrompt, getGroundingVerdict (bounded retry; fail-closed reject on exhaustion), and the constants GROUNDING_PARSE_MAX_RETRIES and GROUNDING_MAX_LLM_CALLS. Collocated grounding-critic.test.ts covers: never-throws validation across input shapes; approve only on explicit approve; fail-closed reject on parse exhaustion; fresh-message-array construction; call-budget cap. No engine/config/audit changes. Build, typecheck, test, and lint pass with no regression.",
+      "assumptions": [
+        "GroundingVerdict mirrors fleet CritiqueVerdict (src/fleet/critic-deep.ts:54-59): {verdict:'approve'|'reject'; feedback:string}.",
+        "The tolerant parser is copied structurally from critic-deep.ts:67-115 (validateVerdict) and inverted only at the exhaustion branch.",
+        "Passages handed to the critic are the same Passage[] shape used by synthesize (src/medical/retrieval/medline-source.ts Passage: {title,text,url}).",
+        "The LLMClient.chat signature is { model, system, messages, jsonObjectMode?, maxTokens? } per src/providers/types.ts (as used at literature.ts:135-140 and critic-deep.ts:154-159)."
+      ],
+      "outOfScope": [
+        "Engine wiring and the re-synthesis loop (Sprint 2)",
+        "Configurable model/provider + cloud-inference gating (Sprint 3)",
+        "AuditEntry.criticVerdict field (Sprint 3)"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Read FIRST: src/fleet/critic-deep.ts (full — copy the validateVerdict tolerant parser at :67-115, the CritiqueVerdictSchema at :54-57, the fresh-message-array critic at :119-162 'LOCK1', and the bounded loop at :166-202; the ONLY behavioral change is the exhaustion default: where critic-deep.ts:199-201 returns {verdict:'approve'}, you return {verdict:'reject', feedback:'<unparseable critic output>'} — FAIL-CLOSED). Read src/medical/retrieval/literature.ts:44-177 (synthesize, buildSynthesisSystem at :54-67, Passage usage, MedicalAnswer/Citation imports) to match the Passage shape and the passage-block format. Read src/medical/retrieval/medline-source.ts for the Passage/RetrievalOutcome types. Read src/providers/types.ts for LLMClient/Message.\n\nNew file src/medical/retrieval/grounding-critic.ts. Section headers (unicode box-drawing) per principles.md. Exports:\n  export const GROUNDING_PARSE_MAX_RETRIES = 1;\n  export const GROUNDING_MAX_LLM_CALLS = 1 + GROUNDING_PARSE_MAX_RETRIES;\n  export const GroundingVerdictSchema = z.object({ verdict: z.enum(['approve','reject']), feedback: z.string() });\n  export type GroundingVerdict = z.infer<typeof GroundingVerdictSchema>;\n  export function validateGroundingVerdict(rawText: string): { ok:true; verdict:GroundingVerdict } | { ok:false; error:string }  // copy critic-deep.ts:67-115 verbatim-structurally\n  export function buildGroundingSystemPrompt(question, answerBody, passages: Passage[]): string  // instruct: 'You are an independent reviewer. The answer below was produced by another assistant from ONLY the retrieved passages. Approve ONLY if EVERY claim in the answer is directly supported by a cited passage AND the answer addresses the core of the question. Reject if any claim is unsupported (faithfulness) OR the answer omits the central part of the question (completeness). Output ONLY {\\\"verdict\\\":\\\"approve\\\"|\\\"reject\\\",\\\"feedback\\\":\\\"...\\\"}'. Pin the numbered passage block exactly like buildSynthesisSystem (literature.ts:54-67).\n  async function callGroundingCritic({ llm, model, question, answerBody, passages, priorText?, formattedError? }): build a FRESH messages array (first turn = single user message containing question + answer + 'Cited passages:' block; coercion retry uses the 3-message [user, assistant(priorText), user(COERCION+error)] shape from critic-deep.ts:139-152). Call llm.chat({ model, system: buildGroundingSystemPrompt(...), messages, jsonObjectMode: true }).\n  export async function getGroundingVerdict({ llm, model, question, answerBody, passages }): loop maxAttempts = GROUNDING_MAX_LLM_CALLS; on validateGroundingVerdict ok -> return verdict; else record error+priorText and retry; AFTER the loop FAIL-CLOSED: return { verdict:'reject', feedback:'<unparseable critic output>' }.\n\nDo NOT catch transport errors here (let them propagate — Sprint 2's orchestrator maps a thrown error to abstain; that keeps this module's responsibility narrow). Tests: use a fake LLMClient { chat: vi.fn() } returning queued strings; assert never-throws over ['{\"verdict\":\"approve\",\"feedback\":\"\"}', '```json\\n{...}\\n```', 'prose {\"verdict\":\"reject\",\"feedback\":\"x\"} prose', '', 'garbage']; assert fail-closed reject on all-garbage; assert call count == GROUNDING_MAX_LLM_CALLS; inspect chat.mock.calls[0][0].messages to assert fresh single-user-turn with passages and no synthesis assistant turn. Follow ESM .js import extensions and import type {…}.",
+      "evaluatorNotes": "sc-1-3: parametrize validateGroundingVerdict over valid/fenced/prose/empty/garbage inputs; wrap each call to assert it returns (never throws). sc-1-4: queue unparseable responses on a fake client and assert getGroundingVerdict(...).verdict==='reject'; queue a valid approve and assert 'approve'. sc-1-5: after a run, read fakeClient.chat.mock.calls[0][0].messages and assert messages.length===1 on the first attempt, role==='user', content includes a passage title/url and the answer body, and contains NO assistant turn from a prior synthesis. sc-1-6: count chat invocations on the all-garbage path and assert ===GROUNDING_MAX_LLM_CALLS (2). sc-1-7: npm run lint clean; grep grounding-critic.ts for '@anthropic-ai/sdk','openai','node:net','node:http','fetch(' — expect none; confirm only zod + type import from providers/types.js. Build + typecheck clean; run the FULL suite to confirm zero regression (esp. existing fleet critic-deep.test.ts and medical tests).",
+      "estimatedFiles": [
+        "src/medical/retrieval/grounding-critic.ts",
+        "src/medical/retrieval/grounding-critic.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T16:00:00Z",
+      "updatedAt": "2026-06-18T16:00:00Z",
+      "completedAt": "2026-06-18T16:25:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-medical-grounding-critic-2",
+      "specId": "spec-20260618-medical-grounding-critic",
+      "sprintNumber": 2,
+      "title": "Gated synthesis flow + engine wiring",
+      "description": "Compose the grounding critic with synthesis into a fail-closed gate, and wire it into the engine's grounded-synthesis branch. Add synthesizeGrounded (new export in src/medical/retrieval/literature.ts, or a sibling grounded-gate.ts) that: (1) runs synthesize (literature.ts:98) to get the candidate MedicalAnswer; (2) if the candidate is already abstained/short-circuit, returns it unchanged; (3) otherwise runs getGroundingVerdict on the candidate body + its passages; (4) on approve -> return the candidate; (5) on reject -> re-run synthesize ONCE more, appending the critic feedback to the synthesis system prompt, then re-critique; (6) on second approve -> return the re-synthesized answer; on second reject OR any thrown transport/model error at any step -> return an ABSTAINED MedicalAnswer (abstained:true, citations:[], footer present, body = the canned 'cannot ground a sufficiently-supported answer' message). The whole flow is wrapped so a thrown error from synthesize or the critic maps to abstain (fail-closed). Replace the single synthesize call at src/medical/engine.ts:402-403 with synthesizeGrounded, threading the same llmClient, footer, and the grounded RetrievalOutcome. Preserve EVERY existing zero-LLM negative assertion: consent-refuse, red-flag short-circuit, content-policy refuse, numeric-only, and literature-disabled paths must construct NO grounding critic and make NO critic LLM call. Bound the grounded-path LLM calls by a named constant GROUNDED_GATE_MAX_LLM_CALLS (synthesize + critic + at most one re-synth + one re-critique).",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-medical-grounding-critic-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "The full test suite passes with zero failures including new collocated tests for synthesizeGrounded and updated src/medical/engine.test.ts (npm run test); no regression in the pre-existing suite.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "When the critic approves the first synthesis, synthesizeGrounded returns the original grounded MedicalAnswer unchanged with its >=1 citations intact (asserted on a fake whose critic approves).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "When the critic rejects then approves the re-synthesis, the RE-synthesized grounded answer is returned (distinct body, still >=1 citation); when it rejects BOTH, the result is abstained:true with citations:[] and the disclaimer footer present.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "Any thrown error from synthesize or the critic (transport/model-unavailable) results in an abstained MedicalAnswer (abstained:true, citations:[]), never a propagated exception and never an ungrounded answer — asserted with fakes that throw at each step.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "On the consent-refuse, red-flag short-circuit, content-policy refuse, numeric-only (sampleCount>0), and literature-disabled paths, MedicalSopEngine.run makes ZERO grounding-critic LLM calls — asserted with an injected spy LLMClient that fails if called, exactly as the existing red-flag spy assertion (engine.ts:53-56). Existing engine.test.ts zero-LLM assertions still pass.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "The grounded path issues at most GROUNDED_GATE_MAX_LLM_CALLS LLM calls; a call-counting fake on a reject->reject scenario asserts the cap (synthesize + critic + re-synth + re-critique).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "No new SDK/network import is added under src/medical; the scoped medical ESLint boundary passes (npm run lint). synthesizeGrounded depends only on the injected LLMClient and the Sprint-1 grounding-critic module.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add config.medical model/provider fields or EgressGuard cloud gating (Sprint 3).",
+        "Do not add the AuditEntry.criticVerdict field or change audit calls (Sprint 3) — the engine still appends the existing answer/abstain event this sprint.",
+        "Do not change the MedicalSopEngine.run signature, the zero-arg constructor, or any upstream gate (consent/red-flag/refuse/numerics/factstore/egress).",
+        "Do not add more than ONE re-synthesis round.",
+        "Do not introduce a cloud client — keep using the existing local default client constructed at engine.ts:402."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "The grounded branch is gated by the fail-closed critic with a single bounded re-synthesis, every non-grounded path remains zero-LLM, and build/typecheck/test/lint are green with no regression"
+      ],
+      "definitionOfDone": "synthesizeGrounded (in src/medical/retrieval/literature.ts or a sibling grounded-gate.ts) composes synthesize + getGroundingVerdict with one bounded re-synthesis and fail-closed abstain on second-reject or any thrown error, bounded by GROUNDED_GATE_MAX_LLM_CALLS. src/medical/engine.ts grounded branch (engine.ts:396-403) calls synthesizeGrounded instead of synthesize, threading the existing llmClient + footer. All existing engine negative assertions (zero LLM on consent/red-flag/refuse/numeric/disabled) still hold. Collocated tests cover approve, reject->approve, reject->reject->abstain, throw->abstain, the call cap, and the zero-LLM non-grounded paths. Build, typecheck, test, lint pass with no regression.",
+      "assumptions": [
+        "synthesize remains the single-call grounding primitive (literature.ts:98-177); synthesizeGrounded calls it rather than replacing it, so the abstain-on-disabled/empty/ABSTAIN semantics (literature.ts:104-166) are reused.",
+        "The grounded RetrievalOutcome carries outcome.passages (RetrievalOutcome 'grounded' variant); synthesizeGrounded forwards those passages to getGroundingVerdict.",
+        "Re-synthesis appends critic feedback to the synthesis system prompt (extra instruction line) without otherwise changing buildSynthesisSystem; the second synthesize still pins to the same passages.",
+        "The engine already constructs the local LLMClient lazily only on the grounded branch (engine.ts:400-402); that construction stays unchanged this sprint and is passed into synthesizeGrounded.",
+        "The engine still appends event:'answer' or 'abstain' (engine.ts:417) based on the returned MedicalAnswer.abstained; the criticVerdict audit field is deferred to Sprint 3."
+      ],
+      "outOfScope": [
+        "Configurable model/provider + cloud-inference egress gating (Sprint 3)",
+        "AuditEntry.criticVerdict (Sprint 3)",
+        "Multi-round critique beyond one re-synthesis"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/medical/retrieval/literature.ts:44-177 (synthesize, buildSynthesisSystem, passagesToCitations, the abstain return shapes); src/medical/retrieval/grounding-critic.ts (Sprint-1 exports: getGroundingVerdict, GROUNDING_MAX_LLM_CALLS); src/medical/engine.ts:383-428 (the grounded branch at :396-403 you are replacing, the hasNumericAnswer guard at :393, the auditLog.append at :417, and the spy-LLM pattern at :53-56); src/fleet/critic-deep.ts:206-265 (runCritiqueLoop — model your loop on it but ACCEPT-ON-APPROVE / ABSTAIN-ON-EXHAUSTION instead of accept-best, and cap at exactly one re-expand-equivalent).\n\nImplement synthesizeGrounded(query, outcome, llm, footer, opts?) in literature.ts (keep it next to synthesize so it shares helpers). Algorithm:\n  if (outcome.kind !== 'grounded') return synthesize(query, outcome, llm, footer); // disabled/abstain already handled there\n  let answer; try { answer = await synthesize(query, outcome, llm, footer); } catch { return abstainAnswer(footer); }\n  if (answer.abstained) return answer; // synthesize itself abstained (empty/ABSTAIN/no passages)\n  let verdict; try { verdict = await getGroundingVerdict({ llm, model: SYNTHESIS_MODEL, question: query, answerBody: answer.body, passages: outcome.passages }); } catch { return abstainAnswer(footer); }\n  if (verdict.verdict === 'approve') return answer;\n  // one re-synthesis with feedback\n  let answer2; try { answer2 = await synthesizeWithFeedback(query, outcome, llm, footer, verdict.feedback); } catch { return abstainAnswer(footer); }\n  if (answer2.abstained) return answer2;\n  let verdict2; try { verdict2 = await getGroundingVerdict({ ... answerBody: answer2.body, passages: outcome.passages }); } catch { return abstainAnswer(footer); }\n  return verdict2.verdict === 'approve' ? answer2 : abstainAnswer(footer);\n where abstainAnswer(footer) returns { body: 'I cannot provide a sufficiently-supported answer grounded in the retrieved literature. For evidence-based guidance, please consult a licensed healthcare professional.', abstained:true, citations:[], disclaimerFooter:footer, shortCircuit:false } and synthesizeWithFeedback is synthesize with one extra system-prompt line: `Address this reviewer feedback while staying grounded ONLY in the passages: ${feedback}`. Export const GROUNDED_GATE_MAX_LLM_CALLS = 2 /*synth*/ + 2*GROUNDING_MAX_LLM_CALLS? — set it to the actual worst case: 1 (synth) + GROUNDING_MAX_LLM_CALLS (critic) + 1 (re-synth) + GROUNDING_MAX_LLM_CALLS (re-critic); compute from the imported constant, not a literal.\n\nengine.ts: replace lines 396-403 grounded branch body so that instead of `answer = await synthesize(userPrompt, outcome, llmClient, footer)` it calls `answer = await synthesizeGrounded(userPrompt, outcome, llmClient, footer)`. Leave the lazy llmClient construction (engine.ts:400-402) and the else-branch (numeric/disabled) untouched. Do not move any numerics/red-flag/consent logic.\n\nTests: a grounded-gate.test.ts (or extend literature.test.ts) with a fake llm whose chat returns queued strings to drive: approve-first; reject-then-approve (assert answer2 body returned); reject-then-reject (assert abstained); throw at synth / throw at critic (assert abstained); call-count cap. Extend engine.test.ts: add a grounded-path test (inject egress with literature-retrieval on + a fake literature returning a grounded outcome + a fake llmClient) asserting the gate runs; CRUCIALLY keep/extend the existing zero-LLM assertions for consent/red-flag/refuse/numeric/disabled using the spy llmClient that throws if called.",
+      "evaluatorNotes": "sc-2-3: fake critic approves -> assert returned answer === first synthesis (same body, citations.length>=1). sc-2-4: queue reject then approve and assert the SECOND synthesis body is returned; queue reject then reject and assert abstained===true, citations===[], disclaimerFooter present. sc-2-5: make synthesize throw (fake llm.chat rejects) and assert abstained answer (no exception escapes); repeat with critic throwing. sc-2-6: drive MedicalSopEngine.run for each non-grounded path (no consent; red-flag prompt; refuse prompt; numeric prompt with seeded healthStore sampleCount>0; literature-disabled egress) with deps.llmClient = a spy that throws if called; assert run resolves and the spy recorded 0 calls; confirm the pre-existing engine.test.ts zero-LLM cases still pass. sc-2-7: reject->reject path with a counting fake -> assert chat calls === GROUNDED_GATE_MAX_LLM_CALLS. sc-2-8: npm run lint clean; grep the diff under src/medical for new '@anthropic-ai/sdk','openai','node:net','node:http','fetch(' — expect none. Build+typecheck clean; FULL suite no regression.",
+      "estimatedFiles": [
+        "src/medical/retrieval/literature.ts",
+        "src/medical/retrieval/literature.test.ts",
+        "src/medical/retrieval/grounded-gate.test.ts",
+        "src/medical/engine.ts",
+        "src/medical/engine.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T16:00:00Z",
+      "updatedAt": "2026-06-18T16:00:00Z",
+      "completedAt": "2026-06-18T16:45:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-medical-grounding-critic-3",
+      "specId": "spec-20260618-medical-grounding-critic",
+      "sprintNumber": 3,
+      "title": "Configurable model + cloud-inference egress gating + audit verdict",
+      "description": "Make the synthesis/critic model+provider configurable and record the critic outcome in the audit log, while keeping cloud egress strictly behind the existing cloud-inference axis. (1) Extend MedicalSectionSchema (src/config/schema.ts:374-385) with an optional `inference` block: { provider?: string; endpoint?: string; model?: string } (zod, all optional). (2) Add a resolver buildMedicalInferenceClient(config, egress) in a small module (e.g. src/medical/inference.ts) that returns { client: LLMClient; model: string }: when config.medical.inference specifies a CLOUD provider (anything other than the local openai-compat localhost / ollama default), it is used ONLY if egress.isAllowed('cloud-inference') (src/medical/egress.ts:35) is true; otherwise the resolver FAILS CLOSED — it falls back to the local default (openai-compat http://localhost:11434/v1, llama3) so no cloud egress occurs. Absent any inference config, it returns the current local default unchanged (back-compat). (3) Wire engine.ts grounded branch to obtain its LLMClient+model from buildMedicalInferenceClient(config, egress) instead of the hardcoded createClient at engine.ts:402, passing the resolved model through synthesizeGrounded to the critic. (4) Extend AuditEntry (src/medical/types.ts:77-87) with optional `criticVerdict?: 'approve' | 'reject-abstained' | 'error-abstained'` (IDs/enums only) and append it on the grounded path: approve when the gate returned an approved answer, reject-abstained when the gate abstained after a critic reject, error-abstained when it abstained due to a thrown error. No prompt text or health values; AuditLog 0600 mode preserved.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-medical-grounding-critic-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "The full test suite passes with zero failures including new collocated src/medical/inference.test.ts and updated engine/audit tests (npm run test); no regression in the pre-existing suite.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "Given config.medical.inference specifying a cloud provider but medical.egress.cloudInference=false (default), buildMedicalInferenceClient returns the LOCAL default client (no cloud) — asserted by inspecting the resolved provider/endpoint and by a spy that fails if a cloud client is constructed/called.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "Given config.medical.inference specifying a cloud provider AND medical.egress.cloudInference=true, buildMedicalInferenceClient returns a client/model built from that cloud config (proving the 'any model' capability is reachable behind the opt-in) — asserted via the resolved provider/model and an injected factory spy.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "With NO config.medical.inference set, buildMedicalInferenceClient returns the exact current local default (openai-compat http://localhost:11434/v1, model llama3); a back-compat test asserts the grounded path behaves identically to Sprint 2.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "After a grounded turn, the audit-<date>.jsonl entry carries exactly one criticVerdict value in {approve, reject-abstained, error-abstained} matching the gate outcome, alongside the existing event:'answer'|'abstain'; the line contains NO substring of the prompt or answer body and NO health value.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "The audit file remains mode 0600 after appending the criticVerdict (stat assertion), and AuditEntry stays IDs/enums-only — criticVerdict is one of the three enum literals, never free text.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "Zero outbound egress unless cloud-inference is enabled: with cloudInference=false and a network spy that throws on use, the grounded turn completes without invoking it; the scoped medical ESLint boundary still passes (npm run lint) and no new disallowed network import is added outside the providers factory seam.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add a new egress axis — reuse cloud-inference (src/medical/egress.ts:5,35).",
+        "Do not change synthesizeGrounded's gate logic or the one-re-synthesis bound (Sprint 2).",
+        "Do not add cloud fallback chains, streaming, or caching.",
+        "Do not log prompt text, answer body, citations, or any health value into the audit entry — criticVerdict is an enum only.",
+        "Do not change the MedicalSopEngine.run signature or the zero-arg constructor; resolver is built from the config already passed to run()."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Synthesis/critic model is configurable with cloud strictly gated by cloud-inference (fail-closed to local), back-compat is byte-identical with no config, the criticVerdict enum is audited IDs/enums-only at 0600, and build/typecheck/test/lint are green with no regression"
+      ],
+      "definitionOfDone": "src/config/schema.ts MedicalSectionSchema gains an optional inference:{provider?,endpoint?,model?} block. src/medical/inference.ts exports buildMedicalInferenceClient(config, egress):{client,model} — cloud only when cloudInference=true else fail-closed local default; identical local default when unset. src/medical/engine.ts grounded branch resolves its client+model via buildMedicalInferenceClient and threads the model into synthesizeGrounded. src/medical/types.ts AuditEntry gains optional criticVerdict enum; engine appends it on the grounded path. Collocated tests cover cloud-gated-off (local fallback), cloud-gated-on (cloud used), no-config back-compat, audit verdict value + PHI-free + 0600, and zero-egress-when-disabled. Build, typecheck, test, lint pass with no regression.",
+      "assumptions": [
+        "EgressGuard already exposes isAllowed('cloud-inference') and is built from config via EgressGuard.fromConfig(config) (src/medical/egress.ts:25-48); the engine builds it at engine.ts:384 and can pass it to the resolver.",
+        "The providers factory createClient(provider, endpoint, apiKey?, model?) (src/providers/factory.ts, used at engine.ts:402) is the single client-construction seam; buildMedicalInferenceClient uses it and is the only place that decides local-vs-cloud.",
+        "'Local default' = provider 'openai-compat', endpoint 'http://localhost:11434/v1', model 'llama3' (engine.ts:402) — treated as non-egressing; any other provider/endpoint is treated as cloud and gated.",
+        "AuditEntry criticVerdict is optional and additive; existing entries without it remain valid (the field is only populated on the grounded answer/abstain path).",
+        "The criticVerdict value is derived from the gate result the engine already has: approved answer -> 'approve'; abstained-after-reject -> 'reject-abstained'; abstained-after-throw -> 'error-abstained'. Sprint 2's synthesizeGrounded must surface enough signal (return the verdict alongside the answer, or an enum) for the engine to classify — extend its return type if needed without changing its gate behavior."
+      ],
+      "outOfScope": [
+        "New egress axes",
+        "Cloud fallback chains / streaming / caching",
+        "Any change to upstream gates or numerics"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read FIRST: src/config/schema.ts:374-421 (MedicalSectionSchema + egress block; add the inference block as a sibling of egress, all-optional zod); src/medical/egress.ts (EgressGuard.fromConfig at :25, isAllowed at :35); src/providers/factory.ts (createClient signature + how validateApiKey behaves for cloud providers — used at fleet index.js:26); src/medical/engine.ts:383-428 (where egress is built at :384 and the client is constructed at :402, and where auditLog.append fires at :417); src/medical/retrieval/literature.ts synthesizeGrounded (Sprint 2 — you may need to widen its return to carry the verdict classification); src/medical/types.ts:64-87 (AuditEvent + AuditEntry — add the optional criticVerdict field).\n\nschema.ts: add to MedicalSectionSchema `inference: z.object({ provider: z.string().optional(), endpoint: z.string().optional(), model: z.string().optional() }).optional()`. Keep egress untouched.\n\nsrc/medical/inference.ts (new): export function buildMedicalInferenceClient(config: BoberConfig, egress: EgressGuard): { client: LLMClient; model: string }. Logic: const inf = config.medical?.inference; const LOCAL = { provider:'openai-compat', endpoint:'http://localhost:11434/v1', model:'llama3' }; const wantProvider = inf?.provider ?? LOCAL.provider; const isLocal = wantProvider === 'openai-compat' && (inf?.endpoint ?? LOCAL.endpoint).includes('localhost'); if (!isLocal && !egress.isAllowed('cloud-inference')) { /* FAIL-CLOSED */ return { client: createClient(LOCAL.provider, LOCAL.endpoint, undefined, LOCAL.model), model: LOCAL.model }; } const provider = inf?.provider ?? LOCAL.provider; const endpoint = inf?.endpoint ?? LOCAL.endpoint; const model = inf?.model ?? LOCAL.model; return { client: createClient(provider, endpoint, undefined, model), model }; Add a tiny seam (e.g. an optional injected factory param defaulting to createClient) so tests can spy without real network. Unicode section headers; import type for LLMClient/BoberConfig/EgressGuard.\n\nengine.ts: replace the hardcoded `const llmClient = this.deps?.llmClient ?? createClient('openai-compat', ...)` at :402 with `const { client: llmClient, model: synthModel } = this.deps?.llmClient ? { client: this.deps.llmClient, model: 'llama3' } : buildMedicalInferenceClient(config, egress);` (keep deps.llmClient injection winning for tests). Thread synthModel into synthesizeGrounded so the critic uses the same model. At the audit append (:417) add criticVerdict derived from the gate outcome — extend synthesizeGrounded (Sprint 2) to return e.g. { answer, verdict: 'approve'|'reject-abstained'|'error-abstained' } and pass verdict into auditLog.append alongside event.\n\ntypes.ts: add `criticVerdict?: 'approve' | 'reject-abstained' | 'error-abstained';` to AuditEntry with a doc comment 'IDs/enums only — never text'.\n\nTests: inference.test.ts (cloud-off->local fallback; cloud-on->cloud client via factory spy; no-config->exact local default; assert the factory spy is NEVER called with a cloud provider when cloudInference=false). engine.test.ts / audit additions: run a grounded turn and read the jsonl, assert criticVerdict is the right enum, assert the line has no prompt/answer substring, stat 0600. Keep all Sprint-2 zero-LLM and gate tests green.",
+      "evaluatorNotes": "sc-3-3: config.medical.inference.provider='anthropic' (or any non-local) with egress cloudInference=false -> assert buildMedicalInferenceClient resolves provider 'openai-compat' + localhost endpoint, and the injected factory spy is never called with a cloud provider. sc-3-4: same inference but cloudInference=true -> assert the factory spy IS called with provider 'anthropic' and the configured model, and the resolved model is threaded. sc-3-5: no inference block -> assert resolved {provider:'openai-compat', endpoint includes localhost, model:'llama3'} and a grounded turn matches Sprint-2 behavior. sc-3-6/sc-3-7: run grounded approve / reject->reject / throw turns; for each read audit-<date>.jsonl, assert exactly one criticVerdict in {approve,reject-abstained,error-abstained} matching the outcome, assert NO prompt or answer substring and no numeric health value in the line, and fs.stat the file mode === 0o600. sc-3-8: with cloudInference=false and a node-level network spy (e.g. patched fetch/createClient) that throws on cloud use, assert the grounded turn completes; npm run lint clean; grep the diff for disallowed network imports outside providers/. Build+typecheck clean; FULL suite no regression (fleet + all medical).",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/medical/inference.ts",
+        "src/medical/inference.test.ts",
+        "src/medical/types.ts",
+        "src/medical/engine.ts",
+        "src/medical/engine.test.ts",
+        "src/medical/retrieval/literature.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T16:00:00Z",
+      "updatedAt": "2026-06-18T16:00:00Z",
+      "completedAt": "2026-06-18T16:55:30Z"
+    }
+  ]
+}

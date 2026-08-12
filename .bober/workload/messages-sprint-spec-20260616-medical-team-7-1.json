@@ -1,0 +1,16 @@
+{
+  "entryId": "messages-sprint-spec-20260616-medical-team-7-1",
+  "channel": "messages",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/handoffs/gen-report-sprint-spec-20260616-medical-team-7-1.json"
+  },
+  "value": {
+    "id": "sprint-spec-20260616-medical-team-7:generator:1",
+    "seq": 2,
+    "role": "assistant",
+    "nodeId": "sprint_generate",
+    "text": "EVALUATOR FLAGS: (1) Single network file: only src/medical/retrieval/medline-source.ts touches fetch/Response; assertAllowed('literature-retrieval') is the FIRST statement in fetchPassages (defense-in-depth over ESLint). (2) NO live network in CI: tests inject a duck-typed FetchLike fake + committed __fixtures__/medlineplus-sample.json — confirm tests pass offline. (3) Abstain-unless-supported: synthesize abstains on empty/'ABSTAIN' model output; non-abstained answers carry citations>=1 derived from pinned passages. (4) Fail-closed at 3 layers (assertAllowed off, fetch error, model unavailable) -> abstain, NEVER fail-open / no uncited claim. (5) cloud-inference independently off: grounded path uses deps.llmClient ?? createClient('openai-compat', Ollama) — never a cloud provider; enabling literature does not enable cloud. (6) Commit 553f087 clean (8 files, 0 .bober). Confirm gates still first + programming team byte-identical.",
+    "tokens": 939
+  }
+}

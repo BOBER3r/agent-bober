@@ -1,0 +1,16 @@
+{
+  "entryId": "refs-observed-5",
+  "channel": "refs",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"sprint_curate_mocks\" writing \"refs\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "sprint-mock-manifest": {
+      "uri": "scratch://run-workload-observe/56f46472f7939bcef6a416eddd08f54c422afebe1ba22c01306089e653092bfd.md",
+      "sha256": "56f46472f7939bcef6a416eddd08f54c422afebe1ba22c01306089e653092bfd",
+      "bytes": 714,
+      "kind": "document"
+    }
+  }
+}

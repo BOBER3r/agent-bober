@@ -62,5 +62,22 @@
   "engineOutcome": {
     "kind": "threw",
     "errorClass": "FinalizeWithoutSpecError"
+  },
+  "corpusHeadroom": {
+    "messages": {
+      "corpusMaxBytes": 1292,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "evaluations": {
+      "corpusMaxBytes": 1067,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "refs": {
+      "corpusMaxBytes": 283,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    }
   }
 }

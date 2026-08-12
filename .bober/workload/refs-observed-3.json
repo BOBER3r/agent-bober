@@ -1,0 +1,16 @@
+{
+  "entryId": "refs-observed-3",
+  "channel": "refs",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"plan_materialize\" writing \"refs\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "plan-spec": {
+      "uri": "scratch://run-workload-observe/8f3b11779b93494383b30fb9de224176e8793190f147c409174a23495dfa4ff3.md",
+      "sha256": "8f3b11779b93494383b30fb9de224176e8793190f147c409174a23495dfa4ff3",
+      "bytes": 650,
+      "kind": "document"
+    }
+  }
+}

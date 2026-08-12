@@ -1,0 +1,614 @@
+{
+  "entryId": "sprintContracts-spec-20260615-chat-interrupt-approve-steer",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-1.json",
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-2.json",
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-3.json",
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-4.json",
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-5.json",
+      ".bober/contracts/sprint-spec-20260615-chat-interrupt-approve-steer-6.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-1",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 1,
+      "title": "RunState grammar + careful-mode chat spawn + /careful toggle",
+      "description": "Lay the spine for chat-driven approval. Extend the RunState status grammar additively with 'input-required' and 'paused' plus optional pending/pause fields. Add an additive `bober run --approve-gates <comma-list>` flag that merges {gate -> 'disk'} into config.pipeline.checkpointOverrides for that run only. Add a session-persisted `/careful on|off` toggle (chat sidecar) and make RunSpawner pass the curated `--approve-gates post-research,post-plan,post-sprint` to the detached child when careful is on. After this sprint a chat user can launch an approval-gated run whose curated gates actually fire pending markers, while autopilot spawns are unchanged.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and typecheck is clean in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "All tests pass with zero failures, including new tests for the grammar extension, --approve-gates parsing, and the /careful toggle (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "RunState.status accepts 'input-required' and 'paused' and the optional fields pendingCheckpointId/pendingPrompt/pendingSince/pausedAt round-trip through writeRunState/readRunState. A unit test writes a RunState with status 'input-required' + pending fields and reads it back unchanged; an existing-status RunState (running/completed/failed/aborted) still round-trips.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "`bober run --approve-gates post-research,post-plan,post-sprint` merges {post-research:'disk', post-plan:'disk', post-sprint:'disk'} into config.pipeline.checkpointOverrides for that run; without the flag, checkpointOverrides is left as-is (today's behavior). A unit test asserts the merge and asserts an unknown gate name (not a declared checkpoint id) is rejected with a clear error.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "`/careful on` / `/careful off` persists the careful flag in a chat-scoped sidecar across turns; `/careful` with no arg reports the current state. A unit test toggles and re-reads the sidecar via a fresh instance.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "When careful is on, RunSpawner.spawn launches the detached child with `--approve-gates post-research,post-plan,post-sprint` appended to the args; when off (default), no --approve-gates is present and the args equal Phase 1's exactly. A unit test inspects the injected spawnFn args in both states.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not surface pending approvals in chat yet (read path is Sprint 2)",
+        "Do not write approve/reject markers from chat yet (write path is Sprint 3)",
+        "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+        "Do not modify the DiskCheckpointMechanism, approval-state.ts, or the existing approve/reject CLI",
+        "Do not change autopilot spawn behavior or the pipeline algorithm"
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "A careful chat spawn launches with the curated --approve-gates; an autopilot spawn is byte-for-byte unchanged from Phase 1; the RunState grammar extension round-trips; build + typecheck + full suite green"
+      ],
+      "definitionOfDone": "RunState gains 'input-required'/'paused' and the optional pending/pause fields (additive, round-tripping). `bober run` gains an additive --approve-gates flag that merges disk overrides for the named gates only, rejecting unknown gate names. A session-persisted /careful on|off toggle exists, and RunSpawner passes the curated approve-gates to the detached child when careful is on while leaving autopilot spawns identical to Phase 1. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "The set of valid checkpoint ids is the pipeline's declared sites (post-research, post-plan, post-sprint-contract, post-sprint, pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, end-of-pipeline). The validator for --approve-gates checks membership in this set.",
+        "The careful sidecar is keyed by sessionId and lives under .bober/chat/ (mirrors src/chat/pid-sidecar.ts). Default state is off (autopilot), preserving Phase 1.",
+        "Merging into checkpointOverrides (override wins over mode) is sufficient to activate only the curated gates without setting --mode careful."
+      ],
+      "outOfScope": [
+        "Read/surface path (Sprint 2)",
+        "Write/resolve path (Sprint 3)",
+        "Guidance injection (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Additive, low-risk plumbing. Verified touch points:\n- src/mcp/run-manager.ts:34 (interface RunState): extend the status union to add 'input-required' | 'paused'; add optional fields pendingCheckpointId?: string; pendingPrompt?: string; pendingSince?: string; pausedAt?: string. Keep dist/.d.ts in sync only via build (do not hand-edit dist). Check no exhaustive switch on status breaks (search for status === and switch(status)).\n- src/state/run-state.ts: writeRunState/readRunState already serialize the whole object — no change needed beyond the type. Add a round-trip test in src/state/run-state.test.ts (or a new test) for the new status + fields.\n- src/cli/commands/run.ts: the --mode override at :104-107 is the pattern to mirror. Add a `--approve-gates <gates>` commander option (registered in src/cli/index.ts under the `run` command alongside --mode/--run-id/--team) and a RunCommandOptions field approveGates?: string. Parse comma-separated, trim, validate each against the known checkpoint-id set, and merge { [gate]: 'disk' } into config.pipeline.checkpointOverrides (spread the existing record). Reject unknown gates with a clear thrown error / process.exitCode=1 + stderr message (mirror existing error style). Do NOT also force --mode; the override is enough.\n- Known checkpoint-id set: define a small exported const (e.g. KNOWN_CHECKPOINT_IDS) — source it from the checkpoint sites if a list already exists (src/orchestrator/checkpoints/sites.ts has post-research/post-plan; the full set is enumerated in pipeline.ts). A literal tuple is acceptable; add a comment pointing at the pipeline sites.\n- New src/chat/careful-sidecar.ts: mirror src/chat/pid-sidecar.ts (read/write a small JSON under .bober/chat/<sessionId>.careful.json). API: isCareful(): Promise<boolean>, setCareful(on: boolean): Promise<void>. Tolerate missing file => false.\n- src/chat/slash-commands.ts: add a `/careful` case. It needs access to the careful sidecar — thread a carefulHandler callback the way stopHandler was threaded (dispatch already takes optional handlers; mirror that to stay back-compat with 2-arg callers). `/careful on` -> set true + 'Careful mode ON — new runs will pause at curated gates.'; `/careful off` -> set false; `/careful` (no arg) -> report current.\n- src/chat/chat-session.ts: construct the CarefulSidecar; pass its state into RunSpawner.spawn (add an options arg or a per-call careful boolean). When spawning (action.action === 'spawn' at :162), read careful state and pass it so RunSpawner appends --approve-gates.\n- src/chat/run-spawner.ts: spawn() at :93 builds args ['run', task, '--run-id', runId]; when careful, append ['--approve-gates', 'post-research,post-plan,post-sprint']. Keep the careful arg optional with default off so existing run-spawner tests pass unchanged.\nKeep everything additive and default-off. Tests: temp dirs, inject spawnFn to capture args, no network. Run npm run build && npm run typecheck && npm run test before handoff.",
+      "evaluatorNotes": "sc-1-4: write+read a RunState with status 'input-required' and all four optional fields; assert deep-equal round-trip; also round-trip a 'paused' and a legacy 'running' state.\nsc-1-5: call the run-command option parsing/merge with --approve-gates post-research,post-plan,post-sprint and assert checkpointOverrides has the three 'disk' entries and nothing else changed; call with an unknown gate ('bogus') and assert a clear error and no partial merge applied (or that valid gates still apply per the AC wording — match the generator's chosen semantics but require the error to be surfaced).\nsc-1-6: toggle /careful on, construct a fresh CarefulSidecar for the same sessionId, assert isCareful() true; toggle off, assert false; /careful with no arg returns a state report string.\nsc-1-7: with careful on, capture RunSpawner.spawn's injected spawnFn args and assert they include '--approve-gates' and the curated list; with careful off, assert the args exactly equal the Phase 1 arg vector (no --approve-gates).\nRegression: existing run-spawner, chat-session, slash-commands, run-state, run-manager tests stay green. Confirm no exhaustive status switch broke. Run npm run build, npm run typecheck, npm run test.",
+      "estimatedFiles": [
+        "src/mcp/run-manager.ts",
+        "src/state/run-state.test.ts",
+        "src/cli/commands/run.ts",
+        "src/cli/index.ts",
+        "src/cli/commands/run.test.ts",
+        "src/chat/careful-sidecar.ts",
+        "src/chat/careful-sidecar.test.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/slash-commands.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/run-spawner.ts",
+        "src/chat/run-spawner.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T13:46:26Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-2",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 2,
+      "title": "Surface pending approvals in chat (read path) + roster input-required",
+      "description": "Make a blocked run visible in chat. Add an ApprovalReader over .bober/approvals/*.pending.json (reusing approval-state.ts list helpers), an announce-once dedupe cursor (mirroring the CompletionTailer/cursor-store pattern), and a poll-prelude in the chat turn that weaves a 'run <id> is waiting at <gate>: <prompt>' notice into the reply. The roster / `/runs` output shows the correlated run as [INPUT-REQUIRED], and the pending checkpoint id/prompt are reflected onto the chat-owned RunState so /runs is consistent across turns. Read-only: this sprint never writes approval markers.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "All tests pass, including new ApprovalReader, dedupe-cursor, and chat-surfacing tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "ApprovalReader.read() returns the pending markers from .bober/approvals/*.pending.json (checkpointId, runId, prompt, requestedAt). A unit test with two synthetic pending markers (one with a runId, one without) returns both; a corrupted JSON file in the dir is skipped silently; a missing dir returns [].",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "When a pending marker correlates (by runId) to a running chat run, handleTurn weaves a one-time notice naming the runId, checkpoint id, and rendered prompt into the reply. A unit test injects a synthetic pending marker + matching running RunState and asserts the notice text appears in the turn output.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "Announce-once dedupe: a given pending marker (keyed by checkpointId+requestedAt) is surfaced at most once across turns; a still-pending marker does not re-announce on the next turn. A unit test runs two turns against the same marker and asserts the notice appears only on the first.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "The roster summary / `/runs` shows a correlated run as [INPUT-REQUIRED] and the chat-owned RunState gains pendingCheckpointId/pendingPrompt/pendingSince + status input-required. A unit test asserts both the summary line and the persisted RunState fields.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "With no pending markers present, chat behavior is identical to Phase 1 — no spurious notices and the existing chat-session/roster tests stay green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not write .approved.json / .rejected.json from chat (Sprint 3)",
+        "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+        "Do not modify the DiskCheckpointMechanism or approval-state.ts write functions",
+        "Do not clean up markers on completion yet (Sprint 6 hygiene)"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "A blocked run is surfaced once in chat and shown [INPUT-REQUIRED] in /runs; no-pending behavior is unchanged; build + typecheck + full suite green"
+      ],
+      "definitionOfDone": "Chat surfaces pending approvals: an ApprovalReader over the approvals dir, an announce-once dedupe cursor, a poll-prelude notice in handleTurn, [INPUT-REQUIRED] in the roster, and the pending fields reflected onto the chat-owned RunState. Read-only — no markers are written. With no pending markers, behavior matches Phase 1. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "Correlation is by the pending marker's optional runId field (PendingMarker.runId, approval-state.ts:27) matched against running RunStates from RosterReader. A marker with no runId is surfaced as 'unknown run' but still announced (so a CLI-spawned careful run is not silently hidden).",
+        "Because marker files are checkpointId-keyed in a shared dir, at most one careful chat run is expected at a time this phase; correlation ambiguity from concurrent careful runs is the documented limitation (handled in Sprint 6 docs).",
+        "The dedupe cursor mirrors src/chat/cursor-store.ts and is stored per session under .bober/chat/; identity key = checkpointId + requestedAt (stable while pending, changes if the gate is re-requested in a later round)."
+      ],
+      "outOfScope": [
+        "Resolve/write path (Sprint 3)",
+        "Guidance (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read-only surfacing, modeled on the Phase 1 completion-tailer prelude. Verified touch points:\n- src/state/approval-state.ts already has listPending(projectRoot): Promise<PendingMarker[]> (:80) and listPendingApprovals (:179). Reuse listPending for full markers (it carries runId + prompt). DO NOT add write functions here.\n- New src/chat/approval-reader.ts: class ApprovalReader(projectRoot) with read(): Promise<PendingMarker[]> delegating to listPending. Mirror roster-reader.ts structure/style. Add a summarize/notice helper or keep formatting in chat-session.\n- New src/chat/approval-cursor.ts (or reuse the cursor-store pattern in src/chat/cursor-store.ts): track already-announced markers per session by key = `${checkpointId}@${requestedAt}`. API: filterNew(markers): returns markers not yet announced and records them. Persist under .bober/chat/<sessionId>.approvals-cursor.json. Tolerate missing file.\n- src/chat/chat-session.ts handleTurn (:116): in the poll prelude (next to this.tailer.poll() at :120), also read ApprovalReader + dedupe via the cursor, build a notice string for new pending markers, and weave it into BOTH the slash-path reply (:135) and the LLM-path reply (:181) exactly like completion notices are woven. Notice format e.g. `[run <runId> waiting at <checkpointId>: <prompt(first line / truncated)>]`. Wrap in try/catch so a read error never breaks the turn (mirror the completion poll try/catch at :119-123).\n- Reflect onto RunState: when a pending marker correlates to a running RunState, set that RunState's status='input-required' + pendingCheckpointId/pendingPrompt/pendingSince via writeRunState (the chat process owns RunState for chat-spawned runs). Keep this idempotent (only flip running->input-required; do not clobber completed/aborted). Roster.summarize already uppercases status so [INPUT-REQUIRED] appears for free; verify the formatting reads cleanly.\n- src/chat/roster-reader.ts summarize: optionally append the pending prompt/checkpoint to the input-required line for readability (small, additive).\nKeep it read-only w.r.t. the approvals dir. Tests: synthetic .pending.json files in a temp .bober/approvals, synthetic RunStates in temp .bober/runs, two-turn dedupe test, no-pending no-op test, corrupted-file skip. Run build+typecheck+test before handoff.",
+      "evaluatorNotes": "sc-2-4: drop two .pending.json (one with runId, one without) + one corrupted file into a temp approvals dir; assert ApprovalReader.read() returns the two valid markers and skips the corrupted one; assert missing dir => [].\nsc-2-5: synthetic pending marker with runId X + a running RunState X in temp runs; call handleTurn and assert the woven notice names X, the checkpoint id, and the prompt.\nsc-2-6: two consecutive handleTurn calls with the same still-present marker; assert the notice appears only in the first call's output.\nsc-2-7: after surfacing, read the RunState back from disk and assert status==='input-required' with pendingCheckpointId/pendingPrompt/pendingSince set; assert roster.summarize includes [INPUT-REQUIRED] for that run.\nsc-2-8: no markers present -> handleTurn output has no approval notice; existing chat-session and roster tests green.\nRegression: full suite, build, typecheck. Confirm approval-state.ts write functions are untouched.",
+      "estimatedFiles": [
+        "src/chat/approval-reader.ts",
+        "src/chat/approval-reader.test.ts",
+        "src/chat/approval-cursor.ts",
+        "src/chat/approval-cursor.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/chat-session-approval.test.ts",
+        "src/chat/roster-reader.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-2-1",
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T14:04:25Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 3,
+      "title": "Resolve approvals from chat: /approve, /reject + feedback, NL",
+      "description": "Close the human-in-the-loop. Add `/approve <checkpointId>` and `/reject <checkpointId> [feedback]` slash commands plus natural-language approve/reject intent (via the existing loose-JSON classifier) that write .approved.json / .rejected.json markers by reusing saveApproved/saveRejected with the pendingExists guard and resolveApprover. The detached child's DiskCheckpointMechanism poll then resumes automatically; rejection feedback flows into the pipeline's runCheckpointWithFeedback rework round. After resolution the chat-owned RunState clears its pending fields and returns the run to running on the next poll.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-chat-interrupt-approve-steer-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "All tests pass, including new approve/reject slash, NL-classify, and marker-write tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "`/approve <checkpointId>` for an existing pending marker writes .bober/approvals/<id>.approved.json with approverId from resolveApprover() and acks resumption; for a non-existent pending marker it returns a clear 'no pending checkpoint' message and writes nothing. A unit test asserts both (file written / not written) using the pendingExists guard.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "`/reject <checkpointId> <feedback>` writes <id>.rejected.json carrying the feedback string (and rejecterId). A unit test asserts the rejected marker contents; a separate test confirms the DiskCheckpointMechanism reads that marker and resolves to {approved:false, feedback:<feedback>} (reusing the existing mechanism, not a reimplementation).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "Natural-language approval/rejection is classified to an approve/reject action carrying the target checkpoint id (resolved from the single outstanding pending marker, or the one named in the message) and routed to the same handlers. A unit test drives a stubbed classifier returning approve/reject and asserts the correct marker is written; when the target is ambiguous (multiple pending, none named) the turn asks which checkpoint instead of writing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "After a marker is resolved, the chat-owned RunState clears pendingCheckpointId/pendingPrompt/pendingSince and reflects the run back to 'running' on the next poll. `/help` lists /approve and /reject. A unit test asserts the RunState transition and the updated help text.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not reimplement the disk poll/resume — the detached child's DiskCheckpointMechanism already resumes when the marker appears",
+        "Do not change the existing approve.ts/reject.ts CLI commands",
+        "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+        "Do not change how the pipeline consumes rejection feedback (verify the existing runCheckpointWithFeedback path; do not modify it)"
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "Approving/rejecting from chat writes the correct marker, a blocked run resumes via the existing disk poll, reject feedback reaches the rework path, and RunState clears its pending fields; build + typecheck + full suite green"
+      ],
+      "definitionOfDone": "Chat can resolve a pending checkpoint: /approve and /reject slash commands plus NL intent write the .approved.json/.rejected.json markers (reusing saveApproved/saveRejected, pendingExists guard, resolveApprover); the detached child resumes via its existing disk poll; reject feedback reaches runCheckpointWithFeedback; RunState clears pending fields and returns to running. /help updated. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "saveApproved/saveRejected (approval-state.ts:106,122) and resolveApprover (cli/commands/approve.ts:29) are reused directly; resolveApprover may be lifted/exported so the chat handler shares it (or duplicated as a tiny env read if importing the CLI module is undesirable).",
+        "When a single pending marker is outstanding, NL approve/reject targets it implicitly; when several are outstanding, the handler requires the checkpoint id (asks the user) rather than guessing — consistent with the 'never guess a load-bearing target' discipline.",
+        "Resume is the existing DiskCheckpointMechanism poll in the detached child (disk.ts:104-169); chat only writes the marker and acks. The RunState running-flip is observed by the chat poll on a later turn (it is fine if the ack says 'resuming' before the child's next poll tick)."
+      ],
+      "outOfScope": [
+        "Guidance injection (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)",
+        "runId-scoped marker filenames (deferred)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Reuse the approval store; do not rebuild it. Verified touch points:\n- src/state/approval-state.ts: saveApproved(projectRoot, id, ApprovedMarker) at :106, saveRejected(projectRoot, id, RejectedMarker) at :122, pendingExists(projectRoot, id) at :145. ApprovedMarker={approvedAt,approverId,editDelta?}; RejectedMarker={rejectedAt,rejecterId,feedback}.\n- src/cli/commands/approve.ts: resolveApprover() at :29 (process.env USER/USERNAME -> 'unknown'). Either export+import it, or replicate the one-liner in a shared helper. The CLI's guard pattern (pendingExists before writing) at :44 is the model — mirror it so chat never writes a dangling .approved.json.\n- New chat handlers (in chat-session.ts, mirroring handleStop at :201): handleApprove(checkpointId) and handleReject(checkpointId, feedback). Both: resolve projectRoot, pendingExists guard, write marker via saveApproved/saveRejected, then clear the pending fields on the correlated chat-owned RunState (status back to 'running', drop pendingCheckpointId/pendingPrompt/pendingSince) and writeRunState. Return an ack string.\n- src/chat/slash-commands.ts: add /approve and /reject cases. Thread approveHandler/rejectHandler callbacks the way stopHandler is threaded (dispatch already supports optional handlers; keep 2-arg callers working). /reject collects the remainder of the line as feedback (everything after the checkpoint id). Update HELP_TEXT to list /approve and /reject.\n- src/chat/turn-classifier.ts: extend the action union and the loose-JSON schema/prompt to recognize approve/reject intents, returning { action:'approve'|'reject', checkpointId?, feedback? }. Keep jsonObjectMode (DeepSeek-safe). When checkpointId is absent, the chat layer resolves it from the outstanding pending markers (single -> use it; multiple -> ask). Add classifier tests with stubbed LLM responses.\n- chat-session.ts classify path (:155-178): route the new actions to handleApprove/handleReject; resolve an absent checkpointId via ApprovalReader (single-pending shortcut; ambiguous -> return a clarifying message, write nothing).\n- Verify (do not modify) the feedback->rework path: runCheckpointWithFeedback in the orchestrator consumes {approved:false, feedback}. Add a test that constructs a DiskCheckpointMechanism pointed at the temp approvals dir, writes a rejected marker via the chat handler, and asserts mechanism.request(...) resolves to {approved:false, feedback}. This proves the chat write integrates with the existing resume+feedback path end-to-end at the unit level.\nTests: temp dirs, stubbed classifier, no network. Run build+typecheck+test before handoff.",
+      "evaluatorNotes": "sc-3-4: pre-create a post-plan.pending.json; call handleApprove('post-plan'); assert post-plan.approved.json exists with approverId; call handleApprove('does-not-exist'); assert no file written and a clear message returned.\nsc-3-5: pre-create a pending marker; handleReject('post-plan','split sprint 2'); assert rejected.json has feedback==='split sprint 2'; then construct DiskCheckpointMechanism(tempApprovalsDir) and assert request('post-plan', artifact) resolves to {approved:false, feedback:'split sprint 2'} (the pending file should be pre-seeded for the mechanism's own poll, or assert against the marker the handler wrote — match the generator's test design but prove the feedback is the one the mechanism returns).\nsc-3-6: stub the classifier to return approve with no checkpointId while exactly one pending marker exists -> assert that marker approved; stub reject while two pending markers exist and none named -> assert nothing written and a clarifying question returned.\nsc-3-7: after handleApprove, read the correlated RunState and assert pending fields cleared and status back to 'running'; assert HELP_TEXT contains /approve and /reject.\nRegression: existing approve.ts/reject.ts CLI tests and chat tests stay green; approval-state.ts unchanged except possibly exporting resolveApprover. Run build, typecheck, test.",
+      "estimatedFiles": [
+        "src/chat/chat-session.ts",
+        "src/chat/chat-session-approval.test.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/slash-commands.test.ts",
+        "src/chat/turn-classifier.ts",
+        "src/chat/turn-classifier.test.ts",
+        "src/cli/commands/approve.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-3-1",
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T14:21:31Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 4,
+      "title": "Free-text guidance injection: /tell <runId> <text> + pipeline read point",
+      "description": "Let a human steer a run with free-text guidance, not just approve/reject. Add a runId-keyed guidance channel (.bober/runs/<id>/guidance.jsonl) appended by `/tell <runId> <text>` (and NL 'tell run X to …'), and an ADDITIVE pipeline read point that, at each checkpoint boundary, drains pending guidance for the active runId and injects it as extra context into the next agent (curator/generator) handoff. With no guidance present the pipeline behaves byte-for-byte as before (the pipeline.ts:571 invariant).",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "All tests pass, including new guidance-channel, drain, and pipeline-injection tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "`/tell <runId> <text>` for a known run appends a guidance entry {ts, text, consumed:false} to .bober/runs/<runId>/guidance.jsonl and acks; for an unknown run it returns a clear error and writes nothing. A unit test asserts the appended entry and the unknown-run no-op. A runId containing path separators or '..' is rejected before any write.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "A guidance helper drains pending (unconsumed) guidance for a runId — returning the entries and marking them consumed so a second drain returns nothing. A unit test asserts drain-then-redrain semantics on the JSONL channel.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "The pipeline drains and injects pending guidance for the active runId at a checkpoint boundary, threading the drained text into the next agent's context/handoff. A unit/integration test seeds guidance for a runId and asserts the boundary read point surfaces it into the agent input (via a stubbed agent invocation or the handoff object).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "The pipeline read point is purely additive: with no guidance file present, the pipeline produces the same handoff/agent input as before and the existing pipeline test suite stays green. A unit test asserts no-guidance is a no-op (no change to the handoff).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-8",
+          "description": "Natural-language 'tell run X to <instruction>' is classified to a tell action {runId, text} and routed to the /tell handler. A unit test with a stubbed classifier asserts the guidance entry is written. /help lists /tell.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not mutate an agent call already executing — guidance applies only at the NEXT checkpoint boundary",
+        "Do not change phase order or the pipeline algorithm; the read point is additive only",
+        "Do not add pause/resume (Sprint 5) or hygiene/docs (Sprint 6)",
+        "Do not require careful mode — guidance can be queued for any run, but is only drained at boundaries that execute"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Guidance can be queued from chat and is drained+injected at a pipeline boundary; no-guidance is a verified no-op; build + typecheck + full suite green"
+      ],
+      "definitionOfDone": "A runId-keyed guidance channel exists, /tell (slash + NL) appends to it with path-safety + unknown-run guard, a drain helper marks entries consumed, and an additive pipeline boundary read point injects drained guidance into the next agent handoff. With no guidance, the pipeline is byte-for-byte unchanged. /help updated. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "guidance.jsonl is append-only with one JSON object per line {ts, text, consumed?}; 'drain' rewrites the file (or appends a consumed-marker) atomically via the temp-file+rename pattern used in run-state.ts:41-52. The exact consumed-tracking representation is the generator's call as long as drain-then-redrain returns nothing the second time.",
+        "The natural injection boundary is the per-sprint pre-generator/pre-curator handoff and/or the post-sprint boundary, where the pipeline already builds a handoff object and invokes an agent (pipeline.ts around the curate/generate sites). Injecting drained guidance text as an extra context field on that handoff is sufficient; the generator chooses the least-invasive insertion point that is provably additive.",
+        "The active runId is available inside runPipeline via the existing opts.runId path (run.ts:155 threads --run-id into runPipeline). Guidance is keyed by that same runId."
+      ],
+      "outOfScope": [
+        "Pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)",
+        "Guidance that edits files or overrides the contract (only adds advisory context)"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "This sprint touches the PROTECTED pipeline.ts — changes must be strictly ADDITIVE read points; do NOT reorder phases or change behavior when no guidance is present (the pipeline.ts:571 invariant). Verified touch points:\n- New src/state/guidance.ts (or src/chat/guidance-channel.ts — prefer src/state/ since the pipeline reads it too): path helpers under .bober/runs/<runId>/guidance.jsonl reusing the runDir helper shape from run-state.ts:23. Functions: appendGuidance(projectRoot, runId, text) (validate runId is a safe segment — reuse/duplicate a safe-segment check; reject '..'/separators), drainGuidance(projectRoot, runId): Promise<string[]> (read unconsumed entries, mark them consumed atomically, return their texts), hasRunDir(projectRoot, runId) for the unknown-run guard. Atomic write via temp+rename (mirror run-state.ts writeRunState).\n- Chat side: new handleTell(runId, text) in chat-session.ts (mirror handleStop): guard the run exists in the roster (RosterReader), append guidance, ack. Unknown run -> clear error. src/chat/slash-commands.ts: add /tell <runId> <rest-of-line-as-text>; thread a tellHandler callback (same optional-handler pattern). Update HELP_TEXT. turn-classifier.ts: add a 'tell' action {runId, text}; keep loose JSON.\n- Pipeline side (additive): in src/orchestrator/pipeline.ts, at the sprint curate/generate boundary (e.g. just before the curator or generator agent invocation, near the pre-curator/pre-generator checkpoint sites at :169/:271), call drainGuidance(projectRoot, runId) and, if non-empty, append the joined guidance text to the handoff/context passed to that agent. Guard on runId being present (opts.runId); if absent or no guidance, do exactly what the code does today. Add a focused test that seeds guidance and asserts it reaches the agent input via a stub; add a test that asserts no-guidance leaves the handoff identical.\n- Be conservative: the smallest additive insertion that satisfies sc-4-6/sc-4-7 is best. Prefer reading guidance once per sprint iteration at a single, clearly-commented site labelled 'Phase 2 guidance injection (additive)'.\nTests: temp dirs, stubbed agent/classifier, no network. Run build+typecheck+test before handoff.",
+      "evaluatorNotes": "sc-4-4: appendGuidance for an existing run dir -> assert guidance.jsonl has the entry; for a non-existent run -> assert no file and a clear error; appendGuidance with runId '../evil' -> assert rejected, nothing written outside .bober/runs.\nsc-4-5: append two entries, drain -> returns both texts; drain again -> returns []; assert the file reflects consumed state.\nsc-4-6: seed guidance for runId R, invoke the pipeline boundary read point (or the smallest unit exercising it) with a stubbed agent, assert the guidance text appears in the agent's input/handoff.\nsc-4-7: with no guidance file, assert the boundary produces an identical handoff (snapshot/deep-equal) and the existing pipeline suite is green.\nsc-4-8: stub classifier to return tell {runId:R, text:'prefer Zod'} -> assert guidance entry written; assert HELP_TEXT lists /tell.\nRegression: full pipeline suite green; diff review confirms only additive read points in pipeline.ts (no phase reordering). Run build, typecheck, test.",
+      "estimatedFiles": [
+        "src/state/guidance.ts",
+        "src/state/guidance.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/chat-session-steer.test.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/turn-classifier.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/orchestrator/pipeline.guidance.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-4-1",
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T14:43:09Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 5,
+      "title": "Soft pause / resume: /pause, /resume + paused RunState + cooperative gate",
+      "description": "Add a soft suspend that keeps the process alive — distinct from the already-built hard /stop (kill-by-PID). `/pause <runId>` (and NL) writes a runId-keyed pause marker (.bober/runs/<id>/paused.json) and flips the chat-owned RunState to 'paused'; an ADDITIVE cooperative-pause check at each checkpoint boundary blocks (polls) while the marker is present; `/resume <runId>` removes the marker and the run continues, RunState returning to 'running'. With no pause marker, the boundary is unchanged beyond a single existence check.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "All tests pass, including new pause-marker, cooperative-gate, and resume tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "`/pause <runId>` for a running run writes .bober/runs/<runId>/paused.json, flips the chat-owned RunState to 'paused' (with pausedAt), and acks that the process stays alive (distinct from /stop). A unit test asserts the marker, the RunState transition, and that no kill signal is sent. /pause on an unknown or non-running run returns a clear message and writes nothing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "The pipeline's additive cooperative-pause check blocks (polls) at a checkpoint boundary while paused.json exists and proceeds once it is removed. A unit/integration test with an injected clock/poll asserts the boundary does not advance while paused and advances after the marker is cleared.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "`/resume <runId>` removes paused.json and flips RunState back to 'running'. A unit test asserts the marker is gone and the status transition; the cooperative gate then advances. /help lists /pause and /resume.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "The cooperative-pause check is additive: with no pause marker, the boundary behaves as before (single existence check, no added blocking) and the existing pipeline suite stays green. Natural-language pause/resume intent is classified and routed to the handlers. A unit test asserts no-marker no-op and NL routing via a stubbed classifier.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not kill the process — that is the existing hard /stop (Phase 1)",
+        "Do not change phase order or the pipeline algorithm; the pause check is additive only",
+        "Do not pause mid-agent — the cooperative gate only acts at checkpoint boundaries",
+        "Do not add hygiene/docs/e2e (Sprint 6)"
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "A run can be soft-paused and resumed from chat, holding at the next boundary while paused; no-marker is a verified no-op; build + typecheck + full suite green"
+      ],
+      "definitionOfDone": "Soft pause/resume works: /pause (slash + NL) writes a runId-keyed pause marker and flips RunState to paused without killing the process; an additive cooperative-pause check blocks at the next boundary while the marker is present; /resume removes it and the run continues with RunState back to running. With no marker, the boundary is unchanged. /help updated. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "The cooperative-pause check reuses the disk-poll pattern from DiskCheckpointMechanism (disk.ts) — a bounded setTimeout poll loop with an injected clock for deterministic tests; a sane upper bound (reuse approvalTimeoutMs or a dedicated cap) prevents an unbounded hang.",
+        "The pause check is placed at the same checkpoint boundaries used for guidance (Sprint 4) and approvals, so 'paused' behaves like 'held at the next gate' rather than an instantaneous freeze of in-flight work.",
+        "RunState 'paused' (added in Sprint 1) is owned/written by the chat process; the pipeline only reads the paused.json marker to decide whether to block. Resume is observed by the chat poll which flips RunState back to running."
+      ],
+      "outOfScope": [
+        "Hygiene/cleanup, docs, end-to-end (Sprint 6)",
+        "Pausing in the middle of an agent invocation"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Touches the PROTECTED pipeline.ts — additive only, no phase reordering (pipeline.ts:571 invariant). Verified touch points:\n- New src/state/pause.ts (peer of guidance.ts from Sprint 4): path helper .bober/runs/<runId>/paused.json under runDir (run-state.ts:23 shape). Functions: setPaused(projectRoot, runId) (write marker {pausedAt}), clearPaused(projectRoot, runId) (unlink, best-effort), isPaused(projectRoot, runId): Promise<boolean>. Validate runId safe-segment before any path build (reuse the Sprint 4 check).\n- Pipeline cooperative gate (additive): in src/orchestrator/pipeline.ts, at the checkpoint boundary (same site cluster as Sprint 4's guidance read, near the pre-curator/pre-generator/post-sprint sites), add an awaited helper waitWhilePaused(projectRoot, runId, {pollMs, timeoutMs, now}) that returns immediately if !isPaused, else polls until clearPaused or a cap. Model the poll loop on DiskCheckpointMechanism.request (disk.ts:104-169) with injected clock. Guard on opts.runId; with no runId or no marker, it is a single existence check then continue — provably additive.\n- Chat side: handlePause(runId)/handleResume(runId) in chat-session.ts (mirror handleStop at :201). handlePause: roster guard (run must exist + be running), setPaused, flip chat-owned RunState to 'paused' + pausedAt via writeRunState, ack 'process alive'. handleResume: clearPaused, flip RunState back to 'running', ack. src/chat/slash-commands.ts: add /pause and /resume (thread pause/resume handler callbacks; same optional-handler pattern). Update HELP_TEXT. turn-classifier.ts: add 'pause'/'resume' actions {runId}; loose JSON. Make sure /pause is clearly distinct from /stop in help text and acks.\n- Determinism: every poll loop MUST accept an injected now()/clock and pollMs so tests don't sleep. Reuse the disk.ts injection style.\nTests: temp dirs, injected clock, stubbed classifier, no network. Run build+typecheck+test before handoff.",
+      "evaluatorNotes": "sc-5-4: /pause on a running run -> assert paused.json exists, RunState status==='paused' with pausedAt, and (critically) no kill signal sent (inject killFn and assert not called — contrast with /stop); /pause on unknown/non-running -> clear message, no marker.\nsc-5-5: with paused.json present, drive waitWhilePaused with an injected clock and assert it keeps polling (does not resolve) across several ticks while the marker exists; remove the marker and assert it resolves and the boundary advances.\nsc-5-6: /resume -> assert paused.json removed and RunState back to 'running'; assert HELP_TEXT lists /pause and /resume.\nsc-5-7: no marker -> waitWhilePaused resolves immediately (single check, no extra ticks); the existing pipeline suite is green; stub classifier returns pause/resume and assert routing to the handlers.\nRegression: full suite green; diff review confirms additive-only pipeline changes (no phase reordering); confirm /stop (Phase 1 hard kill) is unchanged and clearly distinct. Run build, typecheck, test.",
+      "estimatedFiles": [
+        "src/state/pause.ts",
+        "src/state/pause.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/chat-session-steer.test.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/turn-classifier.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/orchestrator/pipeline.pause.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-5-1",
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T15:05:19Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-6",
+      "specId": "spec-20260615-chat-interrupt-approve-steer",
+      "sprintNumber": 6,
+      "title": "Hygiene, docs, and end-to-end verification",
+      "description": "Harden and document the mid-flight HITL loop. Clean up stale pending/guidance/pause markers and chat-owned RunState pending/paused fields when a run completes or is aborted. Document the full chat steer command set and the single-careful-run-at-a-time limitation plus the runId-scoped-marker follow-up. Update /help, the README chat section, and a docs page. Add an end-to-end test that drives the whole loop: /careful on -> spawn -> pause at post-plan -> /tell -> /approve -> resume -> /pause -> /resume -> completion.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+        "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+        "sprint-spec-20260615-chat-interrupt-approve-steer-5"
+      ],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "All tests pass, including the hygiene/cleanup tests and the end-to-end steer test (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "When a run completes or is aborted, its stale pending approval marker(s), guidance.jsonl drain-state, and paused.json are cleaned up and the chat-owned RunState pending/paused fields are cleared. A unit test transitions a run to completed/aborted and asserts the markers + RunState fields are gone.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "An end-to-end test drives the full loop against a stubbed/fast pipeline in temp dirs: /careful on -> spawn -> pause at post-plan -> /tell guidance -> /approve -> resume -> /pause -> /resume -> completion, asserting the disk markers and RunState transitions at each step. No network.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-6",
+          "description": "/help lists the full command set (/careful, /approve, /reject, /tell, /pause, /resume, /stop, /runs, /exit). A unit test asserts each command appears in HELP_TEXT.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-7",
+          "description": "Documentation (README chat section + a docs/ page) describes /careful and the curated gates (post-research/post-plan/post-sprint), /approve, /reject, /tell, /pause, /resume, and explicitly states the single-careful-run-at-a-time limitation and the runId-scoped-marker follow-up.",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement runId-scoped marker filenames (documented as a follow-up only)",
+        "Do not add MCP-cockpit/IDE surfacing of input-required/paused",
+        "Do not introduce new steer capabilities beyond Sprints 1-5"
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "Stale markers + RunState fields are cleaned on completion/abort, the full loop passes end-to-end, /help and docs are complete (including the documented limitation), and build + typecheck + full suite are green"
+      ],
+      "definitionOfDone": "Completion/abort cleans up stale pending/guidance/pause markers and RunState pending/paused fields. /help lists the full steer command set. The README chat section and a docs page document /careful, the curated gates, approve/reject/tell/pause/resume, and the single-careful-run limitation + runId-scoped-marker follow-up. An end-to-end test drives the whole loop. Build, typecheck, and the full suite pass.",
+      "assumptions": [
+        "The cleanup hook runs in the chat process (which owns chat-spawned RunState) when it observes a run reach a terminal status (completed/aborted) — e.g. in the completion poll prelude or alongside CompletionTailer handling. It removes that run's pending markers in .bober/approvals (by correlated runId), drops its guidance/pause markers under .bober/runs/<id>/, and clears RunState pending/paused fields.",
+        "The end-to-end test stubs the pipeline (or uses a tiny fake run loop) so it can deterministically reach post-plan, observe the pending marker, and resume — it does not run the real LLM pipeline.",
+        "Docs live in README.md (chat section, likely extended from Phase 1) plus a dedicated docs/ page (e.g. docs/chat-steer.md); cross-reference research Phase 2 and docs/teams.md."
+      ],
+      "outOfScope": [
+        "runId-scoped marker filenames (follow-up)",
+        "Cockpit/IDE surfacing",
+        "Any Phase 3/5/6 work"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Integration + polish sprint; minimal new abstraction. Verified touch points:\n- Cleanup: add a cleanup helper (e.g. src/chat/steer-cleanup.ts) invoked when the chat process sees a run go terminal. Reuse: src/state/approval-state.ts deletePending(projectRoot, id) (:138) for stale pending markers; unlink guidance.jsonl + paused.json under .bober/runs/<id>/ (best-effort, tolerate ENOENT). Clear RunState pending/paused fields via writeRunState. Hook it in src/chat/chat-session.ts where completions are processed (the tailer poll at :120 / completion handling at :135,181) — when a completion for runId R arrives, run cleanup for R. Keep best-effort (never throw into the turn).\n- /help: src/chat/slash-commands.ts HELP_TEXT — ensure the full set is listed: /careful, /runs, /approve, /reject, /tell, /pause, /resume, /stop, /help, /exit.\n- Docs: extend the README chat section with the steer commands and the curated-gate explanation; add docs/chat-steer.md describing the cross-process model, /careful toggle, curated gates, approve/reject+feedback, /tell guidance, /pause//resume, the relationship to /stop, and a clearly-flagged 'Limitations / follow-ups' section: single careful run at a time (checkpointId-keyed shared markers) and the runId-scoped-marker upgrade path. Cross-reference .bober/research/20260614-chattable-team-of-agents-platform.md Phase 2 and docs/teams.md.\n- E2E test (src/chat/chat-steer-e2e.test.ts): use temp dirs + a stubbed pipeline/run loop. Sequence: setCareful(on); spawn (capture args include --approve-gates); simulate the child reaching post-plan by writing a post-plan.pending.json; turn -> assert surfaced + RunState input-required; handleTell -> assert guidance entry; handleApprove('post-plan') -> assert approved.json + pending cleared; simulate post-sprint pending then handlePause -> assert paused.json + RunState paused; handleResume -> assert cleared; simulate completion marker -> assert cleanup removed stale markers + RunState fields. Assert at the disk-artifact + RunState level (this is the integration proof).\nRun build+typecheck+test before handoff. Run update-all is a human follow-up (noted in docs), not part of this sprint.",
+      "evaluatorNotes": "sc-6-4: seed a run with a pending marker + guidance.jsonl + paused.json + RunState pending/paused fields; transition it to completed (and separately aborted); assert all markers removed and RunState pending/paused fields cleared.\nsc-6-5: run the e2e test and confirm each asserted transition (careful spawn args, surfaced input-required, guidance written, approved+cleared, paused, resumed, completion-cleanup). Confirm it uses a stub, not the real pipeline, and no network.\nsc-6-6: assert HELP_TEXT contains every command in the set.\nsc-6-7: confirm README chat section + docs/chat-steer.md exist and cover /careful, curated gates, approve/reject/tell/pause/resume, and explicitly the single-careful-run limitation + runId-scoped follow-up.\nRegression: full suite green; build + typecheck clean. Confirm cleanup is best-effort and never breaks a chat turn.",
+      "estimatedFiles": [
+        "src/chat/steer-cleanup.ts",
+        "src/chat/steer-cleanup.test.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/slash-commands.ts",
+        "src/chat/chat-steer-e2e.test.ts",
+        "README.md",
+        "docs/chat-steer.md"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1",
+      "createdAt": "2026-06-15T17:00:00Z",
+      "updatedAt": "2026-06-15T17:00:00Z",
+      "completedAt": "2026-06-15T15:30:02Z"
+    }
+  ]
+}

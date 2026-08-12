@@ -14,6 +14,10 @@
 //           measurement output.
 //   sc-1-5  if the observation contradicts the derivation, the measurement is committed
 //           unchanged; see the generator's completion notes for any such contradiction.
+//   sc-2-3  the same "corpus-sized payload against the declared limit" question, extended
+//           from `spec`/`sprintContracts` to `messages`, `evaluations` and `refs` — read
+//           off the committed workload corpus at `.bober/workload/`
+//           (`src/pge/golden/workload.ts`), never off an invented payload.
 //
 // ── The one thing that decides this sprint ──
 //
@@ -29,7 +33,6 @@
 // Regenerate the committed measurement with:
 //   MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 
-import { Buffer } from "node:buffer";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -38,9 +41,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TopologySpec } from "../../contracts/topology.js";
 import { TopologySpecSchema } from "../../contracts/topology.js";
 import { GoldenBindingInvokedError } from "../golden/executor.js";
-import { canonicalJson } from "../registry/reducers.js";
+import { loadWorkloadCorpus, maxBytesPerChannel, WORKLOAD_DIR } from "../golden/workload.js";
 import type { CodingBindings } from "../registry/index.js";
-import { createFixedClock } from "../runtime/commit.js";
+import { byteSize, createFixedClock } from "../runtime/commit.js";
 import { createGraphInterpreter } from "../runtime/interpreter.js";
 import type { GraphInterpreter, GraphRunResult } from "../runtime/interpreter.js";
 import { withNetworkDisabled } from "../runtime/replay.js";
@@ -80,11 +83,6 @@ async function seededRoot(): Promise<string> {
   return dir;
 }
 
-/** The exact boundary the commit boundary measures against: canonical bytes, not file bytes. */
-function byteSize(value: unknown): number {
-  return Buffer.byteLength(canonicalJson(value), "utf8");
-}
-
 // ── The measurement shape ───────────────────────────────────────────
 
 interface RecordedRejection {
@@ -107,6 +105,25 @@ type EngineOutcome =
   | { readonly kind: "resolved"; readonly success: boolean }
   | { readonly kind: "threw"; readonly errorClass: string };
 
+/**
+ * sc-2-3: the same "corpus-sized payload against the declared limit" question sc-1's
+ * `spec`/`sprintContracts` rejections already answered, extended to `messages`,
+ * `evaluations` and `refs` — the three channels real generator and evaluator payloads flow
+ * through. `corpusMaxBytes` is `maxBytesPerChannel(corpus)[channel]` — the boundary's own
+ * `byteSize`, never reimplemented (sc-2-2) — and `declaredLimit` is read off the SAME
+ * `channelLimits` this measurement already records, so `wouldReject` is exactly the
+ * comparison `commit.ts:358-359` performs, computed from the corpus's own real numbers
+ * rather than an invented payload.
+ */
+interface CorpusHeadroom {
+  readonly corpusMaxBytes: number;
+  readonly declaredLimit: number;
+  readonly wouldReject: boolean;
+}
+
+/** The channels sc-2-3 extends the measurement to. `spec`/`sprintContracts` are sc-1's. */
+const CORPUS_HEADROOM_CHANNELS = ["messages", "evaluations", "refs"] as const;
+
 interface Measurement {
   readonly formatVersion: 1;
   readonly graph: { readonly graphId: string; readonly graphVersion: string };
@@ -125,6 +142,7 @@ interface Measurement {
   readonly verdict: string | null;
   readonly specChannelNullAtBoundary: boolean;
   readonly engineOutcome: EngineOutcome;
+  readonly corpusHeadroom: Record<string, CorpusHeadroom>;
 }
 
 /** One writer for the file and for the compare, exactly `goldenCaseJson`'s shape. */
@@ -195,6 +213,24 @@ async function observeRealWorkload(
     channelLimits[channel.id] = channel.maxInlineBytes;
   }
 
+  // sc-2-3: the committed corpus lives under the REPOSITORY root, never under the seeded
+  // temp `projectRoot` this run drives — see the corpus module's own header for why it is
+  // not `.bober/golden/`.
+  const corpus = await loadWorkloadCorpus(join(REPO_ROOT, WORKLOAD_DIR));
+  if (corpus.errors.length > 0) {
+    throw new Error(`the committed workload corpus does not load cleanly: ${corpus.errors.join("; ")}`);
+  }
+  const corpusMax = maxBytesPerChannel(corpus);
+  const corpusHeadroom: Record<string, CorpusHeadroom> = {};
+  for (const channelId of CORPUS_HEADROOM_CHANNELS) {
+    const corpusMaxBytes = corpusMax[channelId];
+    const declaredLimit = channelLimits[channelId];
+    if (corpusMaxBytes === undefined || declaredLimit === undefined) {
+      throw new Error(`no corpus entry (or no declared limit) for channel "${channelId}"`);
+    }
+    corpusHeadroom[channelId] = { corpusMaxBytes, declaredLimit, wouldReject: corpusMaxBytes > declaredLimit };
+  }
+
   const rejections: RecordedRejection[] = run.commits.flatMap((commit) =>
     commit.rejected.map((rejection) => ({
       channel: rejection.channel,
@@ -231,6 +267,7 @@ async function observeRealWorkload(
     verdict: run.status === "completed" ? run.verdict : null,
     specChannelNullAtBoundary: run.state.spec === null,
     engineOutcome,
+    corpusHeadroom,
   };
 
   return { measurement, observed: run };
@@ -307,6 +344,21 @@ describe("PgeEngine over this repository's own real workload (feat-1)", () => {
         kind: "threw",
         errorClass: "FinalizeWithoutSpecError",
       });
+
+      // sc-2-3: the measurement extended to messages, evaluations and refs under
+      // corpus-sized payloads. Every one of `CORPUS_HEADROOM_CHANNELS` must have been
+      // measured — an absent key would mean a channel silently escaped this extension.
+      for (const channelId of CORPUS_HEADROOM_CHANNELS) {
+        expect(measurement.corpusHeadroom[channelId], channelId).toBeDefined();
+        expect(measurement.corpusHeadroom[channelId]?.declaredLimit).toBe(4096);
+      }
+      // Against this repository's own real payloads, only `spec` and `sprintContracts`
+      // exceed the shipped 4096-byte cap (the rejections asserted above). `messages`,
+      // `evaluations` and `refs` are comfortably under it — reported here rather than
+      // engineered around, per this sprint's stopCondition.
+      for (const channelId of CORPUS_HEADROOM_CHANNELS) {
+        expect(measurement.corpusHeadroom[channelId]?.wouldReject, channelId).toBe(false);
+      }
 
       const bytes = measurementJson(measurement);
       if (MEASURING) {

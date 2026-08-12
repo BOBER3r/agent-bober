@@ -1,0 +1,19 @@
+{
+  "entryId": "ledger-observed-4",
+  "channel": "ledger",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"plan_draft\" writing \"ledger\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": [
+    {
+      "nodeId": "plan_draft",
+      "attempt": 0,
+      "callIndex": 0,
+      "calls": 1,
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costUsd": 0
+    }
+  ]
+}
