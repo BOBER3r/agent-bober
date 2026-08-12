@@ -536,6 +536,19 @@ describe("sc-4-4: order-invariance is preserved under the rank-aware join", () =
     expect(new Set(results).size).toBe(1);
     expect(results[0]).toBe(canonicalJson(ten));
   });
+
+  it("lastWriteWinsByKey: every arrival order of a batch TIED on rank still converges — the case a ranking change could silently break", () => {
+    // Equal `attempts` (the widened first rank term) and no `updatedAt` on either side:
+    // rankIsGreater returns false in BOTH directions, so this is the pure-tie case that
+    // falls through to `canonicalJson` — the same tie condition the appendById test above
+    // exercises, but for the OTHER reducer this sprint switched to higherRanked.
+    const left = { "branch-a": { state: "running" as const, attempts: 5, errorClass: "aaa" } };
+    const right = { "branch-a": { state: "failed" as const, attempts: 5, errorClass: "zzz" } };
+    const results = permutations([left, right]).map((perm) =>
+      canonicalJson(lastWriteWinsByKey.merge({}, perm)),
+    );
+    expect(new Set(results).size).toBe(1);
+  });
 });
 
 // ── Per-reducer semantics ───────────────────────────────────────────
