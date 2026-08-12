@@ -552,6 +552,31 @@ unchanged, so a case nobody can reproduce fails immediately. The resulting diff 
 statement "these artifacts changed, and here is how" — a recapture pushed without reading
 the diff defeats the gate as surely as deleting it.
 
+**A MINOR `graphVersion` bump forces a recapture even though `checkCaseAgainstGraph`'s own
+integrity rule is deliberately MAJOR-only, and the two policies genuinely disagree.**
+`case-schema.ts`'s major-only rule (:348-357) exists specifically so a minor bump does not
+force two dozen files to be rewritten — that is its whole stated reason for being
+major-only. But `capture.test.ts`'s "is exactly what a fresh capture produces" check
+compares committed bytes to a *fresh* capture, and a fresh capture embeds whatever
+`graphVersion` is current at capture time (`capture.ts`, via `CODING_GRAPH.graphVersion`)
+into `goldenCase.graph.graphVersion`. So the moment `graphVersion` moves at all — MAJOR or
+MINOR — the byte-exact replay comparison goes red on every committed `replay` case, even
+though `checkCaseAgainstGraph`'s own major-only rule says the same bump does not
+structurally invalidate any of them. Sprint 3 of spec-20260812-pge-real-workload-errors hit
+this at `1.2.0 → 1.3.0`: all five committed `replay` cases failed `capture.test.ts` with a
+diff of exactly one field, `graph.graphVersion`, and nothing else — confirming the bump
+changed no recorded artifact, only the stamp. The resolution taken was to recapture (the
+`graph.graphVersion` field is a FACT about what the case validates against, and five files
+asserting a version that no longer matches the shipped one is a worse state than a
+one-field diff), **not** to weaken `capture.test.ts`'s byte-exact comparison — byte-exactness
+is the stronger gate, and NFR0 (spec-20260812-pge-real-workload-errors) forbids weakening a
+gate to reach green. The two policies are not reconciled here, only named: `case-schema.ts`
+answers "does this version bump invalidate the case's STRUCTURE" (major-only, by design) and
+`capture.test.ts` answers "does this version bump invalidate the case's BYTES" (any bump, by
+construction) — a change to either check should read this paragraph first, because they are
+answering different questions on purpose and making them agree would remove one of the two
+signals.
+
 **Growth plan.** The dataset ships at the low end of its 20-to-50 range because each case
 is hand-curated content, not generated. It grows on two triggers, and both are cheaper
 than authoring cases speculatively:
@@ -724,7 +749,7 @@ the diff is the statement that they changed.
 
 A cap sized from a fixture is a cap sized from nothing, and a plan-and-contracts measurement
 alone does not say whether the OTHER eight channels are anywhere near their limit. Both gaps
-are closed by a corpus of **123 real payloads**, committed at **`.bober/workload/`** (never
+are closed by a corpus of **120 real payloads**, committed at **`.bober/workload/`** (never
 `.bober/golden/` — a workload entry is not a golden case, and the two directories are enforced
 by disjoint gates) and read at test time by `src/pge/golden/workload.ts`.
 
@@ -739,8 +764,8 @@ channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, th
 
 | channel | corpus maximum (canonical bytes) | declared limit | source |
 | --- | --- | --- | --- |
-| `spec` | 48,097 | **131,072** | every `.bober/specs/*.json` that parses (52 of 53 — see below) |
-| `sprintContracts` | 135,106 | **524,288** | one entry per spec, the whole `SprintContract[]` its `sprints` resolve to |
+| `spec` | 48,097 | **131,072** | every `.bober/specs/*.json` that parses AND is at a terminal status (50 of 53 — see below) |
+| `sprintContracts` | 135,106 | **524,288** | one entry per terminal-status spec, the whole `SprintContract[]` its `sprints` resolve to (27) |
 | `messages` | 1,292 | 4,096 | a representative sample of `.bober/handoffs/gen-report-*.json` `notes` |
 | `evaluations` | 1,067 | 4,096 | a representative sample of `.bober/eval-results/*.json` summaries |
 | `refs` | 283 | 4,096 | observed from a real run |
@@ -767,6 +792,29 @@ documents.
 schema (an earlier contract/spec era) and are skipped rather than crashing the corpus build —
 `src/pge/golden/__fixtures__/workload-build.ts` records which, with `safeParse`.
 
+**A further 2 of the 52 that DO parse are excluded for a different reason: they are still
+"in-flight."** `spec` / `sprintContracts` are the only two channels sourced from files that
+are mutated IN PLACE while a spec's own pipeline run proceeds —
+`.bober/contracts/<sprintId>.json` is rewritten with a new `status` / `completedAt` /
+`iterationHistory` as each of that spec's sprints completes, using the same filename
+throughout. A corpus entry captured for a spec whose own sprints are not all done yet is a
+snapshot of a file that is about to change again — not eventually, but during the very run
+that built the snapshot. This is exactly what happened: the `sprintContracts` entry for
+`spec-20260812-pge-real-workload-errors` — the spec whose own sprint 3 wrote this
+sentence — went stale between the corpus being built and sprint 3 running, because sprint 2
+completed in between and rewrote its own contract file. `src/pge/golden/__fixtures__/workload-build.ts`
+now excludes any spec whose `status` is not `"completed"` or `"abandoned"` (see
+`TERMINAL_SPEC_STATUSES` there) from both the `spec` and `sprintContracts` channels — a
+property of the spec, not a name, so a future spec that is mid-run when the corpus is
+rebuilt is excluded the same way automatically. **`messages` and `evaluations` do NOT share
+this failure mode and were deliberately left alone**: their sources
+(`.bober/handoffs/gen-report-*.json`, `.bober/eval-results/*.json`) are written once per
+`(contract, iteration)` under an iteration-suffixed filename and are never rewritten in
+place — the only instability there is which files a rebuild's representative *sample*
+picks (see the next paragraph and `capForCorpusMax`'s doc comment in
+`src/pge/golden/workload.ts`), a different class of drift that the power-of-two headroom
+bucket already absorbs.
+
 Regenerate the whole corpus with:
 
 ```
@@ -774,7 +822,14 @@ BUILD_WORKLOAD_CORPUS=1 npx vitest run src/pge/golden/workload.test.ts
 MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 ```
 
-in that order — the second command reads the corpus the first one just wrote.
+in that order — the second command reads the corpus the first one just wrote. **Known
+hazard as of `1.3.0`:** the committed measurement's `verdict` is currently `null` (the run
+now throws `SuperstepLimitExceededError` before reaching a terminal node — see the
+`corpusHeadroom`/`engineOutcome` discussion above), so a full rebuild right now would drop
+the `verdict` channel's only corpus entry and fail `sc-2-4`'s coverage check. That is a
+consequence of the same superstep ceiling recorded as sprint 4's territory, not something
+this sprint's cap-sizing work created or fixed; if you need to touch the corpus before that
+ceiling is addressed, prefer a surgical edit over `BUILD_WORKLOAD_CORPUS=1`.
 
 **A regeneration is only partly pinned, and the asymmetry is worth knowing before you read the
 diff.** The `spec` and `sprintContracts` entries take *every* file that parses and are keyed to
@@ -913,8 +968,9 @@ shipped default, using `capForCorpusMax` (`src/pge/golden/workload.ts`): the nex
 two at or above **2×** the corpus maximum, floored at `DEFAULT_MAX_INLINE_BYTES` (4,096).
 
 - **`spec`: 4,096 → 131,072.** Corpus maximum **48,097** canonical bytes, the largest of
-  the 52 committed `.bober/specs/*.json` files that parse under their own schema. `2 ×
-  48,097 = 96,194`; the next power of two at or above that is 131,072 (2¹⁷).
+  the 50 committed `.bober/specs/*.json` files that both parse under their own schema and
+  are at a terminal status (see **A committed workload corpus** above). `2 × 48,097 =
+  96,194`; the next power of two at or above that is 131,072 (2¹⁷).
 - **`sprintContracts`: 4,096 → 524,288.** Corpus maximum **135,106** canonical bytes, the
   largest `SprintContract[]` one spec's `sprints` resolves to (this repository's own
   14-sprint `spec-20260805-pge-graph-engineering`). `2 × 135,106 = 270,212`; the next

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import { PlanSpecSchema } from "../../../contracts/spec.js";
+import type { PlanSpecStatus } from "../../../contracts/spec.js";
 import { SprintContractSchema } from "../../../contracts/sprint-contract.js";
 import type { SprintContract } from "../../../contracts/sprint-contract.js";
 import { PgeEngine } from "../../engine/pge-engine.js";
@@ -34,12 +35,15 @@ import type { WorkloadEntry, WorkloadProvenance } from "../workload.js";
  * ── The four sources, and why each one is what it is ──
  *
  *  1. `spec` / `sprintContracts` — EVERY file under `.bober/specs/` that parses under
- *     {@link PlanSpecSchema} becomes one `spec` entry, and its own `spec.sprints`, resolved
- *     against `.bober/contracts/`, becomes one `sprintContracts` entry carrying the WHOLE
- *     array — the shape a real `plan_materialize` write actually is
- *     (`src/pge/nodes/plan.ts:421`), not one contract at a time. 60 of 250 committed
- *     contracts and 1 of 53 committed specs do not parse; both are SKIPPED, by file name,
- *     and the skip counts are the caller's to report — see {@link BuildReport}.
+ *     {@link PlanSpecSchema} AND has reached a {@link TERMINAL_SPEC_STATUSES terminal status}
+ *     becomes one `spec` entry, and its own `spec.sprints`, resolved against
+ *     `.bober/contracts/`, becomes one `sprintContracts` entry carrying the WHOLE array —
+ *     the shape a real `plan_materialize` write actually is (`src/pge/nodes/plan.ts:421`),
+ *     not one contract at a time. 60 of 250 committed contracts and 1 of 53 committed specs
+ *     do not parse; both are SKIPPED, by file name. A spec whose own status is NOT terminal
+ *     is separately EXCLUDED (see {@link TERMINAL_SPEC_STATUSES}) — it is not a parse
+ *     failure, so it is reported through its own {@link BuildReport} field. All three skip
+ *     counts are the caller's to report — see {@link BuildReport}.
  *  2. `evaluations` / `messages` — a representative sample (the largest real payload plus a
  *     deterministic spread) of `.bober/eval-results/*.json` summaries and
  *     `.bober/handoffs/gen-report-*.json` notes, each wrapped in the real
@@ -62,7 +66,47 @@ export interface BuildReport {
   readonly written: number;
   readonly skippedSpecs: readonly string[];
   readonly skippedContracts: readonly string[];
+  readonly excludedInFlightSpecs: readonly string[];
 }
+
+// ── In-flight exclusion ────────────────────────────────────────────
+
+/**
+ * The two {@link PlanSpecStatus} values that mean "this spec's own sprint contract files
+ * will never be rewritten again by the pipeline that ran it."
+ *
+ * ── Why this exists — a real defect this corpus hit ──
+ *
+ * A `sprintContracts` entry is a snapshot of `SprintContractSchema.parse`d bytes read from
+ * `.bober/contracts/<sprintId>.json` at BUILD time. Those files are not immutable: the
+ * orchestrator that runs a spec's sprints rewrites `status` / `completedAt` /
+ * `iterationHistory` INTO THE SAME FILE as each sprint proceeds through
+ * proposed → in-progress → completed. So a `sprintContracts` entry captured for a spec
+ * that is still being worked goes stale the moment the very next sprint completes — not
+ * from drift or a later rebuild, but during the SAME pipeline run that produced the
+ * snapshot. This bit for real: sprint 3 of `spec-20260812-pge-real-workload-errors` — the
+ * spec whose OWN corpus entry this is — completed sprint 2 between the corpus being built
+ * and this test running, and `workload.test.ts`'s "every 'file-group' sprintContracts entry
+ * equals the array its own paths parse to" check (which re-parses the source files at TEST
+ * time, on purpose — see that file's own header) caught the disagreement. A corpus that
+ * invalidates itself while the pipeline that built it is still running cannot serve as a
+ * permanent, committed reference.
+ *
+ * `messages` and `evaluations` do NOT share this failure mode: their sources
+ * (`.bober/handoffs/gen-report-*.json`, `.bober/eval-results/*.json`) are written once per
+ * (contract, iteration) under an iteration-suffixed filename and never rewritten in place —
+ * only WHICH files the representative sample picks can change on a rebuild (see
+ * `capForCorpusMax`'s doc comment in `../workload.ts` for why that sampling drift is already
+ * absorbed). `spec` / `sprintContracts` are the only two channels sourced from files that
+ * are mutated in place across a run, so they are the only two this exclusion applies to.
+ *
+ * The fix is a property of the SPEC, not a name: any spec not yet at a terminal status is
+ * still eligible to have its contract files rewritten by its own pipeline run, so its
+ * `spec` and `sprintContracts` entries are excluded — never merely the one specId that
+ * happened to surface the bug. A future spec that is mid-run when the corpus is rebuilt is
+ * excluded the same way, automatically, with no name to remove later.
+ */
+const TERMINAL_SPEC_STATUSES: ReadonlySet<PlanSpecStatus> = new Set(["completed", "abandoned"]);
 
 // ── Small helpers ───────────────────────────────────────────────────
 
@@ -111,13 +155,14 @@ async function writeEntry(dir: string, entry: WorkloadEntry): Promise<void> {
 
 async function buildSpecAndContractEntries(
   write: (entry: WorkloadEntry) => Promise<void>,
-): Promise<{ skippedSpecs: string[]; skippedContracts: string[] }> {
+): Promise<{ skippedSpecs: string[]; skippedContracts: string[]; excludedInFlightSpecs: string[] }> {
   const specsDir = join(REPO_ROOT, ".bober", "specs");
   const contractsDir = join(REPO_ROOT, ".bober", "contracts");
   const specFiles = (await readdir(specsDir)).filter((file) => file.endsWith(".json")).sort();
 
   const skippedSpecs: string[] = [];
   const skippedContracts: string[] = [];
+  const excludedInFlightSpecs: string[] = [];
 
   for (const file of specFiles) {
     const raw: unknown = JSON.parse(await readFile(join(specsDir, file), "utf-8"));
@@ -127,6 +172,15 @@ async function buildSpecAndContractEntries(
       continue;
     }
     const spec = parsedSpec.data;
+
+    // See TERMINAL_SPEC_STATUSES: a spec still short of a terminal status is still eligible
+    // to have its own `.bober/contracts/*.json` files rewritten in place by the pipeline
+    // running it, so neither its `spec` nor its `sprintContracts` entry is trustworthy as a
+    // permanent, committed snapshot.
+    if (!TERMINAL_SPEC_STATUSES.has(spec.status)) {
+      excludedInFlightSpecs.push(`${file} (status: ${spec.status})`);
+      continue;
+    }
 
     await write({
       entryId: `spec-${spec.specId}`,
@@ -166,7 +220,7 @@ async function buildSpecAndContractEntries(
     }
   }
 
-  return { skippedSpecs, skippedContracts };
+  return { skippedSpecs, skippedContracts, excludedInFlightSpecs };
 }
 
 // ── 2. evaluations + messages ───────────────────────────────────────
@@ -399,12 +453,12 @@ export async function buildWorkloadCorpus(): Promise<BuildReport> {
     written += 1;
   };
 
-  const { skippedSpecs, skippedContracts } = await buildSpecAndContractEntries(write);
+  const { skippedSpecs, skippedContracts, excludedInFlightSpecs } = await buildSpecAndContractEntries(write);
   await buildEvaluationEntries(write);
   await buildMessageEntries(write);
   await buildAnchorEntry(write);
   await buildVerdictEntry(write);
   await buildObservedEntries(write);
 
-  return { written, skippedSpecs, skippedContracts };
+  return { written, skippedSpecs, skippedContracts, excludedInFlightSpecs };
 }
