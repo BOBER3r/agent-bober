@@ -15,6 +15,7 @@ import { isCorrectionPayload } from "./sprint-correct.js";
 import type { CorrectionPayload } from "./sprint-correct.js";
 import { EVALUATOR_FAIL_CLOSED_ERROR_CLASS } from "./sprint-evaluate.js";
 import { SPRINT_REGION, regionSpec } from "./regions.js";
+import { SETTLED_CONTRACT_STATUSES } from "../../contracts/sprint-contract.js";
 import {
   DEFAULT_QUALITY_SCORE_THRESHOLD,
   selectVerification,
@@ -758,11 +759,22 @@ describe("the sprint subgraph, compiled from the committed artifact (sc-12-12)",
 
     // The branch settled, the contract was persisted through the SHIPPED writer, and the
     // contract channel carries the settled status the imperative pipeline writes.
+    //
+    // DELIBERATE EDIT (sc-5-3, sprint 5 of spec-20260812-terminal-vocabulary): before this
+    // sprint the comment above was FALSE — `runSprintCycle` wrote "passed" for a settled
+    // sprint while `sprint_exit` (exercised here) wrote "completed", so the two engines
+    // spelled the same outcome two different ways. This sprint changed the write at
+    // pipeline.ts:589 to "completed", making the comment literally true for the first time.
+    // The assertion below still pins `sprint_exit`'s own write (unchanged — this file pins
+    // the PGE side, never the imperative one), but the SECOND assertion ties that write to
+    // the shared settled-status vocabulary both engines' readers now share, rather than
+    // merely restating the same literal a second time.
     expect(run.finalState.branchStatus[contract.contractId]).toEqual({
       state: "succeeded",
       attempts: 1,
     });
     expect(persisted).toEqual([`${contract.contractId}:completed`]);
+    expect(SETTLED_CONTRACT_STATUSES.has("completed")).toBe(true);
 
     // sc-3-2: sprint_exit writes a monotone `version` on the settled contract, and it is
     // the SAME number `branchStatus` records as `attempts` — the two channels agree on the

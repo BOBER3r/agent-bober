@@ -283,14 +283,20 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    executed — sc-12-9's shipped behaviour, pinned by `nodes/commit.test.ts` and
     //    `topology-invariants.test.ts`. Closing it would mean declaring the other seven
     //    checkpoint ids in `.bober/topology/coding.json`, which this sprint may not edit.
-    //  - `contracts`: FOUR field deltas on the one contract, and `iterationHistory` is NOT
-    //    one of them — it is `[]` on both sides for this fixture. `sprint_exit` writes
-    //    `status: "completed"` where `runSprintCycle` writes `"passed"`, and the graph never
-    //    populates `evaluatorFeedback` or `generatorNotes`. Since sprint-spec-20260812-
-    //    terminal-vocabulary-3, `sprint_exit` also writes `version` (the graph's monotone
-    //    ordering discriminator for `versionRank`, `registry/reducers.ts:366-393`) where the
-    //    imperative engine writes none. Closing any of these means changing what
-    //    `sprint_exit` writes, which `nodes/sprint-evaluate.test.ts` pins deliberately.
+    //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
+    //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
+    //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
+    //    writes `"completed"`, exactly what `sprint_exit` already wrote. What remains is that
+    //    the graph never populates `evaluatorFeedback` or `generatorNotes` — PGE has no
+    //    writer for either field anywhere in `src/pge/`, so this is a missing-writer gap, not
+    //    a word disagreement — and, since sprint 3, `sprint_exit` also writes `version` (the
+    //    graph's monotone ordering discriminator for `versionRank`,
+    //    `registry/reducers.ts:366-393`) where the imperative engine writes none.
+    //    `evaluatorFeedback`/`generatorNotes` would need a new writer inside a PGE node body;
+    //    `version` is deliberately NOT one of `VOLATILE_KEYS` (`conformance.ts:65-76`) because
+    //    stripping it would hide a real divergence rather than close one. None of the three
+    //    is closable by a vocabulary change, which is what sprint 5's stop condition
+    //    pre-authorises recording rather than forcing.
     //  - `pipelineResult`: NO LONGER the seeded-copy defect closed at sprint 4 of
     //    spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
     //    `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`/`mergeEntries`)
@@ -300,11 +306,11 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    gone (verified below in "4. pipelineResult"). What remains is NOT independently
     //    closable: `PipelineResult.completedSprints`/`failedSprints` carry whole
     //    `SprintContract` objects, so `pipelineResult`'s divergence REDUCES EXACTLY to the
-    //    `contracts` divergence above (the same `status`/`evaluatorFeedback`/
-    //    `generatorNotes`/`version` deltas, none of them `VOLATILE_KEYS`,
-    //    `conformance.ts:65-76`) — it is a CONTAINER for the contract this sprint could not
-    //    change without violating nonGoal 1 ("no writer changes"). It closes exactly when
-    //    `contracts` closes, not before.
+    //    `contracts` divergence above (the same `evaluatorFeedback`/`generatorNotes`/
+    //    `version` deltas, none of them `VOLATILE_KEYS`, `conformance.ts:65-76`) — it is a
+    //    CONTAINER for the contract, and the `status` field inside that container is now
+    //    identical on both engines (sprint 5 of spec-20260812-terminal-vocabulary). It closes
+    //    exactly when `contracts` closes, not before.
     //
     // Everything else — specs, evalResults, briefings, reviews, completionMarker — is
     // IDENTICAL across the two engines, which is the positive half of the claim and is
@@ -399,18 +405,23 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsResult?.success).toBe(true);
     expect(pgeResult?.success).toBe(true);
 
-    // ── 3. contracts: four field deltas, and iterationHistory is NOT one of them ──
+    // ── 3. contracts: three field deltas, and iterationHistory is NOT one of them ──
     const tsContract = (await listContracts(tsRoot))[0];
     const pgeContract = (await listContracts(pgeRoot))[0];
     expect(tsContract.contractId).toBe(pgeContract.contractId);
 
-    expect(tsContract.status).toBe("passed");
+    // The status delta is CLOSED (sprint 5 of spec-20260812-terminal-vocabulary): both
+    // engines write "completed" for a settled sprint. Asserted against the OTHER engine's
+    // own answer, not a literal, so the claim pinned is the CONVERGENCE itself, not merely
+    // that today's literal happens to be "completed".
+    expect(tsContract.status).toBe("completed");
     expect(pgeContract.status).toBe("completed");
+    expect(tsContract.status).toBe(pgeContract.status);
     expect(tsContract.evaluatorFeedback).toBeDefined();
     expect(pgeContract.evaluatorFeedback).toBeUndefined();
     expect(tsContract.generatorNotes).toBeDefined();
     expect(pgeContract.generatorNotes).toBeUndefined();
-    // The fourth delta: `sprint_exit` writes a monotone `version`; `runSprintCycle` writes none.
+    // The remaining delta: `sprint_exit` writes a monotone `version`; `runSprintCycle` writes none.
     expect(tsContract.version).toBeUndefined();
     expect(pgeContract.version).toBeDefined();
     // Refutes the reading that the imperative engine accumulates iteration bookkeeping the
@@ -426,7 +437,7 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // (`registry/reducers.ts`, `rankIsGreater`) rather than canonical order, so
     // `commit.finalize` reads the SETTLED copy out of `state.sprintContracts`: the contract
     // inside `completedSprints` is no longer stuck at the seeded `"proposed"`.
-    expect(tsResult?.completedSprints.map((c) => c.status)).toEqual(["passed"]);
+    expect(tsResult?.completedSprints.map((c) => c.status)).toEqual(["completed"]);
     expect(pgeResult?.completedSprints.map((c) => c.status)).toEqual(["completed"]);
     expect(pgeResult?.failedSprints).toEqual([]);
 
