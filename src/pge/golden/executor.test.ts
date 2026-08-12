@@ -9,7 +9,12 @@ import { parseGoldenCase } from "./case-schema.js";
 import type { GoldenCase } from "./case-schema.js";
 import { GOLDEN_RUN_ID, UnsupportedGoldenInputError, createGoldenExecutor } from "./executor.js";
 import { runGoldenGate } from "./gate.js";
-import { GOLDEN_EXIT, compareGoldenArtifacts, loadGoldenDataset } from "./runner.js";
+import {
+  GOLDEN_EXIT,
+  compareGoldenArtifacts,
+  loadGoldenDataset,
+  runGoldenRegression,
+} from "./runner.js";
 import type { GoldenExecutor } from "./runner.js";
 
 /**
@@ -124,14 +129,31 @@ describe("the runtime comparison bites", () => {
   );
 
   /**
-   * A case whose pins do not cover the run FAILS. It never answers from anywhere else.
+   * A case whose pins do not cover the run does not PASS. That is the rule under test, and
+   * (sc-8-3, sprint 8 of spec-20260812-pge-real-workload-errors) it is no longer the same
+   * thing as "the executor throws".
    *
-   * The error class is not asserted, and that is deliberate: the replay registry throws
-   * `MissingRecordingError` at the call it cannot answer, the interpreter treats that as a
-   * failed node and routes onwards, and what finally reaches the caller is whichever
-   * failure the truncated run ends on — here `FinalizeWithoutSpecError`, because the plan
-   * never happened. Pinning one class would be pinning the routing rather than the rule,
-   * and the rule is: an unpinned call cannot produce a passing case.
+   * `createReplayEffectRegistry` throws `MissingRecordingError` at the first call it
+   * cannot answer, the interpreter treats that as a failed node and routes onwards — and
+   * how the run ENDS now depends on how much of the pipeline the truncation left standing,
+   * because sprint 7 taught `CommitBoundary.finalize` a second ending:
+   *
+   *  - truncated during research (this test, `slice(0, 1)`, before `plan_draft` ever runs),
+   *    neither `state.spec` nor `state.specDraft` is ever written, so `finalize` still
+   *    THROWS `FinalizeWithoutSpecError` — unchanged since before sprint 7.
+   *  - truncated once `plan_draft` has answered but before `plan_materialize` does,
+   *    `state.specDraft` IS written, so sprint 7's fallback now RESOLVES instead, with
+   *    `success: false`, `needsClarification: true`, and an `errors` entry naming the
+   *    `MissingRecordingError` that ended the run (verified by hand against this exact
+   *    truncation depth while diagnosing this sprint; not asserted here because pinning it
+   *    would make this test a test of where the truncation happens to land).
+   *
+   * A test asserting `rejects.toThrow()` pinned the FIRST ending only, which sprint 7 made
+   * one of two rather than the only one. This assertion instead runs the SAME per-case
+   * logic the CI job runs — `runGoldenRegression`, imported rather than reimplemented — so
+   * it is indifferent to which ending a truncation produces: a throw and a resolved
+   * mismatch both leave `results[0].passed` `false`, which is the rule the module header
+   * above already states and the only claim either ending was ever entitled to make.
    */
   it(
     "fails the case when a pinned response is missing, rather than answering from anywhere else",
@@ -141,7 +163,9 @@ describe("the runtime comparison bites", () => {
         ...goldenCase,
         pinnedResponses: goldenCase.pinnedResponses.slice(0, 1),
       };
-      await expect(execute(short)).rejects.toThrow();
+      const report = await runGoldenRegression({ cases: [short], execute });
+      expect(report.results).toHaveLength(1);
+      expect(report.results[0].passed).toBe(false);
     },
     120_000,
   );
@@ -232,12 +256,30 @@ describe("runGoldenGate with its own default executor", () => {
    * THE negative control this sprint owes: a case that stops reproducing its artifacts
    * fails the gate the CI job runs, with no executor injected by the test.
    *
-   * Mutates the two `replay-full-run-evaluation-*` cases specifically — both are whole
-   * runs that materialise sprint contracts, so both are guaranteed a non-empty
-   * `expected.artifacts.contracts` to drift. One mutated case out of six is a pass rate
-   * of ~83 percent, which now CLEARS the 80 percent threshold (it did not at five); two
-   * mutated cases (~67 percent pass) is comfortably below it regardless of how many more
-   * cases the replay set grows to hold.
+   * SCALED at sc-8-4 (sprint 8 of spec-20260812-pge-real-workload-errors). The previous
+   * revision mutated exactly the two `replay-full-run-evaluation-*` cases and claimed that
+   * was safe "regardless of how many more cases the replay set grows to hold" — false:
+   * `(n-2)/n` crosses the 80 percent threshold at `n = 11` (see docs/pge-graph.md, "A
+   * negative control can stop biting as the dataset grows"), so a fixed count of 2 would
+   * have silently stopped failing the moment the replay set reached 11 cases, with nothing
+   * anywhere reporting it. `dataset.test.ts` and `gate.test.ts` hit the identical shape of
+   * bug at `1.4.0` and fixed it by injecting a FRACTION (`seen % 3`) rather than a count;
+   * this control adopts the same fraction.
+   *
+   * The mutated FIELD changed for the same reason. `contracts[0].title` is not available on
+   * every case — `replay-plan-clarify-rounds-exhausted` never reaches `sprint_exit`, so its
+   * `expected.artifacts.contracts` is empty — but `pipelineResult` is one of
+   * `SCALAR_ARTIFACT_FIELDS` (`case-schema.ts`) and every `replay` case's expectation
+   * carries exactly one element of it with a `success` key always present
+   * (`PipelineResult.success` is required, never optional). Flipping it is a mutation every
+   * case, present and future, can take, which a per-caseId allow-list cannot promise.
+   *
+   * At the dataset's current 6 replay cases `(index + 1) % 3 === 0` drifts indices 2 and 5
+   * — 2 of 6, a ~67 percent pass rate, the SAME failure count the fixed-count version
+   * produced. This is a scaling fix, not a change in what today's run catches, and it keeps
+   * failing at any replay count from the floor upward — `dataset.test.ts`'s identical
+   * control states why: at most one third of any n >= GOLDEN_MIN_REPLAY_CASES clears an 80
+   * percent bar only when two thirds pass, and two thirds is comfortably under 80.
    */
   it(
     "exits non-zero when a committed replay case stops reproducing its expectation",
@@ -246,13 +288,18 @@ describe("runGoldenGate with its own default executor", () => {
       const files = (await readdir(GOLDEN_DIR)).sort();
       for (const file of files) await copyFile(join(GOLDEN_DIR, file), join(dir, file));
 
-      const drifted = replayCases.filter((c) => c.caseId.startsWith("replay-full-run-evaluation-"));
-      expect(drifted.length).toBe(2);
+      const drifted = replayCases.filter((_, index) => (index + 1) % 3 === 0);
+      expect(drifted.length).toBeGreaterThan(0);
       for (const goldenCase of drifted) {
         const target = join(dir, `${goldenCase.caseId}.json`);
         const draft = JSON.parse(await readFile(target, "utf-8")) as GoldenCase;
-        const contracts = draft.expected.artifacts.contracts as Record<string, unknown>[];
-        contracts[0].title = "a title no run produces";
+        const pipelineResult = draft.expected.artifacts.pipelineResult as
+          | Array<Record<string, unknown>>
+          | undefined;
+        expect(pipelineResult).toHaveLength(1);
+        const pinned = (pipelineResult as Array<Record<string, unknown>>)[0];
+        expect(typeof pinned.success).toBe("boolean");
+        pinned.success = !pinned.success;
         await writeFile(target, JSON.stringify(draft, null, 2), "utf-8");
         // Still a valid case — only its expectation changed, which is what a runtime
         // regression looks like from the dataset's side.

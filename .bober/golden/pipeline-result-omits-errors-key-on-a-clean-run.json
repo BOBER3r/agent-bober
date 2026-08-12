@@ -1,13 +1,13 @@
 {
   "formatVersion": 1,
-  "caseId": "pipeline-result-reports-success-with-no-error-channel",
-  "title": "PipelineResult reports success and cannot report why not",
-  "intent": "Pin sprint 13's structural gap: PipelineResult carries success, the two contract lists and the spec, and has NO error channel — so a run that was refused mid-way still returns success true.",
+  "caseId": "pipeline-result-omits-errors-key-on-a-clean-run",
+  "title": "PipelineResult carries no errors key at all when a run has nothing to report",
+  "intent": "Pin the OTHER half of PipelineResult.errors (added sprint 5 of spec-20260812-pge-real-workload-errors, after this case's original prose was falsified by that same change): the field is optional, and a run with no interpreter TaskFailure carries no errors KEY at all — checked with the `in` operator, never `=== undefined`. This case's own artifact was never wrong (a clean run's shape did not change under sprint 5), only its title, intent and caseId were, because they asserted the type could never carry an error channel at all rather than that this particular run has nothing in it. The companion case commit-refused-fail-closed-under-noop-gate.json pins the branch where errors IS populated, success stays true regardless (Option A), and a caller must check errors, not success, to see it.",
   "tags": [
     "pipeline-result",
     "artifacts:pipelineResult",
-    "known-divergence",
-    "fail-closed"
+    "error-channel",
+    "clean-run"
   ],
   "enforcement": "integrity",
   "graph": {
@@ -211,6 +211,6 @@
         }
       ]
     },
-    "notes": "success is true and there is nowhere in this value to say that the commit node was refused. duration and totalCost are stripped as volatile. Any future field that DID carry a failure reason would change this expectation, which is the point of pinning the shape."
+    "notes": "This scenario has nothing to refuse — one sprint completed, none failed — so success is true for the ordinary reason (deriveRunSuccess: failedCount === 0 && completedCount > 0), not because a refusal was hidden. The pinned shape has exactly four keys: completedSprints, failedSprints, spec, success (duration and totalCost are stripped as volatile). There is no fifth `errors` key, and that absence IS the claim under test post-sprint-5: `PipelineResult.errors` is optional and present only when `result.failures` from the interpreter is non-empty (src/orchestrator/pipeline.ts:100-114, src/pge/engine/pge-engine.ts's conditional spread). A future change that started always spreading `errors` — even empty — would change this expectation, which is the point of pinning the shape. Contrast with commit-refused-fail-closed-under-noop-gate.json, whose pinned run DOES have something to report and pins errors non-empty with success still true."
   }
 }

@@ -602,13 +602,32 @@ failures, because the field is populated from *any* non-empty failure list rathe
 `errorClass`. Contrast this with sprint 3's recapture above: that one was a version **stamp**
 moving with no artifact change, this one is an artifact change with no version move.
 
-**Two `integrity` cases currently carry prose that is no longer true, knowingly.**
-`pipeline-result-reports-success-with-no-error-channel` and
-`commit-refused-fail-closed-under-noop-gate` state in their `title`/`intent` that `PipelineResult`
-has no error channel — a claim sprint 5 falsified. They were left byte-unchanged because an
-`integrity` case is hand-authored prose, so correcting one is a re-**authoring** job needing
-judgement rather than a `GOLDEN_CAPTURE=1` rerun, and that work is scoped to a later sprint of the
-same spec. Until it lands, read those two files' prose as historical; their pins are unaffected.
+**Two `integrity` cases were RE-AUTHORED, not recaptured, once their prose went false.**
+Sprint 5 added `PipelineResult.errors`, which falsified what both hand-authored cases said in
+their `title`/`intent` — that the type has no error channel at all. A recapture cannot fix a
+hand-authored case (replaying a partial pin set throws `MissingRecordingError` at the first call
+its author did not think to write down), so sprint 8 rewrote the prose by judgement instead:
+
+- `pipeline-result-reports-success-with-no-error-channel.json`'s own **caseId and filename**
+  asserted the falsehood, not just its prose — a caseId that contradicts the shipped runtime is
+  worse than a stale comment, because it is what a reader greps for. It is now
+  `pipeline-result-omits-errors-key-on-a-clean-run.json` (new file, old one deleted by the same
+  commit), and its claim narrowed to what is still true: a run with nothing to report carries no
+  `errors` KEY at all — the OTHER half of the same optional field, not a channel that never
+  exists. Its pinned artifact was never wrong (a clean run's shape did not move under sprint 5)
+  and is byte-identical to before the rename.
+- `commit-refused-fail-closed-under-noop-gate.json` kept its caseId (accurate: the refusal is
+  still fail-closed, still under the noop gate) and gained a `pipelineResult` artifact entry
+  pinning what sprint 5 and sprint 6 added: `errors` carrying one `PipelineFailure`
+  (`nodeId: "commit"`, `errorClass: "FailClosed"`) alongside `success: true` (Option A), plus
+  prose naming the two downstream consumers — `bober run`'s exit code and "Refused:" block, and
+  the MCP `RunManager`'s `RunState.status: "failed"` — neither of which is a conformance field
+  `collectRunArtifacts` collects, so neither is expressible as a pinned artifact; both are named
+  in `intent` and left to their own unit tests (`run.test.ts`, `run-manager.test.ts`) to prove.
+
+Both cases stay `enforcement: "integrity"` — re-authoring is orthogonal to what a case claims to
+prove, and relabelling either as `replay` would still throw `MissingRecordingError` on the first
+call their partial pin sets do not answer.
 
 **A MINOR `graphVersion` bump forces a recapture even though `checkCaseAgainstGraph`'s own
 integrity rule is deliberately MAJOR-only, and the two policies genuinely disagree.**
@@ -746,18 +765,30 @@ a **83 % pass rate that clears the bar**; `executor.test.ts`'s single mutated ca
 way. All three controls would have gone on passing while proving nothing, and no test anywhere
 would have reported it.
 
-Sprint 7 of spec-20260812-pge-real-workload-errors fixed all three in the same commit that
-grew the dataset, and the evaluator confirmed the fix by reverting each control and observing
-the pre-sprint version produce a **false pass** against the six-case set. Two now inject a third
-of the cases (`seen % 3`), which cannot clear 80 % at any count from the floor upward;
-`executor.test.ts` mutates two named cases.
+Sprint 7 of spec-20260812-pge-real-workload-errors fixed two of the three in the same commit
+that grew the dataset, and the evaluator confirmed the fix by reverting each control and
+observing the pre-sprint version produce a **false pass** against the six-case set.
+`dataset.test.ts` and `gate.test.ts` now inject a third of the cases (`seen % 3`), which cannot
+clear 80 % at any count from the floor upward. `executor.test.ts`'s own control was left as a
+fixed count of 2 — its comment claimed that was safe "regardless of how many more cases the
+replay set grows to hold", which this section's own arithmetic already contradicted: `(n-2)/n`
+crosses 80 % at **n = 11**.
+
+**Sprint 8 fixed the third.** `executor.test.ts`'s negative control now injects the identical
+`(index + 1) % 3 === 0` fraction, over ALL replay cases rather than two named ones, mutating
+`pipelineResult[0].success` — a field every case's expectation carries exactly one of
+(`pipelineResult` is a `SCALAR_ARTIFACT_FIELDS` entry and `PipelineResult.success` is required),
+where the previous version mutated `contracts[0].title`, a field one committed case
+(`replay-plan-clarify-rounds-exhausted`) does not have at all. At the dataset's current 6 replay
+cases this still drifts exactly 2 of them — the same failure count the fixed-count version
+produced — so the fix changed nothing about what today's run catches, only whether a future
+count keeps catching it.
 
 **The general rule, for anyone adding a case or a control:** a control whose failure injection
 does not scale with `replayCases.length` has a case count at which it silently stops being a
-control — compute that number and write it down, or make the injection a fraction. The dataset
-holds **6 `replay` cases** against a `GOLDEN_MIN_REPLAY_CASES` floor of 5 as of `1.4.0`, so this
-is live arithmetic, not a hypothetical: `executor.test.ts`'s two-case mutation is `(n-2)/n` and
-crosses 80 % at **n = 11**.
+control — compute that number and write it down, or make the injection a fraction. As of the fix
+above, no control in this table injects a fixed count; all three are `seen % 3` or its
+index-parity equivalent, so none of them has a breakpoint to compute.
 
 ## The graph engine against a real workload
 
