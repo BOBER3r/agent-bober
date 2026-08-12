@@ -534,6 +534,122 @@ describe("RunManager", () => {
     });
   });
 
+  describe("sc-6-3/sc-6-4: PipelineResult.errors surfaced as status 'failed' + error", () => {
+    // Option A (spec-20260812-pge-real-workload-errors resolvedClarifications D3): a
+    // non-empty `errors` array is possible ALONGSIDE `success: true` — the shipped
+    // sc-12-9 FAIL_CLOSED refusal of the git-effect `commit` node. These tests set
+    // success:true throughout to prove RunManager keys off `errors`, not `success`.
+
+    it("sc-6-3: sets status to 'failed' when the resolved result carries a non-empty errors array", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({
+        success: true,
+        errors: [
+          {
+            nodeId: "commit",
+            branchKey: null,
+            errorClass: "FailClosed",
+            message: "FAIL_CLOSED: node 'commit' declares effects (git) and there is no recorded approval.",
+          },
+        ],
+      });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = manager.getRun(runId);
+      expect(state!.status).toBe("failed");
+    });
+
+    it("sc-6-3: populates error with the refused node's id and errorClass, not a generic message", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({
+        success: true,
+        errors: [
+          {
+            nodeId: "commit",
+            branchKey: null,
+            errorClass: "FailClosed",
+            message: "FAIL_CLOSED: node 'commit' declares effects (git) and there is no recorded approval.",
+          },
+        ],
+      });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = manager.getRun(runId);
+      expect(state!.error).toContain("commit");
+      expect(state!.error).toContain("FailClosed");
+    });
+
+    it("sc-6-3: leaves result.success untouched — Option A, success and the failed status can disagree", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({
+        success: true,
+        errors: [
+          { nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: "refused" },
+        ],
+      });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = manager.getRun(runId);
+      expect(state!.status).toBe("failed");
+      expect(state!.result!.success).toBe(true);
+    });
+
+    it("sc-6-3: persists the 'failed' status and error to disk", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({
+        success: true,
+        errors: [
+          { nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: "refused" },
+        ],
+      });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const { readFile } = await import("node:fs/promises");
+      const raw = await readFile(stateFilePath(runId), "utf-8");
+      const parsed = JSON.parse(raw) as RunState;
+      expect(parsed.status).toBe("failed");
+      expect(parsed.error).toContain("commit");
+    });
+
+    it("sc-6-4: an absent errors key leaves status 'completed' and error unset — exactly as before", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({ success: true });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = manager.getRun(runId);
+      expect(state!.status).toBe("completed");
+      expect(state!.error).toBeUndefined();
+    });
+
+    it("sc-6-4: an empty errors array leaves status 'completed' and error unset — exactly as before", async () => {
+      const manager = new RunManager();
+      const result = makeFakePipelineResult({ success: true, errors: [] });
+      const mockPipeline = vi.fn().mockResolvedValue(result);
+
+      const runId = await manager.startRun("task", tmpDir, makeFakeConfig(), mockPipeline);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const state = manager.getRun(runId);
+      expect(state!.status).toBe("completed");
+      expect(state!.error).toBeUndefined();
+    });
+  });
+
   describe("sc-1-5: back-compat shims — isRunning and getStatus", () => {
     it("isRunning() returns true when ANY run has status='running'", async () => {
       const manager = new RunManager();

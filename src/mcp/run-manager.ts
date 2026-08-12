@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 
 import type { BoberConfig } from "../config/schema.js";
 import { runPipeline } from "../orchestrator/pipeline.js";
-import type { PipelineResult } from "../orchestrator/pipeline.js";
+import type { PipelineFailure, PipelineResult } from "../orchestrator/pipeline.js";
 import type { RunOptions } from "../orchestrator/workflow/engine.js";
 import { writeRunState, listRunStateFiles } from "../state/run-state.js";
 import { logger } from "../utils/logger.js";
@@ -77,6 +77,19 @@ export interface StartRunOptions {
   worktreePath?: string;
   /** Branch the worktree was created on. */
   branch?: string;
+}
+
+// ── Refusal reporting (sc-6-3) ─────────────────────────────────────────
+
+/**
+ * Render a resolved run's `PipelineResult.errors` (Option A — non-empty ALONGSIDE
+ * `success: true`, spec-20260812-pge-real-workload-errors resolvedClarifications D3)
+ * into the single-line `RunState.error` string. Names what was refused — nodeId and
+ * errorClass of every entry, per sc-6-2's bar for run.ts — rather than a generic
+ * "run failed" line.
+ */
+function describeRefusal(errors: readonly PipelineFailure[]): string {
+  return errors.map((e) => `${e.nodeId} (${e.errorClass}): ${e.message}`).join("; ");
 }
 
 // ── RunManager ───────────────────────────────────────────────────────
@@ -206,7 +219,18 @@ export class RunManager {
       .then((result) => {
         const s = this.runs.get(runId);
         if (s) {
-          s.status = "completed";
+          // sc-6-3: a resolved PipelineResult with a non-empty `errors` array (a
+          // FAIL_CLOSED refusal under Option A — success can still be true) is surfaced
+          // as status 'failed' + error, not folded into the pre-existing 'completed'
+          // path. sc-6-4: when `errors` is absent or empty this branch does nothing
+          // different from before — status stays 'completed' and `error` is untouched.
+          const { errors } = result;
+          if (errors !== undefined && errors.length > 0) {
+            s.status = "failed";
+            s.error = describeRefusal(errors);
+          } else {
+            s.status = "completed";
+          }
           s.completedAt = new Date().toISOString();
           s.result = {
             success: result.success,
