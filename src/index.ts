@@ -75,8 +75,13 @@ export {
   type ContextHandoff,
   type Decision,
   type ProjectContext,
+  DEFAULT_KEEP_RECENT_SPRINTS,
+  MAX_KEEP_RECENT_SPRINTS,
+  MAX_SUMMARIZED_DESCRIPTION_LENGTH,
+  MAX_SUMMARIZED_SPRINTS,
   createHandoff,
   serializeHandoff,
+  serializeHandoffForPrompt,
   summarizeOlderSprints,
 } from "./orchestrator/context-handoff.js";
 
@@ -150,9 +155,12 @@ export type {
 
 export {
   ensureBoberDir,
+  type ContractListing,
+  type SkippedContractFile,
   saveContract,
   loadContract,
   listContracts,
+  listContractsWithSkips,
   updateContract,
   saveSpec,
   loadSpec,

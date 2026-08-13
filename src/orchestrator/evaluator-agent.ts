@@ -1,6 +1,6 @@
 import type { BoberConfig } from "../config/schema.js";
 import type { ContextHandoff } from "./context-handoff.js";
-import { serializeHandoff } from "./context-handoff.js";
+import { serializeHandoffForPrompt } from "./context-handoff.js";
 import type { EvalResult } from "../contracts/eval-result.js";
 import {
   createDefaultRegistry,
@@ -229,7 +229,7 @@ async function runSingleLensEval(
       config.evaluator.providerConfig,
       config.evaluator.model,
     );
-    const handoffJson = serializeHandoff(handoff);
+    const handoffJson = serializeHandoffForPrompt(handoff);
 
     // Format programmatic results for context
     const programmaticSummary = programmaticResults

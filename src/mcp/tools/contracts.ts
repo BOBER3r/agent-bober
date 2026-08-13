@@ -5,7 +5,7 @@
 
 import { cwd } from "node:process";
 
-import { listContracts, loadContract } from "../../state/index.js";
+import { listContractsWithSkips, loadContract } from "../../state/index.js";
 import { registerTool } from "./registry.js";
 
 // ── Registration ─────────────────────────────────────────────────────
@@ -53,14 +53,36 @@ export function registerContractsTool(): void {
         }
       }
 
-      // List mode
-      const contracts = await listContracts(projectRoot);
+      // List mode.
+      //
+      // Reports BOTH halves of the directory. A contract file that does not
+      // parse is skipped — one bad file must not break the listing — but it is
+      // named here rather than dropped, because a caller told "you have N
+      // contracts" has no way to tell that number apart from the number of
+      // files actually on disk. On this repository the two differ by 52.
+      const { contracts, skipped } = await listContractsWithSkips(projectRoot);
+
+      const unreadable =
+        skipped.length > 0
+          ? {
+              unreadable: {
+                count: skipped.length,
+                note:
+                  `${skipped.length} contract file(s) in .bober/contracts/ did not parse and are NOT ` +
+                  `included in the list above. They are on disk; they do not satisfy the current ` +
+                  `SprintContractSchema. Use bober_contracts with a contractId to see the full error.`,
+                files: skipped.map((s) => s.file),
+              },
+            }
+          : {};
+
       if (contracts.length === 0) {
         return JSON.stringify(
           {
             contracts: [],
             message:
               "No contracts found. Run bober_plan first to generate sprint contracts.",
+            ...unreadable,
           },
           null,
           2,
@@ -74,7 +96,7 @@ export function registerContractsTool(): void {
         dependsOn: c.dependsOn,
       }));
 
-      return JSON.stringify({ contracts: summary }, null, 2);
+      return JSON.stringify({ contracts: summary, ...unreadable }, null, 2);
     },
   });
 }
