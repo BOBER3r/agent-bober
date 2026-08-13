@@ -751,3 +751,33 @@ default requires that error channel first, not merely green conformance.
 4. [proposed] The channel join becomes rank-aware, and pipelineResult converges
 5. [proposed] Both engines write the same word, and contracts converges
 6. [proposed] The convergence record, and what a flip would still need
+
+---
+
+## Plan: One terminal vocabulary for SprintContract, and the rank-aware channel join
+- Spec: spec-20260812-terminal-vocabulary
+- Branch: bober/terminal-vocabulary
+- Status: completed (6/6 sprints)
+- Closed: 2026-08-12T21:00:56Z
+
+### Sprint Breakdown
+1. [completed] One settled-status predicate, and the MCP sprint tools work again -- iteration 1
+2. [completed] No committed contract carries a status the schema forbids -- iteration 1
+3. [completed] A monotone version the rank-aware join can read, stable under replay -- iteration 1
+4. [completed] The channel join becomes rank-aware, and pipelineResult converges -- iteration 1
+5. [completed] Both engines write the same word, and contracts converges -- iteration 1
+6. [completed] The convergence record, and what a flip would still need -- iteration 1
+
+### Pipeline Statistics
+- Total iterations used: 6 / 20 (every sprint passed first try)
+- Sprints completed: 6 / 6
+- Subagents spawned: 25 (6 curator, 6 generator, 6 evaluator, 3 documenter, 6 security auditor, 1 security verifier -- 2 generators resumed for follow-ups)
+- Suite: 6928 -> 6965 tests; golden gate 6/6 throughout
+
+### Outcome, stated honestly
+The conformance divergence SET did not shrink. It is still [audits, contracts, history, pipelineResult],
+exactly as before the spec began. What closed is one level below the field:
+the pipelineResult MECHANISM (sprint 4) and the contracts STATUS delta (sprint 5).
+Three deltas remain inside contracts (evaluatorFeedback, generatorNotes, version),
+and history + audits are now recorded as recommended for PERMANENT ACCEPTANCE --
+which makes the current flip bar ("sustained green conformance") unsatisfiable by design.

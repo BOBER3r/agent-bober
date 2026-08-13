@@ -1,0 +1,155 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-terminal-vocabulary-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-5",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "timestamp": "2026-08-12T19:03:39Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "One terminal vocabulary for SprintContract, and the rank-aware channel join \u2014 Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "One settled-status predicate",
+        "summary": "isSettledContractStatus (passed|completed) + isTerminalContractStatus. Five readers + resume-cursor migrated. status-vocabulary.invariant.test.ts scans production source for terminal status literals against a LINE-NUMBER-PINNED allowlist \u2014 prose edits that shift lines can break it."
+      },
+      {
+        "contractId": "...-2",
+        "title": "No illegal contract statuses",
+        "summary": "Four contracts migrated pending->completed; run-time corpus guard."
+      },
+      {
+        "contractId": "...-3",
+        "title": "A monotone version, replay-stable",
+        "summary": "SprintContractSchema.version (optional, NO default). PGE sprintExitNode writes version: attempts. 5 of 6 golden replay cases re-captured."
+      },
+      {
+        "contractId": "...-4",
+        "title": "The channel join becomes rank-aware",
+        "summary": "mergeEntries and lastWriteWinsByKey resolve duplicates via rankIsGreater. versionRank widened with an attempts fallback. materializeContracts now strips a producer-supplied version. 5 golden cases re-captured again. MEASURED: the pipelineResult divergence did NOT close \u2014 PipelineResult.completedSprints/failedSprints are SprintContract[] containers, so pipelineResult's diff reduces to the contracts diff. Divergence set is still [audits,contracts,history,pipelineResult]."
+      }
+    ],
+    "currentBranch": "bober/terminal-vocabulary",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/workflow/flusher.ts",
+      "src/orchestrator/workflow/interpreter.ts",
+      "src/pge/nodes/sprint-evaluate.test.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/",
+      "docs/pge-graph.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-terminal-vocabulary-5",
+    "specId": "spec-20260812-terminal-vocabulary",
+    "sprintNumber": 5,
+    "title": "Both engines write the same word, and contracts converges",
+    "description": "The ts engine changes to write \"completed\", matching PGE and the 218-of-250 on-disk majority. This is the change that makes the two engines agree about what happened, and it closes the contracts divergence.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-terminal-vocabulary-4"
+    ],
+    "features": [
+      "feat-5"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-5-1",
+        "description": "runSprintCycle writes \"completed\" where it wrote \"passed\" (src/orchestrator/pipeline.ts:589), and every ts-side consumer of that write follows \u2014 including the split at :1052 and the workflow flusher and interpreter readers.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-2",
+        "description": "The contracts conformance divergence's STATUS delta is closed. The other two field deltas (evaluatorFeedback, generatorNotes) are either closed too or recorded with a stated reason \u2014 say which, and do not leave it ambiguous.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-3",
+        "description": "src/pge/nodes/sprint-evaluate.test.ts, which pins the current write, is edited deliberately rather than incidentally.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-4",
+        "description": "The replay golden cases are re-captured and the diff is verified confined to the status word, the version field and their direct consequences. Anything else moving is a STOP CONDITION.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-5",
+        "description": "The replay count stays at or above GOLDEN_MIN_REPLAY_CASES and no case is relabelled from replay to integrity.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-6",
+        "description": "The negative controls in the golden suite are re-verified to still bite at the current case count \u2014 the previous spec found three that had silently stopped biting as the dataset grew.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-7",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing what the evaluator DECIDES. This sprint changes the word recorded for an outcome, never the outcome.",
+      "Closing history or audits.",
+      "Flipping the engine default."
+    ],
+    "stopConditions": [
+      "Re-capture shows a field moving that is not the status, the version, or a direct consequence \u2014 stop and report.",
+      "Closing the status delta does not close the contracts divergence because another delta remains \u2014 that is a finding to record, not to force."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 4,
+    "generatorNotes": "This is the behaviour-changing sprint and the one a careless blanket-replace would damage. The ts engine has several readers of its own write (pipeline.ts:1052, workflow/flusher.ts:62,76, workflow/interpreter.ts:128,134,140,141) \u2014 note that some of those read an OUTCOME field rather than a contract status; check each. Sprint 1's predicate should already cover most reader sites; what changes here is the WRITE. Re-capture in this sprint, not the next \u2014 the previous spec learned that deferring a blast radius makes the suite red in between.",
+    "evaluatorNotes": "Verify the divergence set by running the conformance harness yourself, not by reading the pin. Confirm the status delta is genuinely gone rather than masked. For sc-5-4, read every re-captured diff hunk \u2014 the previous spec's sprint 5 found a case affected for a reason nobody predicted, and the discipline that caught it was reading the diff rather than trusting the count. For sc-5-6, revert one negative control to its pre-sprint form and confirm it now produces a false pass, which is how the previous spec proved its controls were strengthened.",
+    "estimatedFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/workflow/flusher.ts",
+      "src/orchestrator/workflow/interpreter.ts",
+      "src/pge/nodes/sprint-evaluate.test.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T14:30:00Z",
+    "updatedAt": "2026-08-12T19:03:39Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "node scripts/run-golden-regression.mjs",
+      "goldenCapture": "GOLDEN_CAPTURE=1 npx vitest run src/pge/golden/capture.test.ts"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "criticalFinding": {
+    "source": "sprint 3 evaluator + sprint 4 measurement",
+    "finding": "sc-5-2's contracts convergence has a FOURTH delta the contract does not name: `version`. PGE writes it, the ts engine does not. conformance.ts's normalize() strips only 10 VOLATILE_KEYS and version is not among them (nor should it be \u2014 stripping it would hide a real divergence). So closing the STATUS delta will NOT close the contracts divergence.",
+    "authority": "This is explicitly pre-authorized by this contract's own sc-5-2 ('either closed too or recorded with a stated reason \u2014 say which') and its stop condition ('Closing the status delta does not close the contracts divergence because another delta remains \u2014 that is a finding to record, not to force'). Record it; do not force it."
+  },
+  "environmentNote": "A stray git worktree exists at .claude/worktrees/youthful-satoshi-563347 (unrelated work, branch claude/youthful-satoshi-563347) nested inside the repo. A bare `npx vitest run` picks it up and reports ~22 failures belonging to THAT checkout. Do NOT touch or delete it. Always run the suite with the --exclude flags in config.commands.test. The verified clean baseline is 459 files / 6952 tests passed, 0 failed.",
+  "evaluatorFeedback": null
+}

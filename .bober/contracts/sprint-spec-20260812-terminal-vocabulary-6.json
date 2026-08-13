@@ -4,7 +4,7 @@
   "sprintNumber": 6,
   "title": "The convergence record, and what a flip would still need",
   "description": "Two divergences closed, two remaining and recommended for permanent acceptance. State that honestly in the place the previous spec recorded the original four, and say plainly what a default flip would still require \u2014 so nobody reads two closed divergences as a green light.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-terminal-vocabulary-5"
   ],
@@ -71,5 +71,6 @@
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z"
+  "updatedAt": "2026-08-12T20:51:36Z",
+  "completedAt": "2026-08-12T20:51:36Z"
 }

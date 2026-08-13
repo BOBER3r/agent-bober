@@ -4,7 +4,7 @@
   "sprintNumber": 3,
   "title": "A monotone version the rank-aware join can read, stable under replay",
   "description": "versionRank already ranks by a `version` number before falling back to updatedAt and canonical JSON. Give SprintContract that field and write it at sprint_exit \u2014 replay-stably, because a fixed clock makes updatedAt useless as a tiebreak and a wall-clock-derived version would make every golden case irreproducible.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-terminal-vocabulary-2"
   ],
@@ -73,5 +73,6 @@
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z"
+  "updatedAt": "2026-08-12T17:15:28Z",
+  "completedAt": "2026-08-12T17:15:28Z"
 }

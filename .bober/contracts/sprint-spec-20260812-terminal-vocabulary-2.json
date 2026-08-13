@@ -4,7 +4,7 @@
   "sprintNumber": 2,
   "title": "No committed contract carries a status the schema forbids",
   "description": "Four contracts carry \"pending\", which ContractStatusSchema does not permit \u2014 they load only because loadContract parses non-strictly. Migrate them and add the guard that would have caught it when it happened.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-terminal-vocabulary-1"
   ],
@@ -66,5 +66,6 @@
   "estimatedDuration": "small",
   "iterationHistory": [],
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z"
+  "updatedAt": "2026-08-12T16:33:49Z",
+  "completedAt": "2026-08-12T16:33:49Z"
 }

@@ -990,3 +990,28 @@
 {"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-9","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T13:49:26Z"}
 {"event":"plan-completed","specId":"spec-20260812-pge-real-workload-errors","sprintsCompleted":9,"timestamp":"2026-08-12T13:49:26Z"}
 {"event":"plan-created","specId":"spec-20260812-terminal-vocabulary","title":"One terminal vocabulary for SprintContract, and the rank-aware channel join","sprintCount":6,"timestamp":"2026-08-12T14:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-08-12T15:30:07Z","specId":"spec-20260812-terminal-vocabulary","task":"One terminal vocabulary for SprintContract, and the rank-aware channel join","branch":"bober/terminal-vocabulary"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-terminal-vocabulary-1","specId":"spec-20260812-terminal-vocabulary","timestamp":"2026-08-12T15:30:29Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-1","iteration":1,"timestamp":"2026-08-12T15:54:26Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-1", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T16:02:01Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-1","critical":0,"important":0,"minor":2,"timestamp":"2026-08-12T16:12:05Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-2", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T16:12:59Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-2","iteration":1,"timestamp":"2026-08-12T16:27:39Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-2", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T16:33:49Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-2","critical":0,"important":0,"minor":0,"timestamp":"2026-08-12T16:40:14Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-3", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T16:40:32Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-3","iteration":1,"timestamp":"2026-08-12T17:04:21Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-3", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T17:15:28Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-3","critical":0,"important":0,"minor":1,"informational":1,"verifierDowngrades":2,"timestamp":"2026-08-12T17:28:56Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T17:29:25Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-4","iteration":1,"timestamp":"2026-08-12T18:31:05Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T18:49:05Z"}
+{"event": "security-audit-passed", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "critical": 1, "criticalPreExisting": true, "important": 2, "minor": 1, "note": "critical is a pre-existing NUL byte in reducers.ts, present at main before this spec; spawned as task_9e3c1791", "timestamp": "2026-08-12T19:03:02Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T19:03:39Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-5","iteration":1,"timestamp":"2026-08-12T19:44:43Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T19:55:38Z"}
+{"event": "security-audit-passed", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "critical": 0, "important": 0, "minor": 3, "timestamp": "2026-08-12T20:03:39Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-6", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T20:04:24Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-6","iteration":1,"timestamp":"2026-08-12T20:39:48Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-6", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T20:51:36Z"}
+{"event": "plan-completed", "specId": "spec-20260812-terminal-vocabulary", "sprintsCompleted": 6, "timestamp": "2026-08-12T20:51:36Z"}

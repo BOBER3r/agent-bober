@@ -1,0 +1,111 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-terminal-vocabulary-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-1",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "timestamp": "2026-08-12T15:30:25Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "One terminal vocabulary for SprintContract, and the rank-aware channel join \u2014 Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
+    "completedSprints": [],
+    "currentBranch": "bober/terminal-vocabulary",
+    "relevantFiles": [
+      "src/contracts/sprint-contract.ts",
+      "src/mcp/tools/sprint.ts",
+      "src/mcp/tools/eval.ts",
+      "src/cli/commands/sprint.ts",
+      "src/cli/commands/eval.ts",
+      "src/state/history.ts",
+      "src/orchestrator/workflow/resume-cursor.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-terminal-vocabulary-1",
+    "specId": "spec-20260812-terminal-vocabulary",
+    "sprintNumber": 1,
+    "title": "One settled-status predicate, and the MCP sprint tools work again",
+    "description": "Five production readers each hardcode one of the two terminal words, and the ones that picked \"passed\" return empty against a corpus of 250 contracts holding zero of them. Ship one predicate, migrate every reader to it, and pin the live bug closed. No writer changes here, so no conformance field moves \u2014 this sprint is pure reader convergence and it is immediately valuable on its own.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "A single exported predicate decides whether a contract status is terminal. It generalises what updateContractStatus (src/contracts/sprint-contract.ts:216-219) and resume-cursor.ts:22 already do independently, rather than adding a third rule.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "Every production reader doing a terminal check uses the predicate: src/mcp/tools/sprint.ts:147, src/mcp/tools/eval.ts:139, src/cli/commands/sprint.ts:160, src/cli/commands/eval.ts:127, src/state/history.ts:193. Readers that are NOT terminal checks (playwright.ts:530's test status, fleet/do-bridge run states, mcp/tools/status.ts:69's RunState) must be left alone \u2014 verify each before touching it.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "A test drives both MCP sprint tools against the committed contract corpus and asserts a NON-EMPTY settled list. This is the live bug; it must be pinned, not merely fixed.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "A test asserts no production module outside the predicate compares a contract status to a status literal for a terminal check, so a sixth reader cannot reintroduce the bug. Proven to bite by mutation.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build are green, and the golden gate still passes 6/6.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing what any writer writes \u2014 that is sprints 3 and 5.",
+      "Touching ContractStatusSchema's membership.",
+      "Migrating the four illegal 'pending' contracts (sprint 2)."
+    ],
+    "stopConditions": [
+      "A reader turns out not to be a terminal check after all \u2014 leave it and say so, rather than forcing it through the predicate."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 2,
+    "generatorNotes": "Do NOT blanket-replace every status comparison. The map is deliberate: mcp/tools/status.ts:69, fleet/reporter.ts, fleet/aggregator.ts and do-bridge/reconcile.ts compare RUN states, not contract statuses, and playwright.ts:530 compares a TEST result. Only the five named readers are contract-terminal checks. resume-cursor.ts:22 already reads both words \u2014 it is the shape to generalise, and it should end up calling the predicate too. Put the predicate next to ContractStatusSchema in src/contracts/sprint-contract.ts so it ships with the type it describes.",
+    "evaluatorNotes": "The failure mode is over-reach: a blanket replace that catches run states or test results. Check each of the four non-contract sites listed in generatorNotes is untouched. Then verify sc-1-3 against the REAL corpus, not a fixture \u2014 count the settled contracts yourself and confirm the tools return that many. Verify sc-1-4 bites by adding a literal comparison in a temp copy.",
+    "estimatedFiles": [
+      "src/contracts/sprint-contract.ts",
+      "src/mcp/tools/sprint.ts",
+      "src/mcp/tools/eval.ts",
+      "src/cli/commands/sprint.ts",
+      "src/cli/commands/eval.ts",
+      "src/state/history.ts",
+      "src/orchestrator/workflow/resume-cursor.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T14:30:00Z",
+    "updatedAt": "2026-08-12T15:30:25Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

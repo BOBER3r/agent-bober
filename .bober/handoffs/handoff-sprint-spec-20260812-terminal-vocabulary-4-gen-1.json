@@ -1,0 +1,146 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-terminal-vocabulary-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-4",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "timestamp": "2026-08-12T17:29:25Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "One terminal vocabulary for SprintContract, and the rank-aware channel join \u2014 Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "One settled-status predicate",
+        "summary": "isSettledContractStatus (passed|completed) + isTerminalContractStatus (adds failed) in src/contracts/sprint-contract.ts. Five readers + resume-cursor migrated. Relevant to sprint 4: the predicate is available if the join needs to be settled-status-aware."
+      },
+      {
+        "contractId": "...-2",
+        "title": "No illegal contract statuses",
+        "summary": "Four docs-correction contracts migrated pending->completed; run-time corpus guard in sprint-contract.test.ts."
+      },
+      {
+        "contractId": "...-3",
+        "title": "A monotone version, replay-stable",
+        "summary": "SprintContractSchema gained version?: number (optional, NO default). PGE sprintExitNode writes version: attempts (a count-filter over the appendById evaluations channel, hence order-invariant). 5 of 6 golden replay cases re-captured. Conformance field deltas went from three to FOUR (version: PGE writes it, ts engine does not)."
+      }
+    ],
+    "currentBranch": "bober/terminal-vocabulary",
+    "relevantFiles": [
+      "src/pge/registry/reducers.ts",
+      "src/pge/registry/reducers.test.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "docs/pge-graph.md",
+      ".bober/golden/"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-terminal-vocabulary-4",
+    "specId": "spec-20260812-terminal-vocabulary",
+    "sprintNumber": 4,
+    "title": "The channel join becomes rank-aware, and pipelineResult converges",
+    "description": "mergeEntries resolves a duplicate id by canonical order, under which every settled status sorts before the seeded \"proposed\" \u2014 so the channel keeps the planned copy and a pge run reports a contract still marked \"proposed\" inside completedSprints. Switch to the rank-aware join already shipping in the same module. This closes the pipelineResult divergence, so the two-directional pin must be edited deliberately here.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-terminal-vocabulary-3"
+    ],
+    "features": [
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-4-1",
+        "description": "mergeEntries resolves duplicates with rankIsGreater rather than joinByCanonicalOrder. No new ranking logic is introduced \u2014 versionRank and rankIsGreater are reused exactly as they ship.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-2",
+        "description": "A test proves the settled contract outranks the seeded \"proposed\" one, so a pge run no longer reports \"proposed\" inside completedSprints.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-3",
+        "description": "The latent lastWriteWinsByKey defect is fixed and pinned: attempts:10 must outrank attempts:9, which canonical order got backwards.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-4",
+        "description": "ORDER-INVARIANCE IS PRESERVED \u2014 the property appendById exists for. A test merges the same containers in several different arrival orders and asserts an identical result. This is the criterion most likely to be broken silently by a ranking change.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-5",
+        "description": "The pipelineResult conformance divergence is CLOSED, and conformance.engines.test.ts's divergence-set pin and its per-field record are edited DELIBERATELY in the same commit as the docs/pge-graph.md disposition they change.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-6",
+        "description": "Any golden case whose recorded artifacts move is re-captured in THIS sprint, with the diff verified confined to the contract status/version and their direct consequences.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-7",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green; golden gate passes with the replay count at or above its floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing what any writer writes (sprint 5).",
+      "Weakening a pin to accommodate the change \u2014 the pin moves because the behaviour legitimately changed, and it must still fail in both directions afterwards.",
+      "Closing the contracts, history or audits divergences."
+    ],
+    "stopConditions": [
+      "Order-invariance cannot be preserved under the rank-aware join \u2014 stop and report, because that property is why appendById exists.",
+      "A divergence other than pipelineResult moves \u2014 that is unplanned and must be understood before committing."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 3,
+    "generatorNotes": "The change itself is one line at reducers.ts:187. Everything else is proving it safe. rankIsGreater's total order is version, then updatedAt, then canonical JSON \u2014 the last term is what keeps it deterministic when the first two tie, which is what preserves order-invariance. Say in the code why that fallback matters. For sc-4-5, remember the discipline the previous spec established: a pin edit and the doc disposition it changes go in ONE commit, never as a side effect.",
+    "evaluatorNotes": "sc-4-4 is where a subtle break hides. Do not just run the generator's test \u2014 construct your own containers, shuffle them into several orders, and confirm identical results including when ranks TIE. Then verify sc-4-5 by reading the pin diff: it should record pipelineResult closing, not merely drop it. Confirm the divergence set is now exactly what a real run produces by running the harness yourself.",
+    "estimatedFiles": [
+      "src/pge/registry/reducers.ts",
+      "src/pge/registry/reducers.test.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "docs/pge-graph.md",
+      ".bober/golden/"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T14:30:00Z",
+    "updatedAt": "2026-08-12T17:29:25Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run",
+      "golden": "node scripts/run-golden-regression.mjs",
+      "goldenCapture": "GOLDEN_CAPTURE=1 npx vitest run src/pge/golden/capture.test.ts"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "securityDirective": {
+    "source": "sprint 3 security audit + adversarial verifier (both findings downgraded, but this directive is binding for sprint 4)",
+    "finding": "materializeContracts' embedded branch (src/orchestrator/contract-materialization.ts:52-65) normalizes status, specId, sprintNumber and contractId on a producer-supplied contract but NOT version. SprintContractSchema bounds version only by .int().min(0) \u2014 no upper bound. Today this is inert because sprintContracts is bound to appendById and nothing reads SprintContract.version. It becomes decision-bearing the moment THIS sprint switches the join to consult versionRank: a seeded 'proposed' copy carrying an inflated version would permanently outrank the settled 'completed' copy \u2014 inverting exactly the ordering this sprint exists to provide.",
+    "required": "Do not rank on producer-supplied version alone. Either (a) strip/reset version on the embedded branch of materializeContracts alongside the four fields already normalized there, or (b) make the join settled-status-aware so only a contract passing isSettledContractStatus may win on version. Pin whichever you choose with a test that fails if the guard is removed.",
+    "secondaryNote": "If version ever becomes decision-bearing across a resumed/re-run boundary, derive rank from within-run state only \u2014 never trust a version read off disk. plan_materialize legitimately rewrites the contract file with the field absent (contract-materialization.ts:102-132), so the on-disk sequence can be 2 -> absent -> 1."
+  },
+  "evaluatorFeedback": null
+}

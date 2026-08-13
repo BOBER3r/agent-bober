@@ -4,7 +4,7 @@
   "sprintNumber": 1,
   "title": "One settled-status predicate, and the MCP sprint tools work again",
   "description": "Five production readers each hardcode one of the two terminal words, and the ones that picked \"passed\" return empty against a corpus of 250 contracts holding zero of them. Ship one predicate, migrate every reader to it, and pin the live bug closed. No writer changes here, so no conformance field moves \u2014 this sprint is pure reader convergence and it is immediately valuable on its own.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-1"
@@ -67,5 +67,6 @@
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z"
+  "updatedAt": "2026-08-12T16:02:01Z",
+  "completedAt": "2026-08-12T16:02:01Z"
 }

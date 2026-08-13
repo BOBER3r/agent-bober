@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260812-terminal-vocabulary-1-1",
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-1",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "timestamp": "2026-08-12T16:00:26Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Zero type errors."},
+    {"strategy": "typecheck:tests", "required": true, "result": "pass", "output": "tsc --noEmit -p tsconfig.test.json exit 0", "details": "Zero errors."},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "0 errors, 2 pre-existing warnings in eval-persist.test.ts (untouched)", "details": "Scoped lint over the 11 changed files: zero output."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean build."},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "459 files passed, 6926 tests passed, 2 skipped, 0 failed (32.98s)", "details": "Generator's reported run-manager flake did not reproduce."},
+    {"strategy": "golden-gate", "required": true, "result": "pass", "output": "6/6 passed (100%), threshold >80%, exit 0", "details": "Independently re-run."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-1-1", "required": true, "result": "pass", "evidence": "Two predicates over one canonical Set (TERMINAL = SETTLED + 'failed'). isTerminalContractStatus used ONLY at updateContractStatus:285. The split is technically necessary: pre-existing resume-cursor.test.ts:77-93 asserts a 'failed' contract is EXCLUDED from completedSprintNumbers, so a failed-inclusive predicate there would be a real bug."},
+    {"criterionId": "sc-1-2", "required": true, "result": "pass", "evidence": "isSettledContractStatus(c.status) at sprint.ts:147, eval.ts:140, cli/sprint.ts:160, cli/eval.ts:128, history.ts:198, resume-cursor.ts:23. Zero diff overlap with status.ts, evaluators/builtin/playwright.ts, fleet/reporter.ts, fleet/aggregator.ts, do-bridge/reconcile.ts. Contract's cited path src/eval/strategies/playwright.ts confirmed non-existent."},
+    {"criterionId": "sc-1-3", "required": true, "result": "pass", "evidence": "Evaluator counted the corpus independently: 256 files, 218 completed / 33 proposed / 4 pending / 1 in-progress / 0 passed. Test drives the real listContracts(REPO_ROOT) both tools call, asserts non-empty without a hardcoded count."},
+    {"criterionId": "sc-1-4", "required": true, "result": "pass", "evidence": "Scan over 219+ production files, 13-entry allowlist each re-derived and grepped by the evaluator; every line:number real and reason accurate. Evaluator extracted the regex and mutation-tested it via node -e against 7 novel synthetic cases including no-space === and bare-local-variable comparison."},
+    {"criterionId": "sc-1-5", "required": true, "result": "pass", "evidence": "All six gates re-run independently green."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [{"priority": "low", "category": "quality", "description": "SETTLED/TERMINAL split deviates from sc-1-1's literal 'single predicate' wording; verified necessary, accepted as-is. Later sprints' wording should not re-assume a single flat predicate."}],
+  "summary": "5/5 required criteria pass, all gates green, golden 6/6. Both judgement calls upheld on independent verification: the two-predicate split is necessary (not evasion), and the 13-entry allowlist is genuine and specific in every entry."
+}

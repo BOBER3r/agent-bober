@@ -1,0 +1,9 @@
+{"contractId":"sprint-spec-20260812-terminal-vocabulary-2","status":"complete","iteration":1,
+"commits":["a5c8531 - bober(sprint-2): migrate the four \"pending\" docs-correction contracts to \"completed\"; add the real-corpus status guard"],
+"decision_value":"Chose 'completed' (not 'proposed', not 'passed'). Evidence: history.jsonl:271-272 plan-created+plan-completed sprintCount=4; CHANGELOG.md:59 [0.16.0]; README.md:784; all five annotated tags v0.12.0-v0.16.0 exist at their named commits. 'passed' rejected because it would collide with sprint-corpus.test.ts:62-71's pin of zero 'passed' contracts.",
+"decision_completedAt":"Deliberately NOT added. The four files never had the key (pre-schema-era shape) and nonGoal 2 forbids rewriting other fields.",
+"correction":"The contract's description is FALSE: loadContract (sprint-state.ts:96-101) IS strict and throws. The real leak is listContracts (:132-144) silently skipping schema-invalid files. Not repeated in code, tests or commit message.",
+"scope_note":"Status-only migration does NOT make the four pass SprintContractSchema — they also fail on successCriteria/nonGoals/stopConditions/definitionOfDone, as do 60 of 256 files. Guard validates the status field alone via ContractStatusSchema, exactly as sc-2-2 words it. Corpus strict-parse count verified unchanged at 196/256 before and after.",
+"testsAdded":["src/contracts/sprint-contract.test.ts (7 new cases: liveness, corpus assertion, in-memory mutation control, does-not-bite-on-legal, mkdtemp temp-copy mutation control)"],
+"manual_verification":"git-stashed the four json edits, re-ran the guard, confirmed it failed naming all four offenders, then restored and confirmed green.",
+"blockers":[]}

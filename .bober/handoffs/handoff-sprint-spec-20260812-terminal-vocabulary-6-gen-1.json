@@ -1,0 +1,157 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-terminal-vocabulary-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-6",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "timestamp": "2026-08-12T20:04:24Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "One terminal vocabulary for SprintContract, and the rank-aware channel join \u2014 Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "One settled-status predicate",
+        "summary": "isSettledContractStatus/isTerminalContractStatus in sprint-contract.ts; six readers migrated; status-vocabulary.invariant.test.ts source scan with a line-number-pinned allowlist."
+      },
+      {
+        "contractId": "...-2",
+        "title": "No illegal contract statuses",
+        "summary": "Four contracts pending->completed; run-time corpus guard."
+      },
+      {
+        "contractId": "...-3",
+        "title": "A monotone version, replay-stable",
+        "summary": "SprintContractSchema.version (optional, no default); PGE sprint_exit writes version:attempts. ADDED a fourth contracts delta."
+      },
+      {
+        "contractId": "...-4",
+        "title": "The channel join becomes rank-aware",
+        "summary": "mergeEntries + lastWriteWinsByKey resolve by rankIsGreater; versionRank widened with an attempts fallback; materializeContracts strips a producer-supplied version. MEASURED: the pipelineResult divergence did NOT close."
+      },
+      {
+        "contractId": "...-5",
+        "title": "Both engines write the same word",
+        "summary": "pipeline.ts:589 + flusher + the MCP tool's and CLI's own loops now write 'completed'. getStatusIcon fixed (would have rendered every settled sprint [PENDING]). MEASURED: the contracts STATUS delta closed; evaluatorFeedback, generatorNotes and version remain, each recorded with a reason."
+      }
+    ],
+    "currentBranch": "bober/terminal-vocabulary",
+    "relevantFiles": [
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "src/orchestrator/workflow/oracle-retention.test.ts",
+      "docs/pge-graph.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-terminal-vocabulary-6",
+    "specId": "spec-20260812-terminal-vocabulary",
+    "sprintNumber": 6,
+    "title": "The convergence record, and what a flip would still need",
+    "description": "Two divergences closed, two remaining and recommended for permanent acceptance. State that honestly in the place the previous spec recorded the original four, and say plainly what a default flip would still require \u2014 so nobody reads two closed divergences as a green light.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-terminal-vocabulary-5"
+    ],
+    "features": [
+      "feat-6"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-6-1",
+        "description": "conformance.engines.test.ts pins the divergence set to exactly what a real run now produces, with the per-field records updated to match, and STILL FAILS IN BOTH DIRECTIONS \u2014 a new divergence and a silently fixed one both break it.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-2",
+        "description": "docs/pge-graph.md's engine-migration disposition records which divergences closed in this spec, which remain, and why history and audits are recommended for permanent acceptance rather than left as open work.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-3",
+        "description": "oracle-retention.test.ts still asserts pipeline.engine defaults to \"ts\", that TsPipelineEngine is what the default config selects, and that it is still the fallback. This spec flips nothing.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-4",
+        "description": "The document states plainly what a flip would STILL require beyond this spec \u2014 at minimum the remaining divergences' disposition, Option B success semantics, a durable checkpoint mechanism for commit and finalize, and an explicit re-specification of the bar itself.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-5",
+        "description": "Every claim the document adds is backed by a test that fails when the claim stops being true, and `pge docs --check` passes.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green; golden gate passes.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Re-specifying the conformance bar \u2014 that is a stated decision, not a sprint.",
+      "Flipping the default.",
+      "Closing history or audits."
+    ],
+    "stopConditions": [
+      "The divergence set is not what this spec predicted \u2014 record what it actually is and why, rather than adjusting anything to match the prediction."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 2,
+    "generatorNotes": "This is the spec's closing record and should read like one. The previous spec's disposition section is the model: it stated the outcome, named what was enforced by which test, and said what stayed unproven. Do the same. The most valuable sentence you can write is the one that stops a future reader treating 'two of four closed' as progress toward an automatic flip \u2014 the remaining two are recommended for permanent acceptance, which means the bar itself has to change before a flip is possible.",
+    "evaluatorNotes": "Verify sc-6-1 by mutation in both directions \u2014 add a fake divergence and remove a real one, and confirm each fails. Verify sc-6-3 by reading oracle-retention.test.ts and confirming it is unmodified or only strengthened. For sc-6-2 and sc-6-4, check the prose against reality: every divergence it claims closed should be absent from a real harness run you perform yourself.",
+    "estimatedFiles": [
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "src/orchestrator/workflow/oracle-retention.test.ts",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T14:30:00Z",
+    "updatedAt": "2026-08-12T20:04:24Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "measuredReality": {
+    "warning": "This contract's own description says 'Two divergences closed, two remaining'. AS MEASURED IN SPRINTS 4 AND 5, THAT IS NOT WHAT HAPPENED. The divergence SET never shrank: it is still exactly [audits, contracts, history, pipelineResult], four fields, the same as before this spec began.",
+    "whatActuallyClosed": [
+      "The pipelineResult MECHANISM (sprint 4): the seeded 'proposed' copy no longer wins the channel, so a pge run no longer reports 'proposed' inside completedSprints. But pipelineResult remains in the divergence set, because PipelineResult.completedSprints/failedSprints are SprintContract[] containers, so its diff reduces to the contracts diff.",
+      "The contracts STATUS delta (sprint 5): both engines now write 'completed', pinned by asserting the two engines' values against each other AND against the literal. But contracts remains in the set, because three deltas remain inside it."
+    ],
+    "whatRemainsInsideContracts": [
+      "evaluatorFeedback \u2014 RECORDED: PGE has no writer anywhere in src/pge (verified by grep, zero hits); closing it means adding a writer to a PGE node body.",
+      "generatorNotes \u2014 RECORDED: same reason.",
+      "version \u2014 RECORDED: sprint_exit writes version:attempts, runSprintCycle writes none, and conformance.ts's VOLATILE_KEYS deliberately excludes version because stripping it would hide a real divergence."
+    ],
+    "authority": "The contract's stop condition covers this exactly: 'The divergence set is not what this spec predicted \u2014 record what it actually is and why, rather than adjusting anything to match the prediction.' Record the truth. Do not adjust code or tests to make the prediction come true."
+  },
+  "carryForward": {
+    "verdictFromNowDead": "Sprint 5's evaluator and security auditor both confirmed: after sprint 5, NO writer in either engine produces the literal 'passed', so src/pge/runtime/interpreter.ts:728's counter is structurally always 0. verdictFrom's downgrade paths (success-with-failures -> partial, failed-with-some-passed -> partial) are unreachable for any run. Direction is conservative \u2014 every affected transition moves toward a MORE severe verdict, and a declared success with zero failures still returns success at :746 without consulting the counter. Pre-existing (traced to 0e423ea, spec-20260805), allowlisted at status-vocabulary.invariant.test.ts:205-208. This belongs in the closing record.",
+    "flusherLiteral": "flusher.ts:76 decides the completed/failed split with a bare literal rather than the predicate, and is structurally invisible to the sc-1-4 scan (which keys on the .status member-access spelling). Safe today because the ternary above bounds the value; failure direction is conservative. Worth naming in the record.",
+    "nulByte": "A pre-existing critical from sprint 4's audit: src/pge/registry/reducers.ts contains literal NUL bytes making it binary, so grep/semgrep/gitleaks silently skip the engine's most trust-bearing module. Present at main before this spec. Spawned as a separate task, NOT fixed here."
+  },
+  "environmentNote": "A stray git worktree at .claude/worktrees/youthful-satoshi-563347 (unrelated work) is nested inside the repo; a bare `npx vitest run` picks it up and reports ~22 failures belonging to it. Do NOT touch it. Clean baseline: 459 files / 6960 tests, 0 failed. Also: the machine's disk is at 89% (2.1GiB free) and has produced transient ENOSPC flakes in abort-run.test.ts and run-manager.test.ts.",
+  "evaluatorFeedback": null
+}

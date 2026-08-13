@@ -4,7 +4,7 @@
   "sprintNumber": 4,
   "title": "The channel join becomes rank-aware, and pipelineResult converges",
   "description": "mergeEntries resolves a duplicate id by canonical order, under which every settled status sorts before the seeded \"proposed\" \u2014 so the channel keeps the planned copy and a pge run reports a contract still marked \"proposed\" inside completedSprints. Switch to the rank-aware join already shipping in the same module. This closes the pipelineResult divergence, so the two-directional pin must be edited deliberately here.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-terminal-vocabulary-3"
   ],
@@ -80,5 +80,6 @@
   "estimatedDuration": "large",
   "iterationHistory": [],
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z"
+  "updatedAt": "2026-08-12T18:49:05Z",
+  "completedAt": "2026-08-12T18:49:05Z"
 }

@@ -2,11 +2,11 @@
   "specId": "spec-20260812-terminal-vocabulary",
   "version": 1,
   "createdAt": "2026-08-12T14:30:00Z",
-  "updatedAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T20:51:36Z",
   "title": "One terminal vocabulary for SprintContract, and the rank-aware channel join",
   "description": "Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
   "mode": "brownfield",
-  "status": "draft",
+  "status": "completed",
   "ambiguityScore": 3,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -217,5 +217,6 @@
     "estimatedTotalDuration": "8-13 hours",
     "riskLevel": "medium",
     "riskNotes": "Lower risk than its predecessor: no topology change, no new channel, no frozen-surface revision. The risk concentrates in two places \u2014 the deliberate edits to two-directional conformance pins, where the danger is editing one incidentally rather than deliberately, and the replay-stability of the version discriminator, where a wall-clock-derived value would silently make every golden case irreproducible. Both are addressed by dedicated criteria rather than left to care."
-  }
+  },
+  "completedAt": "2026-08-12T20:51:36Z"
 }
