@@ -305,7 +305,7 @@ function tableRows(doc: string, begin: string, end: string): string[][] {
 }
 
 function sortRows(rows: readonly string[][]): string[][] {
-  return [...rows].sort((a, b) => compare(a.join(" "), b.join(" ")));
+  return [...rows].sort((a, b) => compare(a.join("\u0000"), b.join("\u0000")));
 }
 
 /**

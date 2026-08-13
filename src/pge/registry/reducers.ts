@@ -449,7 +449,7 @@ export const replaceIfNewer: Reducer<VersionedValue> = defineReducer<VersionedVa
 
 /** Composite key of a charge: `(nodeId, attempt, callIndex)`. */
 function ledgerKey(entry: unknown): string {
-  if (!isPlainObject(entry)) return `${canonicalJson(entry)}`;
+  if (!isPlainObject(entry)) return `\u0001${canonicalJson(entry)}`;
   const nodeId = typeof entry.nodeId === "string" ? entry.nodeId : "";
   const attempt = typeof entry.attempt === "number" && Number.isFinite(entry.attempt)
     ? entry.attempt
@@ -457,7 +457,7 @@ function ledgerKey(entry: unknown): string {
   const callIndex = typeof entry.callIndex === "number" && Number.isFinite(entry.callIndex)
     ? entry.callIndex
     : 0;
-  return `${nodeId} ${attempt} ${callIndex}`;
+  return `${nodeId}\u0000${attempt}\u0000${callIndex}`;
 }
 
 /**
