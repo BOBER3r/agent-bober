@@ -1235,24 +1235,56 @@ serves both.
   delta be closed with the others "either closed too or **recorded with a stated reason**",
   and its stop condition read *"Closing the status delta does not close the contracts
   divergence because another delta remains — that is a finding to record, not to force."*
-  The reason recorded for the remaining three: `evaluatorFeedback`/`generatorNotes` have no
+  The reason recorded for the remaining three, AS OF THAT SPEC's CLOSE — later narrowed
+  further, see the next bullet: `evaluatorFeedback`/`generatorNotes` have no
   PGE writer anywhere in `src/pge/` (a `grep -rn 'evaluatorFeedback' src/pge/` outside tests
   returns zero hits) — closing either means adding a writer to a PGE node body, which is a
-  graph-node change, not a vocabulary change, and outside this sprint's scope; `version` is
+  graph-node change, not a vocabulary change, and outside that sprint's scope; `version` is
   deliberately excluded from `VOLATILE_KEYS` for the reason above. Full record:
   [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md)
   and
   [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-5.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-5.md).
+- **`evaluatorFeedback`/`generatorNotes` CLOSED at sprint 5 of
+  `spec-20260814-pge-full-convergence` — the `contracts` divergence narrows to `version`
+  ALONE.** The "no PGE writer anywhere" finding two paragraphs above was the honest state of
+  the tree at the time it was written; it stopped being true this sprint. `sprint_evaluate`
+  (`src/pge/nodes/sprint-evaluate.ts`) now carries the RAW `EvaluationRunResult.summary` and
+  the RAW `GeneratorResult.notes` onto the decisive `SprintVerdict` it emits — via two new
+  OPTIONAL fields on `SprintVerdictSchema` (`src/pge/state/overall.ts`), not a new channel —
+  and `sprint_exit` (`src/pge/nodes/sprint-review.ts`) writes them onto the settled contract
+  from that verdict, never from the seeded copy. Both match the imperative engine's own
+  expressions exactly: `pipeline.ts:592`/`:719` write `evaluatorFeedback := evaluation.summary`
+  (verbatim, on both the pass and the fail branch) and `pipeline.ts:428` writes
+  `generatorNotes := generatorResult.notes`. Asserted against the OTHER engine's own answer
+  (`src/orchestrator/workflow/conformance.engines.test.ts`, Pattern D), not a literal — the
+  claim pinned is the convergence itself. No topology change and no `graphVersion` bump:
+  `sprint_evaluate` and `sprint_exit`'s declared `reads`/`writes` are unchanged, because the
+  raw values ride on the EXISTING `evaluations` channel's entries rather than a new one — the
+  same channel `version` already crosses. Two fields have no graph analogue and are
+  deliberately NOT synthesised: `pipeline.ts:418-421`'s literal
+  `"Generator failed to complete the implementation."` (a max-iterations fail path
+  `sprint_generate` does not branch on) and `pipeline.ts:520-525`'s rendered security
+  feedback (the graph's security block routes to `sprint_correct`, not to a settle). A
+  refusal, or a decisive verdict from a call site that never populated either field, leaves
+  it genuinely ABSENT on the settled contract rather than standing in a plausible-looking
+  placeholder — the honest answer sc-5's stop condition asks for. `contracts` therefore
+  narrows to **one** field delta — `version` — asserted directly by a `canonical`-based
+  whole-object comparison with `version` stripped from both sides
+  (`conformance.engines.test.ts`, sc-5-4), not merely inferred from two field-by-field
+  checks. Full record:
+  [`docs/sprints/sprint-spec-20260814-pge-full-convergence-5.md`](./sprints/sprint-spec-20260814-pge-full-convergence-5.md).
 - **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame,
   and the divergence set stayed at four fields — because `pipelineResult`'s divergence
-  REDUCES to `contracts`'s, it does not close independently of it. Sprint 5 narrowed what it
-  reduces to from four field deltas to three, for the identical reason `contracts` narrowed.**
+  REDUCES to `contracts`'s, it does not close independently of it. Sprint 5 of
+  `spec-20260812-terminal-vocabulary` narrowed what it reduces to from four field deltas to
+  three; sprint 5 of `spec-20260814-pge-full-convergence` (the bullet above) narrowed it
+  again, from three to ONE — `version` alone.**
   `PipelineResult.completedSprints`/`failedSprints` carry whole `SprintContract` objects
   (`src/orchestrator/pipeline.ts`), so once the channel join converges on the settled copy
-  (sprint 4) and the two engines agree on the status word inside it (sprint 5), what a caller
-  sees inside `pipelineResult` is exactly what `listContracts` sees on disk — no more, no
-  less. The two engines' contracts now differ on three fields (`evaluatorFeedback`,
-  `generatorNotes`, `version`), so `pipelineResult` still diverges, for the identical reason
+  (sprint 4) and the two engines agree on the status word and the `evaluatorFeedback`/
+  `generatorNotes` pair inside it, what a caller sees inside `pipelineResult` is exactly what
+  `listContracts` sees on disk — no more, no less. The two engines' contracts now differ on
+  ONE field (`version`), so `pipelineResult` still diverges, for the identical reason
   `contracts` does. `src/orchestrator/workflow/conformance.engines.test.ts` pins this
   positively — `pgeResult?.completedSprints[0]` `toEqual`s the contract `listContracts` reads
   back off disk, and `tsResult?.completedSprints.map((c) => c.status)` now equals
@@ -1468,11 +1500,12 @@ them this spec's to do (`nonGoals`):**
    permanent acceptance, and that is sufficient by itself — one field that can never close
    means `diffs` can never become empty. `history` (point 1) no longer needs anything — it
    CLOSED at sprint 4. The other two (`contracts`, `pipelineResult`) are unbuilt, not
-   architecturally barred: they need a PGE-node writer for `evaluatorFeedback` and
-   `generatorNotes` that no sprint in this spec has added yet, plus a `version` delta this
-   harness deliberately keeps visible. `diffs` can therefore never become empty under the
-   bar's current wording regardless, so a flip is not "closer" for one divergence having
-   closed and another having narrowed below the field level — the bar itself has to be
+   architecturally barred: sprint 5 of this spec added the PGE-node writer for
+   `evaluatorFeedback` and `generatorNotes` that no earlier sprint had, narrowing both to a
+   single remaining delta — the `version` field this harness deliberately keeps visible
+   (`VOLATILE_KEYS`, `conformance.ts:65-76`). `diffs` can therefore never become empty under
+   the bar's current wording regardless, so a flip is not "closer" for one divergence having
+   closed and two others having narrowed below the field level — the bar itself has to be
    re-specified, on purpose, before "flip the default" is a live question again. Doing that
    re-specification is explicitly this spec's `nonGoals`/`outOfScope[2]`, not this record's
    to perform.

@@ -1320,3 +1320,67 @@ describe("the `history` claim is checked against source, not trusted as prose", 
     expect(isProductionTsFile("README.md")).toBe(false);
   });
 });
+
+// ── The `evaluatorFeedback`/`generatorNotes` claim (sprint 5 of
+// spec-20260814-pge-full-convergence) is a checked fact too ─────────────────────────
+//
+// Before this sprint, `docs/pge-graph.md` stated "PGE has no writer for either field
+// anywhere in `src/pge/`" and a `grep -rn 'evaluatorFeedback' src/pge/` outside tests
+// returned zero hits — the same shape of claim `history`'s disposition used to make, and
+// the same discipline applies: re-derive the underlying FACT from the real `src/pge` source
+// tree on every run, independent of what the document says, so a future edit that silently
+// removes the writer (or a doc edit that reverts the claim without the writer disappearing)
+// fails a test instead of the claim quietly rotting the way the `history` one did.
+
+/** Every production (non-test) `src/pge` file that writes `evaluatorFeedback` or `generatorNotes`. */
+function findContractFeedbackWriters(files: readonly ScannedFile[]): string[] {
+  return files
+    .filter((file) => file.content.includes("evaluatorFeedback") || file.content.includes("generatorNotes"))
+    .map((file) => file.path);
+}
+
+describe("the `evaluatorFeedback`/`generatorNotes` claim is checked against source, not trusted as prose", () => {
+  it("finds the sprint-5 writers in src/pge today, and the doc's claim agrees", async () => {
+    const files = await collectPgeSourceFiles(join(REPO_ROOT, "src", "pge"), REPO_ROOT);
+    expect(files.length).toBeGreaterThan(50);
+    const writers = findContractFeedbackWriters(files);
+    // The carrier (schema), the node that populates it, and the node that settles the
+    // contract from it — sc-5-1/sc-5-2's whole implementation surface, re-derived from
+    // source rather than trusted.
+    expect(
+      writers,
+      "the evaluatorFeedback/generatorNotes writer set changed shape — update this pin, " +
+        "docs/pge-graph.md and conformance.engines.test.ts's prose together with whichever " +
+        "file moved",
+    ).toEqual(
+      expect.arrayContaining([
+        "src/pge/state/overall.ts",
+        "src/pge/nodes/sprint-evaluate.ts",
+        "src/pge/nodes/sprint-review.ts",
+      ]),
+    );
+    // The other direction: the doc must still state the closure fact this test just
+    // re-derived from source, so an edit that quietly reverts the doc's claim (without the
+    // writer actually disappearing) fails here too, not just when it appears.
+    expect(
+      shippedDoc,
+      "the doc must still state evaluatorFeedback/generatorNotes CLOSED at sprint 5 of spec-20260814-pge-full-convergence",
+    ).toContain("`evaluatorFeedback`/`generatorNotes` CLOSED at sprint 5 of");
+  });
+
+  it("the scanner actually bites: a synthetic node body referencing either field is caught", () => {
+    const hit = findContractFeedbackWriters([
+      { path: "src/pge/nodes/fake-node.ts", content: "settled.evaluatorFeedback = raw;" },
+      { path: "src/pge/nodes/other-node.ts", content: "export const x = 1;" },
+    ]);
+    expect(hit).toEqual(["src/pge/nodes/fake-node.ts"]);
+  });
+
+  it("both field names are scanned independently — a file with only one is still caught", () => {
+    const hit = findContractFeedbackWriters([
+      { path: "src/pge/nodes/notes-only.ts", content: "const generatorNotes = x;" },
+      { path: "src/pge/nodes/unrelated.ts", content: "export const y = 2;" },
+    ]);
+    expect(hit).toEqual(["src/pge/nodes/notes-only.ts"]);
+  });
+});
