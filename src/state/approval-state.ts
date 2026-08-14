@@ -1,8 +1,8 @@
-import { readFile, writeFile, readdir, unlink, access } from "node:fs/promises";
+import { readFile, readdir, unlink, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
 
-import { ensureDir } from "./helpers.js";
+import { ensureDir, writeFileAtomic } from "./helpers.js";
 
 const APPROVAL_DIR = ".bober/approvals";
 
@@ -51,10 +51,9 @@ export async function savePending(
   m: PendingMarker,
 ): Promise<void> {
   await ensureDir(approvalsDir(projectRoot));
-  await writeFile(
+  await writeFileAtomic(
     pendingPath(projectRoot, m.checkpointId),
     JSON.stringify(m, null, 2) + "\n",
-    "utf-8",
   );
 }
 
@@ -109,10 +108,9 @@ export async function saveApproved(
   m: ApprovedMarker,
 ): Promise<void> {
   await ensureDir(approvalsDir(projectRoot));
-  await writeFile(
+  await writeFileAtomic(
     approvedPath(projectRoot, id),
     JSON.stringify(m, null, 2) + "\n",
-    "utf-8",
   );
 }
 
@@ -125,10 +123,9 @@ export async function saveRejected(
   m: RejectedMarker,
 ): Promise<void> {
   await ensureDir(approvalsDir(projectRoot));
-  await writeFile(
+  await writeFileAtomic(
     rejectedPath(projectRoot, id),
     JSON.stringify(m, null, 2) + "\n",
-    "utf-8",
   );
 }
 

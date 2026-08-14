@@ -341,3 +341,85 @@ describe("DiskCheckpointMechanism — race handling (s9-c7g)", () => {
     expect(outcome).toEqual({ approved: false, feedback: "TIMEOUT" });
   });
 });
+
+// ── (h) Torn-marker resilience ───────────────────────────────────────────────
+//
+// The poll loop triggers on a directory ENTRY appearing, but the entry appears
+// at the writer's open(2) — before its bytes. A marker that is briefly
+// unreadable must be retried, not escalated into a failure of the gate that
+// authorises commits.
+
+describe("DiskCheckpointMechanism — torn marker resilience", () => {
+  it("retries instead of failing when an approval marker is seen mid-write", async () => {
+    const m = new DiskCheckpointMechanism(tmpDir, { pollMs: 5 });
+    const id = "post-research" as CheckpointId;
+    const markerPath = join(tmpDir, `${id}.approved.json`);
+    const complete =
+      JSON.stringify(
+        { approvedAt: new Date().toISOString(), approverId: "test-user" },
+        null,
+        2,
+      ) + "\n";
+
+    // First the prefix a mid-write reader would see, then the whole marker.
+    const t1 = setTimeout(() => {
+      void writeFile(markerPath, complete.slice(0, 15), "utf-8");
+    }, 20);
+    const t2 = setTimeout(() => {
+      void writeFile(markerPath, complete, "utf-8");
+    }, 80);
+
+    const outcome = await m.request(id, {});
+    clearTimeout(t1);
+    clearTimeout(t2);
+
+    expect(outcome).toEqual({ approved: true });
+  });
+
+  it("retries instead of failing when a rejection marker is still zero bytes", async () => {
+    const m = new DiskCheckpointMechanism(tmpDir, { pollMs: 5 });
+    const id = "post-sprint" as CheckpointId;
+    const markerPath = join(tmpDir, `${id}.rejected.json`);
+
+    // Zero bytes is what a reader sees between the writer's open(2) and its
+    // first write(2) — the dominant shape for a small marker.
+    const t1 = setTimeout(() => {
+      void writeFile(markerPath, "", "utf-8");
+    }, 20);
+    const t2 = setTimeout(() => {
+      void writeFile(
+        markerPath,
+        JSON.stringify({
+          rejectedAt: new Date().toISOString(),
+          rejecterId: "test-user",
+          feedback: "needs work",
+        }) + "\n",
+        "utf-8",
+      );
+    }, 80);
+
+    const outcome = await m.request(id, {});
+    clearTimeout(t1);
+    clearTimeout(t2);
+
+    expect(outcome).toEqual({ approved: false, feedback: "needs work" });
+  });
+
+  it("denies via TIMEOUT when a marker never becomes readable JSON", async () => {
+    // A permanently corrupt marker must neither approve nor throw out of
+    // request() — it falls through to the timeout, which is the fail-closed
+    // outcome for a gate that authorises effects.
+    const m = new DiskCheckpointMechanism(tmpDir, { pollMs: 5, timeoutMs: 200 });
+    const id = "post-plan" as CheckpointId;
+
+    // Written after request() starts, so the stale-marker sweep does not eat it.
+    const t1 = setTimeout(() => {
+      void writeFile(join(tmpDir, `${id}.approved.json`), "{ not json", "utf-8");
+    }, 20);
+
+    const outcome = await m.request(id, {});
+    clearTimeout(t1);
+
+    expect(outcome).toEqual({ approved: false, feedback: "TIMEOUT" });
+  });
+});
