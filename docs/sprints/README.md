@@ -2768,7 +2768,13 @@ delta with no honest imperative write site, ARCHITECTURAL in the same sense `aud
 set is `audits` + `pipelineResult`, both architectural, sharing one root cause: the graph has a
 checkpoint-gated commit the imperative engine lacks)* —
 so `diffs` can never become empty under the bar's current wording regardless.
-Re-specifying that bar is the next spec's decision, not this one's.
+Re-specifying that bar is the next spec's decision, not this one's *(**taken** at sprint 11 of
+`spec-20260814-pge-full-convergence`: the bar is now `equivalentModuloAcceptedDivergences` —
+the reported divergence set must be EXACTLY the two accepted, individually-justified
+architectural fields, no more and no less — met on a real run of both engines and proven
+two-directional by mutation. The literal `equivalent: true` was NOT reached and was not
+weakened to reach it: `report.equivalent`'s formula is untouched and is still asserted `false`
+directly, in the same test)*.
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -2979,6 +2985,34 @@ still-UNDECIDED formal ADR joinder of `pipelineResult.errors` to `audits`' accep
 them a missing writer, a missing case or a missing test; all three are decisions this record
 leaves exactly as open as it found them. No production `.ts` file outside
 `src/orchestrator/workflow/conformance.ts` changed; no topology moved; golden gate unaffected.
+
+**The challenge this closing record expects — "is a named allowlist of accepted divergences a
+legitimate acceptance, or moving the goalpost?" — was adjudicated explicitly, and VERIFIED
+rather than accepted.** Five grounds, all independently checkable: `report.equivalent`'s
+formula is byte-identical to what it was before the sprint and is still asserted directly, in
+the same test, immediately before the amended claim (the literal bar was never softened, only
+joined by a narrower one); the accepted set is exactly two members, `Object.freeze`d, with the
+test hardcoding `Object.keys(...).sort()` against the literal `["audits", "pipelineResult"]`,
+so widening it means editing a literal inside a test rather than letting a set grow by
+accretion; both mutation directions were reproduced INDEPENDENTLY by the evaluator in a
+disposable worktree and reverted byte-identical; the ORCHESTRATOR wrote the amendment into the
+contract BEFORE the sprint started, specifying this exact form and forbidding
+comparison-adjustment, so the generator implemented a pre-specified amendment rather than a
+self-serving relaxation; and both recorded reasons trace to source facts the evaluator
+re-checked itself, with `audits`' half resting on an ADR written at sprint 1 and upheld at
+sprint 3. **The limitation is disclosed rather than papered over:** a test can enforce that the
+accepted set stays internally consistent and stays exactly two members — it CANNOT prove the
+"architectural" characterisation of either member is correct. That stays a human/ADR judgement.
+
+**Two things stay OPEN as the spec closes, and are recorded as open rather than tidied away.**
+(1) The formal ADR joinder of `pipelineResult.errors` to `audits`' ADR-1 acceptance is now
+recommended by three independent agents and taken by none; the contract's `carryTo` named
+sprint 11 as its owner, sprint 11 is over, so it is UNOWNED and belongs to an architect — an
+amendment to `arch-20260814-pge-full-convergence-adr-1` or a new ADR — not to another sprint
+and not to a documentation pass. (2) The `evaluations` channel is still unmeasured under
+production-length evaluator text: sprint 10's 368-of-4,096 reading was taken with STUB
+collaborators, so it does not clear a cap sized against a ~1 KB stub corpus for a real
+evaluator's free text, and nothing in sprint 11 closed it.
 
 | # | Record | What it added |
 |---|--------|---------------|

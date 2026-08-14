@@ -12,8 +12,11 @@ of both engines"* — is **UNSATISFIABLE BY BUILDING, not by shortfall**. Two di
 and BOTH are architectural, sharing one root cause: the graph has a checkpoint-gated `commit`
 the imperative engine lacks.
 
-- `audits` — PROVEN unreachable at sprint 3: the runtime cannot express a per-branch interrupt
-  (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`).
+- `audits` — PROVEN unreachable: the runtime cannot express a per-branch interrupt. Established
+  by sprint 1's ADR revisit (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`,
+  which supplies the runtime soundness argument ADR-6 never gave) and upheld at sprint 3, which
+  declared the one checkpoint id outside the fan-out region and left `audits` RECOMMENDED FOR
+  PERMANENT ACCEPTANCE.
 - `pipelineResult.errors` — proven at sprint 6: only `PgeEngine.run` writes it, from the
   interpreter's `TaskFailure` records after a checkpoint-gated commit refusal; the imperative
   `commitAll` is unconditional and ungated, so there is no honest equivalent write site.
@@ -71,11 +74,13 @@ read-through:
 
 1. **A PERMANENT synthetic test**, in this file's own established idiom
    (`coverage.test.ts:311-354` — hand-built `ConformanceReport` values against the exported
-   function itself, not against the real dataset). Four cases: the accepted baseline reads
+   function itself, not against the real dataset). Five cases: the accepted baseline reads
    `true`; a NEW divergence (`history` regressing) flips it `false`; ONE of the two accepted
-   divergences silently disappearing flips it `false`; and BOTH disappearing (the literal,
+   divergences silently disappearing flips it `false`; BOTH disappearing (the literal,
    un-amended `equivalent: true`) also reads `false` — this function does not quietly grant the
-   claim it is not the assertion for.
+   claim it is not the assertion for; and a `vacuous` report reads `false` too, for the same
+   reason `report.equivalent` has always refused one (an empty comparison proves nothing about
+   either engine).
 2. **Two LIVE mutations of the shipped source, observed red, then reverted byte-identical** —
    not committed, and not this diff:
    - `ARCHITECTURALLY_ACCEPTED_DIVERGENCES` gained a third, bogus entry (`history`, which the
@@ -126,6 +131,47 @@ grow `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`'s membership from the two fields
 `conformance.engines.test.ts` has pinned since sprint 6 — only named them, and their reasons,
 explicitly in code for the first time.
 
+## Was the amendment moving the goalpost? — the verdict, on record
+
+This is the claim most likely to be challenged later, so the reasoning is recorded here rather
+than left in an eval-result JSON. **Verdict: legitimate — and VERIFIED, not accepted**
+(`.bober/eval-results/eval-sprint-spec-20260814-pge-full-convergence-11-1.json`,
+`goalpostVerdict`). Five grounds, each independently checkable:
+
+1. **The literal bar was never softened.** `report.equivalent`'s formula
+   (`diffs.length === 0 && !vacuous`) is BYTE-IDENTICAL to what it was before this sprint —
+   untouched — and the real-engine test asserts it directly, in the same test, immediately
+   before checking the amended claim. A second, narrower claim was added BESIDE the original.
+2. **The accepted set cannot widen invisibly.** Exactly two members, `Object.freeze`d, and the
+   test HARDCODES `expect(Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES).sort())` against
+   the literal `["audits", "pipelineResult"]`. A third field requires editing that literal
+   inside a test — a diff a reviewer sees.
+3. **Both mutation directions were reproduced INDEPENDENTLY** by the evaluator in a disposable
+   worktree, each observed red with the generator's exact error text, then reverted
+   byte-identical (`git diff --stat` empty).
+4. **The amendment pre-dates the work.** The ORCHESTRATOR wrote it into the contract
+   (`amendment.sc-11-1`, `amendedAt: 2026-08-14T18:04:50Z` — before either commit), specifying
+   this exact form and forbidding comparison-adjustment outright. The generator implemented a
+   pre-specified amendment, not a self-serving relaxation of a bar it was failing.
+5. **Both recorded reasons trace to source the evaluator re-checked itself:**
+   `Checkpoint.interrupt`'s single slot (`checkpointer.ts:247`), branch-blind
+   `grantScope`/`resumeMessageId` (`interrupt.ts:268`, `:332`), and `PgeEngine.run` as the sole
+   repo-wide writer of `PipelineResult.errors` against `pipeline.ts:451`'s unconditional,
+   ungated `commitAll`. `audits`' half rests on ADR-1 — written at sprint 1, upheld at sprint 3
+   — established independently of this sprint.
+
+**The limitation this verdict discloses, and does not paper over:** a test can enforce that the
+accepted set stays internally consistent and stays exactly two members; it **CANNOT prove that
+the "architectural" characterisation of either member is correct**. That remains a human/ADR
+judgement, carrying the same limit the sprint-1/sprint-3 precedent carries for `audits` — which
+is exactly why `pipelineResult.errors`' formal ADR joinder is recorded below as RECOMMENDED and
+UNDECIDED rather than silently treated as settled: the code records the EVIDENCE, an architect
+still owes the DECISION. What goalpost-moving would have looked like, for the record: quietly
+merging the literal and the amended claim into one, or weakening `report.equivalent` itself.
+This sprint did neither. The same account is kept in `docs/pge-graph.md`'s "Engine migration
+disposition", which is where a reader who meets `ARCHITECTURALLY_ACCEPTED_DIVERGENCES` in the
+source is pointed.
+
 ## What did NOT converge — stated plainly (sc-11-5)
 
 | field | status | reason |
@@ -146,9 +192,12 @@ explicitly in code for the first time.
   (`sc-11-1` real-run, `sc-11-2` synthetic both-directions) plus the two updated imports.
 - `docs/pge-graph.md` *(documentation commit)* — "Engine migration disposition" rewritten in
   place; new "Sprint 11's own outcome" closing subsection; the oracle-retention paragraph gains
-  one clarifying sentence (the file itself untouched).
+  a short passage recording that the file itself is unmodified and that the amended claim lives
+  BESIDE its pin rather than replacing it, and the closing "revisit deliberately" sentence gains
+  the same rule for `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`.
 - `docs/sprints/README.md` *(documentation commit)* — heading moves to "complete (11 of 11)",
-  new sprint-11 narrative paragraph, new table row.
+  the spec's intro paragraph gains the three-of-four outcome sentence, new sprint-11 narrative
+  paragraph, new table row.
 - **This record** — new *(documentation commit)*.
 
 ## Notes for maintainers
@@ -157,13 +206,30 @@ explicitly in code for the first time.
   field genuinely closes, or growing it to paper over a regression, is exactly the "adjusting
   the comparison" this spec's stop conditions forbid throughout. Each entry carries a reason to
   argue with for that purpose.
-- **The formal ADR joinder for `pipelineResult.errors` is still open.** This sprint's code
-  records BOTH fields as architectural (satisfying `sc-11-1`'s "each with a recorded reason")
-  without taking the separate, still-recommended decision to formally amend or extend
-  `arch-20260814-pge-full-convergence-adr-1` to cover `pipelineResult.errors` explicitly. That
-  is unfinished business for an architect, named rather than silently dropped.
-- **Gate, as run:** working tree — 468 files / **7,120 passed / 2 skipped / 0 failed**;
-  `typecheck` and `typecheck:tests` clean; `lint` 0 errors / 2 pre-existing warnings; `build`
-  clean; golden gate **8/8 (100%)**. Run the suite as `npx vitest run --exclude
+- **The formal ADR joinder for `pipelineResult.errors` is still open, and now UNOWNED.** This
+  sprint's code records BOTH fields as architectural (satisfying `sc-11-1`'s "each with a
+  recorded reason") without taking the separate decision to formally amend or extend
+  `arch-20260814-pge-full-convergence-adr-1` to cover `pipelineResult.errors` explicitly. Three
+  independent agents have now recommended it (sprint 6's generator and its evaluator, and this
+  documentation pass) and no one has taken it. The contract's `amendedDisposition.carryTo`
+  named sprint 11 as the owner; sprint 11 is over, so the decision belongs to an ARCHITECT —
+  an amendment to that ADR, or a new one — not to a sprint measuring itself against the
+  acceptance, and not to a documentation pass. Recorded as open rather than quietly dropped.
+- **The `evaluations` channel is still UNMEASURED under production-length evaluator text.**
+  Sprint 10 measured 368 bytes against the 4,096-byte cap on a real 29,214-byte spec and 14
+  real contracts — but with STUB collaborators (`generator.notes` is
+  `` `generated ${contractId}` ``,
+  the evaluator stub's `summary` is `"all criteria met"`). Sprint 5's carried finding therefore
+  did NOT close, and nothing in sprint 11 closed it either: a real evaluator's free text is
+  longer than a ~1 KB stub corpus, and this repository has no measurement of it. Do not read
+  "no channel breached" as clearing that cap. Related, and equally open: `wouldReject` is
+  checked per `ChannelUpdate` before the reducer, so an append-style channel's ACCUMULATED
+  footprint after many writes is a different question the measurement does not answer.
+- **Gate, as run and as independently reproduced:** working tree — 468 files / **7,120 passed
+  / 2 skipped / 0 failed**; and, re-run by the evaluator on a CLEAN detached worktree at
+  `97ac340` — 468 files / **7,116 passed / 6 skipped / 0 failed** (both totals are 7,122: four
+  tests that run in the working tree are skipped on a clean checkout). `typecheck` and
+  `typecheck:tests` clean, `lint` 0 errors / 2 pre-existing warnings, `build` clean and golden
+  gate **8/8 (100%)** in both. Run the suite as `npx vitest run --exclude
   '**/.claude/worktrees/**' --exclude '**/node_modules/**'` — a bare run picks up nested
-  worktrees. Commit `1487ba1`.
+  worktrees. Commits `1487ba1` (code + tests) and `97ac340` (docs).
