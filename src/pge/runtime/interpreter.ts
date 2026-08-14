@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { BoberConfig } from "../../config/schema.js";
+import { isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import { TERMINAL_ENDPOINT } from "../../contracts/topology.js";
 import type { Durability, NodeSpec, TopologySpec } from "../../contracts/topology.js";
 import type { CheckpointOutcome } from "../../orchestrator/checkpoints/types.js";
@@ -725,7 +726,12 @@ function refusalKeyOf(nodeId: string, branchKey: string | null): string {
 }
 
 function verdictFrom(state: OverallState, failures: readonly TaskFailure[]): Exclude<RunVerdict, "pending"> {
-  const passed = state.sprintContracts.filter((c) => c.status === "passed").length;
+  // "How many sprints settled well" — the same reading `src/state/history.ts`'s "Passed"
+  // row and `src/orchestrator/pipeline.ts`'s completed/failed split use. `"passed"` alone
+  // used to make this counter structurally zero: no writer produces that literal for a
+  // settled PGE contract — `sprint_exit` (sprint-review.ts) writes `"completed"` — so the
+  // downgrade branches below were unreachable for any real run.
+  const passed = state.sprintContracts.filter((c) => isSettledContractStatus(c.status)).length;
   const total = state.sprintContracts.length;
 
   // A graph may DECLARE its own verdict, and a terminal node normally does. It may not

@@ -743,6 +743,114 @@ describe("a partially failed run reports every branch and a 'partial' verdict (s
     expect(run.result.verdict).toBe("failed");
   });
 
+  /**
+   * `sprintOut`'s shipped body (golden-graph.ts:868-886) settles a contract with the
+   * literal `"passed"`. No production writer uses that word anymore — `sprint_exit`
+   * (sprint-review.ts:290) and `runSprintCycle` (pipeline.ts) both write `"completed"` —
+   * so the two tests above pass today only via the fixture's retired spelling, not via
+   * anything a real graph run produces. This override reproduces what a real run writes,
+   * without touching the fixture body itself (`GoldenBehaviour.handlerOverrides`,
+   * golden-graph.ts:570-577).
+   *
+   * `version: 1` is not decoration. `sprintContracts` resolves a same-key conflict via
+   * `versionRank` (reducers.ts:366-393): a missing `version` ranks 0, so a settled write
+   * that OMITS it ties the seeded copy on both `version` (0) and `updatedAt` (the golden
+   * harness's fixed clock makes seed and settle identical) and falls to a canonicalJson
+   * STRING tie-break. The shipped fixture body wins that tie only because "passed" sorts
+   * lexicographically after "in-progress"; "completed" does not ("c" < "i"), so a
+   * version-less "completed" write silently LOSES to the seed and the contract never
+   * settles. Production's real settled writer (sprint-review.ts:297) always sets
+   * `version: attempts` (>= 1 via `Math.max(1, ...)`) for exactly this reason — this
+   * mirrors that, not an arbitrary constant.
+   */
+  const settleAsCompleted: NodeImpl["handler"] = async (input, state, ctx) => {
+    const key = ctx.branchKey ?? "";
+    const contract = state.sprintContracts.find((c) => c.contractId === key);
+    return {
+      update: {
+        branchStatus: { [key]: { state: "succeeded", attempts: 1 } },
+        ...(contract === undefined
+          ? {}
+          : { sprintContracts: [{ ...contract, status: "completed" as const, version: 1 }] }),
+      },
+      goto: { kind: "parent" },
+      output: { contractId: key, verdict: "pass", echo: input },
+    };
+  };
+
+  it("downgrades a run that ENDED at the failure terminal, when branches settled 'completed' rather than 'passed' (sc-7-2)", async () => {
+    // Same scenario as "downgrades a run that ENDED at the failure terminal, when branches
+    // had passed" above, except contracts settle with the literal every real writer uses —
+    // "completed" — so this exercises `verdictFrom`'s branch B (interpreter.ts:745) for the
+    // word production code actually produces, not the fixture's retired one.
+    //
+    // MUTATION VERIFIED: against `verdictFrom`'s pre-migration counter
+    // (`state.sprintContracts.filter((c) => c.status === "passed").length`), this test
+    // FAILS: `passed` stays 0 because the override never writes the literal "passed", guard
+    // B (`state.verdict === "failed" && passed > 0`) never fires, and branch C returns the
+    // terminal's declared verdict verbatim — `expect(run.result.verdict).toBe("partial")`
+    // receives `"failed"`. Migrating the counter to
+    // `isSettledContractStatus(c.status)` (which "completed" satisfies) makes `passed` 2,
+    // fires guard B, and the assertion passes. Verified in a disposable detached worktree
+    // at this commit's parent: reverting only the migrated line in `interpreter.ts`
+    // reproduces the failure above verbatim; restoring the migrated line passes again. The
+    // negative control below still returns "failed" under both counters, so the migration
+    // is discriminating, not universally true.
+    const run = await runGolden({
+      projectRoot: root,
+      runId: RUN_ID,
+      concurrency: 2,
+      maxSupersteps: 40,
+      spec: specWithLoop(GOLDEN_NODES.supervisor, {
+        counterKey: "supervisorRounds",
+        maxIterations: 2,
+        onExhausted: GRACEFUL_FAILURE_NODE_ID,
+      }),
+      behaviour: {
+        contracts: goldenContracts(2),
+        handlerOverrides: { [GOLDEN_NODES.sprintOut]: settleAsCompleted },
+      },
+    });
+
+    expect(run.result.status).toBe("completed");
+    if (run.result.status !== "completed") return;
+    expect(run.handlerLog.calls[GOLDEN_NODES.finalize]).toBeUndefined();
+    expect(run.handlerLog.calls[GRACEFUL_FAILURE_NODE_ID]).toBe(1);
+    expect(run.finalState.sprintContracts.filter((c) => c.status === "completed")).toHaveLength(2);
+
+    // What the terminal DECLARED, and what the interpreter reports having seen.
+    expect(run.finalState.verdict).toBe("failed");
+    expect(run.result.verdict).toBe("partial");
+    expect(run.result.verdict).not.toBe("success");
+  });
+
+  it("does NOT downgrade a run that ended at the terminal with nothing committed, under the same 'completed' override", async () => {
+    // Mirrored negative control for the test above: the same bound, exhausted before any
+    // branch could settle. Nothing landed, so `failed` is the truth under EITHER counter,
+    // and the migration must not turn this into a predicate that is true for everything.
+    const run = await runGolden({
+      projectRoot: root,
+      runId: RUN_ID,
+      concurrency: 2,
+      maxSupersteps: 40,
+      spec: specWithLoop(GOLDEN_NODES.supervisor, {
+        counterKey: "supervisorRounds",
+        maxIterations: 1,
+        onExhausted: GRACEFUL_FAILURE_NODE_ID,
+      }),
+      behaviour: {
+        contracts: goldenContracts(2),
+        handlerOverrides: { [GOLDEN_NODES.sprintOut]: settleAsCompleted },
+      },
+    });
+
+    expect(run.result.status).toBe("completed");
+    if (run.result.status !== "completed") return;
+    expect(run.finalState.sprintContracts.filter((c) => c.status === "completed")).toHaveLength(0);
+    expect(run.finalState.verdict).toBe("failed");
+    expect(run.result.verdict).toBe("failed");
+  });
+
   it("is not vacuous: the same graph with no failure verdicts 'success'", async () => {
     const run = await runGolden({
       projectRoot: root,

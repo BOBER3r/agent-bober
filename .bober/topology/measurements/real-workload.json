@@ -35,7 +35,7 @@
   ],
   "terminalNodeId": "graceful_failure",
   "status": "completed",
-  "verdict": "failed",
+  "verdict": "partial",
   "specChannelNullAtBoundary": false,
   "supersteps": 234,
   "superstepCeiling": {

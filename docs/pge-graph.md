@@ -1367,38 +1367,45 @@ serves both.
   two divergences that WERE missing writers, `history` and `contracts`, are both closed
   (sprints 4 and 6). See point 1 under "What a flip would still require" below for the
   disposition this implies and for the decision that is recommended but NOT yet taken.
-- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — now
-  dead for BOTH engines, not narrower for one, as of `spec-20260812-terminal-vocabulary`
-  sprint 5.** `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict
-  from the count of `state.sprintContracts` entries whose status is the literal `"passed"`
-  — before sprint 5 that was "a word no PGE run writes", i.e. a defect that only ever
-  affected graph runs; **as of sprint 5, `runSprintCycle` does not write `"passed"` for a
-  settled sprint either**, so the literal `verdictFrom` compares against is now a word
-  *neither* engine's settled-sprint writer produces. That is a strictly stronger statement of
-  the same defect, not a new one: for a graph run the count was already permanently zero, and
-  it stays permanently zero, for one more reason than before. Every consequence
-  under-reports exactly as it did before: a terminal-declared `success` that the interpreter
-  downgrades because it recorded failures can only become `failed`, never `partial`; a
-  declared `failed` never softens to `partial`; and a run that reaches a terminal without
-  declaring a verdict is `failed` even when every branch settled. **Migrating the literal
-  alone would still not fix it — the reason has not changed since sprint 4.** Before sprint
-  4, the channel had TWO independent problems: it kept the seeded `"proposed"` copy of each
-  contract (`appendById` resolved a duplicate `contractId` by canonical order, and
-  `"completed" < "proposed"`), AND no settled contract ever wrote the word `"passed"`. Sprint
-  4 fixed the first: `mergeEntries` (`src/pge/registry/reducers.ts`) now resolves a duplicate
-  id by RANK (`rankIsGreater`), reading the monotone `SprintContract.version`
-  (`src/contracts/sprint-contract.ts:214`, optional and **never defaulted**) `sprint_exit`
-  writes as `attempts`. The channel now holds the SETTLED copy — `status: "completed"`, not
-  `"proposed"` — pinned positively at `src/pge/nodes/sprint-evaluate.test.ts` (flipped from
-  the sprint-3 known limitation) and end to end at
-  `src/orchestrator/workflow/conformance.engines.test.ts` ("4. pipelineResult"). What remains
-  is the second problem alone: `"completed"` is still not the literal `"passed"`
-  `verdictFrom` compares against, so `passed` is still zero — sprint 5 did not touch this
-  site (nonGoal 1: "changing what the evaluator DECIDES" is out of scope; migrating this
-  literal changes `partial`/`failed` verdict math, which sc-5-4's stop condition would treat
-  as an out-of-scope golden-case move). The site stays in
-  `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist, with an unchanged reason,
-  so it cannot be forgotten silently.
+- **Both remaining `"passed"`-literal runtime readers were migrated and are now live, as of
+  `spec-20260814-pge-full-convergence` sprint 7.** `verdictFrom`
+  (`src/pge/runtime/interpreter.ts:734`) derives a run's verdict from the count of
+  `state.sprintContracts` entries that have *settled* — before sprint 7 that count was the
+  literal `c.status === "passed"`, a word neither engine's settled-sprint writer produces
+  (`sprint_exit` and `runSprintCycle` both write `"completed"`), so the count was
+  structurally zero for every run and `verdictFrom`'s downgrade branches — a declared
+  `failed` softening to `partial` when work had landed, a declared `success` with recorded
+  failures downgrading only as far as `partial` rather than always `failed`, and the
+  fallback `success`/`partial` outcomes when no verdict was declared at all — were
+  unreachable in production. Sprint 7 migrated the comparison to
+  `isSettledContractStatus(c.status)` (`src/contracts/sprint-contract.ts`), the same
+  predicate `state/history.ts`'s "Passed" row and `pipeline.ts`'s completed/failed split
+  already use — a **strict widening**: every contract the literal counted is still counted,
+  `"completed"` now joins it, and the count can only move toward a verdict of *less*
+  severity, never more. `src/pge/runtime/commit.ts:535`'s completed/failed split moved the
+  same way, in the same sprint, from `c.status === "passed"` to
+  `isSettledContractStatus(c.status) || succeededBranches.has(c.contractId)` — a fallback
+  that only matters when a `"completed"` contract has no `branchStatus` row at all, since
+  `sprint_exit` writes both in the same update for every run that reaches it. Verified by
+  execution, not by reading: `src/pge/runtime/__tests__/partial-failure.test.ts` (sc-7-2)
+  drives a run to a declared `"failed"` terminal with two branches settled `"completed"`
+  (the production word, via a `handlerOverrides` seam rather than the fixture's own
+  `"passed"`-writing body) and asserts the reported verdict is `"partial"` — a test proven,
+  in a disposable worktree, to fail against the pre-migration counter with `"failed"`
+  received. Both sites' entries are gone from
+  `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist, which now fails in either
+  direction if the code and the allowlist disagree. The 44-case committed `.bober/golden/`
+  dataset was re-captured and its diff is **empty**: `verdict` is not one of
+  `CONFORMANCE_FIELDS` (`src/orchestrator/workflow/types.ts`) and `PgeEngine.run` never
+  reads it (`src/pge/engine/pge-engine.ts`), so no committed golden artifact carries it —
+  real in-memory verdict movement and zero golden-dataset movement are both true at once, for
+  different reasons. One committed artifact OUTSIDE `.bober/golden/` does carry `verdict` —
+  `.bober/topology/measurements/real-workload.json`
+  (`src/pge/engine/real-workload.test.ts`), which reads the interpreter's own
+  `GraphRunResult.verdict` directly — and it moved from `"failed"` to `"partial"`, re-captured
+  in the same sprint: all 14 dispatched branches settle `"succeeded"`, and the only recorded
+  failure is the already-documented `commit` `FailClosed` refusal, so `"partial"` is the more
+  accurate report of a run whose work landed but whose commit was gated, not a regression.
 
 ### The decision
 
@@ -1622,18 +1629,25 @@ them this spec's to do (`nonGoals`):**
    was explicitly this spec's earlier sprints' `nonGoals`/`outOfScope[2]`, and it is not this
    record's to perform.
 
-**Two carried-forward facts, unchanged since sprint 5, worth restating here because a
-closing record is where a reader looks for them.** `verdictFrom`
+**One carried-forward fact from sprint 5/6 is now CLOSED, not merely unchanged — see the
+sprint 7 bullet above.** An earlier version of this paragraph read: *"`verdictFrom`
 (`src/pge/runtime/interpreter.ts:728`) is now structurally dead for BOTH engines: no writer
 anywhere produces the literal `"passed"` for a settled sprint any more, so its counter is
-permanently zero and its downgrade paths are unreachable; every affected transition moves
-toward a MORE severe verdict, never a less severe one, so the direction is conservative
-(allowlisted at `src/contracts/status-vocabulary.invariant.test.ts:205-208`). And
+permanently zero and its downgrade paths are unreachable ... (allowlisted at
+`src/contracts/status-vocabulary.invariant.test.ts:205-208`)."* **That is no longer true.**
+`spec-20260814-pge-full-convergence` sprint 7 migrated the counter (now
+`src/pge/runtime/interpreter.ts:734`) to `isSettledContractStatus`, its downgrade paths are
+reachable again (proven by execution, sc-7-2), and the cited allowlist entry no longer
+exists — the two lines that section used to name are gone from ALLOWLIST entirely.
+
+The other carried-forward fact remains true and unchanged.
 `src/orchestrator/workflow/flusher.ts:76` decides the completed/failed split against a bare
 local variable rather than the shared predicate, invisible to the sc-1-4 source scan by
 construction (it keys on the `.status` member-access spelling); the ternary above it bounds
-the value today, so this is safe, not silently wrong — recorded, not fixed, because fixing
-it changes nothing sc-6 was scoped to change.
+the value today (only `"completed"`, `"needs-rework"` or `"failed"` are possible, never
+`"passed"`), so this is safe, not silently wrong — recorded, not fixed, because fixing it is
+outside sprint 7's `estimatedFiles` and changes nothing its own success criteria were scoped
+to change.
 
 **A recurring hazard this spec's own history demonstrates, worth naming rather than
 repeating quietly a sixth time:** sprints 3, 4 and 5 each had to correct a stale `path:line`

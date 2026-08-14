@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import type { BoberConfig } from "../../config/schema.js";
 import type { PlanSpec } from "../../contracts/spec.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
+import { isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import { finalizePipelineRun } from "../../orchestrator/finalize.js";
 import type { PipelineResult } from "../../orchestrator/pipeline.js";
 import { saveContract, saveSpec } from "../../state/index.js";
@@ -499,34 +500,29 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
         };
       }
 
-      // ── The split, and why the CONTRACT STATUS alone still cannot decide it ──
+      // ── The split, and why CONTRACT STATUS ALONE still cannot decide it ──
       //
-      // `runTsPipeline` used to split on `status === "passed"`, the same literal as below —
-      // as of sprint 5 of spec-20260812-terminal-vocabulary it splits on
-      // `isSettledContractStatus(result.contract.status)` instead (`pipeline.ts:1052`), and
-      // `runSprintCycle` no longer WRITES `"passed"` at all: it writes `"completed"`
-      // (`pipeline.ts:589`), the identical word `sprint_review` has always written. So
-      // `c.status === "passed"` below is no longer merely insufficient for a GRAPH run — it
-      // is now a comparison against a word NEITHER engine's settled-sprint writer produces,
-      // for any run, imperative or graph. (`appendById` resolving a duplicate `contractId` by
-      // RANK rather than canonical order — sprint 4, `registry/reducers.ts`, `rankIsGreater`
-      // — is the separate, already-fixed reason the settled copy reaches this channel at all;
-      // `sprint-evaluate.test.ts` pins that.) Migrating this comparison to
-      // `isSettledContractStatus` would change which contracts land in `completedSprints`
-      // for a GRAPH run specifically, which moves golden cases and is exactly what sc-5-4's
-      // stop condition (spec-20260812-terminal-vocabulary sprint 5) forbids — so this
-      // comparison stays a live, documented, deliberately-deferred defect rather than a
-      // migrated reader.
+      // sprint 7 of spec-20260814-pge-full-convergence migrated this comparison from the
+      // literal `c.status === "passed"` to `isSettledContractStatus(c.status)` — the same
+      // reading `pipeline.ts:1091` and `state/history.ts`'s "Passed" row use. This is a
+      // STRICT WIDENING, not a behavior change in kind: every contract the literal counted
+      // is still counted (`isSettledContractStatus` includes `"passed"`), and `"completed"`
+      // — the word both engines' settled-sprint writers actually produce (`sprint_exit` in
+      // sprint-review.ts, `runSprintCycle` in pipeline.ts) — now joins it.
       //
-      // The settled outcome is therefore still read from the channel that unambiguously
-      // distinguishes PASS from FAIL today: `branchStatus`, keyed by `contractId`, carrying
-      // an explicit `attempts` discriminator, with `sprint_exit` as its only terminal writer.
-      // Without this, a graph run in which every sprint passed still reported
-      // `completedSprints: []` and `success: false` — the engine contradicting its own
-      // trace, which is precisely the class of divergence the conformance harness exists to
-      // surface.
+      // Contract status still cannot decide the split ALONE, though, which is why this
+      // stays an OR with `succeededBranches` rather than a bare predicate: `branchStatus`,
+      // keyed by `contractId` with an explicit `attempts` discriminator and `sprint_exit`
+      // as its only terminal writer, is what unambiguously distinguishes PASS from FAIL for
+      // a GRAPH run — `sprint_exit` writes a `succeeded` branch row and a settled contract
+      // status in the SAME update, so for every run in which it ran, the branch arm already
+      // catches everything the status arm newly catches. The widened predicate only matters
+      // as a FALLBACK: a `"completed"` contract with no `branchStatus` row at all (a
+      // channel the imperative engine never populates) now correctly lands in
+      // `completedSprints` instead of `failedSprints`, matching `pipeline.ts:1091`'s own
+      // rule for the identical case.
       //
-      // A branch that is `succeeded` is the same fact as a contract that is `passed`; a
+      // A branch that is `succeeded` is the same fact as a contract that has settled; a
       // branch in any other state, or no branch at all, leaves the contract's own status to
       // decide. Nothing here invents a pass: an absent `branchStatus` reduces this to the
       // imperative engine's rule exactly.
@@ -536,7 +532,7 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
           .map(([branchKey]) => branchKey),
       );
       const passed = (c: SprintContract): boolean =>
-        c.status === "passed" || succeededBranches.has(c.contractId);
+        isSettledContractStatus(c.status) || succeededBranches.has(c.contractId);
       const completedSprints = state.sprintContracts.filter((c) => passed(c));
       const failedSprints = state.sprintContracts.filter((c) => !passed(c));
 

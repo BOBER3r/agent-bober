@@ -30,16 +30,16 @@ import { describe, it, expect } from "vitest";
  * sprint's five named readers (src/mcp/tools/sprint.ts,
  * src/mcp/tools/eval.ts, src/cli/commands/sprint.ts,
  * src/cli/commands/eval.ts, src/state/history.ts's "Passed" row) and
- * outside its `estimatedFiles`: five PGE runtime/node files (originally six
- * entries including orchestrator/pipeline.ts:1052, which sprint 5 of
- * spec-20260812-terminal-vocabulary migrated to `isSettledContractStatus`
- * alongside the write it was reading — see the "six migrated readers" test
- * below). The contract's own description promises "no writer changes here,
- * so no conformance field moves" for this sprint, and migrating the
- * remaining PGE files would touch machinery shared with sprint 6
- * (commit.ts, sprint-review.ts) and the imperative/graph conformance
- * harness. They are allowlisted WITH A REASON per entry, not silently
- * skipped — see ALLOWLIST.
+ * outside its `estimatedFiles`: three PGE NODE-body files (originally six
+ * entries total across two sprints — orchestrator/pipeline.ts:1052, migrated
+ * by sprint 5 of spec-20260812-terminal-vocabulary, and PGE RUNTIME's own
+ * interpreter.ts:728 / commit.ts:539, migrated by sprint 7 of
+ * spec-20260814-pge-full-convergence — each alongside the write or split it
+ * was reading, in the same step — see the "eight migrated readers" test
+ * below). What remains, sprint-curate.ts / sprint-generate.ts /
+ * documenter.ts, are PGE NODE bodies outside every migrating sprint's
+ * `estimatedFiles` so far. They are allowlisted WITH A REASON per entry, not
+ * silently skipped — see ALLOWLIST.
  *
  * ── Two sites this scan's PATTERN cannot see, by design ──
  * `src/orchestrator/workflow/flusher.ts:76` (`contractStatus === "passed"`)
@@ -47,7 +47,7 @@ import { describe, it, expect } from "vitest";
  * from a WRITE, not a `.status` member access — writer-adjacent, and
  * excluded because OFFENDER_PATTERN is keyed on the `.status` accessor
  * spelling every genuine reader in this repo uses.
- * `src/pge/nodes/sprint-review.ts:208`
+ * `src/pge/nodes/sprint-review.ts:290`
  * (`status: outcome.settled === "succeeded" ? "completed" : "failed"`) is a
  * WRITER assigning a new object's `status` field — nonGoal 1 forbids
  * touching writers this sprint — and its only `===` comparison is against
@@ -188,29 +188,18 @@ const ALLOWLIST: AllowedOffender[] = [
   },
 
   // ── §3: genuine contract-terminal-shaped reads, outside the five named readers ──
-  // and outside estimatedFiles. The contract's description promises "no writer changes
-  // here, so no conformance field moves" for this sprint; migrating these touches
-  // src/pge/{runtime,nodes}/** — machinery shared with sprint 6 (commit.ts,
-  // sprint-review.ts) and the imperative/graph conformance harness. Deferred, not
-  // missed — flagged by file:line for whichever future sprint migrates them.
+  // and outside estimatedFiles. Three PGE NODE bodies remain here — the two PGE RUNTIME
+  // sites that used to sit in this section are gone: sprint 7 of
+  // spec-20260814-pge-full-convergence migrated both `src/pge/runtime/interpreter.ts:728`
+  // (`verdictFrom`'s settled-contract counter) and `src/pge/runtime/commit.ts:539` (the
+  // completed/failed split) to `isSettledContractStatus`, in the same step, so neither
+  // entry matches OFFENDER_PATTERN anymore. Both joined the "migrated readers" test below.
   //
-  // src/orchestrator/pipeline.ts:1052 USED to be allowlisted here with the same
-  // reasoning ("deferred to keep this sprint's diff to reader convergence only"). Sprint
-  // 5 of spec-20260812-terminal-vocabulary migrated it to `isSettledContractStatus`
-  // in the SAME step it flipped the write at :589 (deferring the reader while
-  // changing the writer would have landed every passing sprint in `failedSprints` —
-  // see that sprint's briefing §1), so the entry is gone and pipeline.ts joined the
-  // "six migrated readers" test below.
-  {
-    location: "src/pge/runtime/interpreter.ts:728",
-    reason:
-      "Graph-engine verdict computation over the sprintContracts channel; PGE writes 'completed' not 'passed', so this counter is a live instance of the same bug class this sprint fixes elsewhere — but migrating it changes PGE runtime verdict math, outside estimatedFiles and this sprint's 'no conformance field moves' promise.",
-  },
-  {
-    location: "src/pge/runtime/commit.ts:539",
-    reason:
-      "Has its own documented rationale at :502-519 for why contract status alone still cannot decide the completed/failed split. Sprint 4 of spec-20260812-terminal-vocabulary made the channel join rank-aware; sprint 5 changed the WRITER too — runSprintCycle now writes 'completed', not 'passed' — so this literal now compares against a word NEITHER engine's settled-sprint writer produces, for any run. Migrating it would change GRAPH completedSprints/failedSprints math and move golden cases, which sc-5-4's stop condition forbids — read the header before ever touching this line.",
-  },
+  // The three that remain (src/pge/nodes/sprint-curate.ts, sprint-generate.ts,
+  // documenter.ts) are PGE NODE bodies, not runtime — outside sprint 7's estimatedFiles —
+  // and stay deferred for the same reason pipeline.ts:1052 used to be here before sprint 5
+  // of spec-20260812-terminal-vocabulary migrated it: flagged by file:line for whichever
+  // future sprint migrates them, not missed.
   {
     location: "src/pge/nodes/sprint-curate.ts:271",
     reason:
@@ -276,13 +265,17 @@ describe("no production module outside the predicate compares a contract status 
     expect(unexplained).toEqual([]);
   });
 
-  it("the six migrated readers no longer contain the literal comparison", async () => {
+  it("the eight migrated readers no longer contain the literal comparison", async () => {
     // Positive evidence the migration happened, beyond "the scan found nothing new" —
-    // these six specific lines used to match OFFENDER_PATTERN and now must not. The sixth,
-    // src/orchestrator/pipeline.ts, joined the list at sprint 5 of
+    // these eight specific lines used to match OFFENDER_PATTERN and now must not. The
+    // sixth, src/orchestrator/pipeline.ts, joined the list at sprint 5 of
     // spec-20260812-terminal-vocabulary, when its :1052 split (`result.contract.status
     // === "passed"`) was migrated to `isSettledContractStatus` in the same step as the
-    // write it reads (:589) flipped from "passed" to "completed".
+    // write it reads (:589) flipped from "passed" to "completed". The seventh and eighth,
+    // src/pge/runtime/interpreter.ts and src/pge/runtime/commit.ts, joined at sprint 7 of
+    // spec-20260814-pge-full-convergence, migrating verdictFrom's settled-contract counter
+    // (:728, formerly allowlisted) and the completed/failed split (:539, formerly
+    // allowlisted) in the same step.
     const migrated = [
       "src/mcp/tools/sprint.ts",
       "src/mcp/tools/eval.ts",
@@ -290,6 +283,8 @@ describe("no production module outside the predicate compares a contract status 
       "src/cli/commands/eval.ts",
       "src/orchestrator/workflow/resume-cursor.ts",
       "src/orchestrator/pipeline.ts",
+      "src/pge/runtime/interpreter.ts",
+      "src/pge/runtime/commit.ts",
     ];
     for (const rel of migrated) {
       const content = await readFile(join(REPO_ROOT, rel), "utf-8");
