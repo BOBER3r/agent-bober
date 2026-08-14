@@ -857,10 +857,13 @@ crosses 80 % at **n = 11**.
 `pipelineResult[0].success` — a field every case's expectation carries exactly one of
 (`pipelineResult` is a `SCALAR_ARTIFACT_FIELDS` entry and `PipelineResult.success` is required),
 where the previous version mutated `contracts[0].title`, a field one committed case
-(`replay-plan-clarify-rounds-exhausted`) does not have at all. At the dataset's current 6 replay
-cases this still drifts exactly 2 of them — the same failure count the fixed-count version
-produced — so the fix changed nothing about what today's run catches, only whether a future
-count keeps catching it.
+(`replay-plan-clarify-rounds-exhausted`) does not have at all. At the 6 replay cases the dataset
+held then, this drifted exactly 2 of them — the same failure count the fixed-count version
+produced — so the fix changed nothing about what that run caught, only whether a future count
+keeps catching it. At the current **7** (sprint 2 of `spec-20260814-pge-full-convergence` added
+`replay-full-run-commit-approved`) the fraction still drifts exactly 2, indices 2 and 5 — a
+different pair of cases, since the new caseId sorts first, but the same count. The comment at
+`executor.test.ts:363` still says "current 6".
 
 **The general rule, for anyone adding a case or a control:** a control whose failure injection
 does not scale with `replayCases.length` has a case count at which it silently stops being a
