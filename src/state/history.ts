@@ -144,6 +144,25 @@ const HOME_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
+ * Remove credentials, email addresses and home-directory usernames from a
+ * string, leaving its length and everything else intact.
+ *
+ * Split out from {@link redactHistoryString} because the two persisted
+ * artifacts need different halves of the treatment. `history.jsonl` is a
+ * machine-read log with no bound on what a writer may append, so it takes
+ * scrub AND cap. `progress.md` is a HUMAN-read status document whose plan
+ * summary is the whole point of the file — capping it there would destroy the
+ * artifact to protect it. Scrubbing is the part that is right for both.
+ */
+export function scrubSensitive(value: string): string {
+  let out = value;
+  for (const pattern of CREDENTIAL_PATTERNS) out = out.replace(pattern, CREDENTIAL_PLACEHOLDER);
+  out = out.replace(EMAIL_PATTERN, CREDENTIAL_PLACEHOLDER);
+  for (const pattern of HOME_PATTERNS) out = out.replace(pattern, HOME_PLACEHOLDER);
+  return out;
+}
+
+/**
  * Scrub, then bound, a single string.
  *
  * Order matters: scrubbing runs BEFORE truncation so a secret straddling the
@@ -155,10 +174,7 @@ const HOME_PATTERNS: readonly RegExp[] = [
  * a changed payload without persisting the body.
  */
 export function redactHistoryString(value: string): string {
-  let out = value;
-  for (const pattern of CREDENTIAL_PATTERNS) out = out.replace(pattern, CREDENTIAL_PLACEHOLDER);
-  out = out.replace(EMAIL_PATTERN, CREDENTIAL_PLACEHOLDER);
-  for (const pattern of HOME_PATTERNS) out = out.replace(pattern, HOME_PLACEHOLDER);
+  const out = scrubSensitive(value);
 
   if (out.length <= MAX_HISTORY_STRING_LENGTH) return out;
 
@@ -274,6 +290,11 @@ export async function loadRecentHistory(
 
 /**
  * Update the human-readable progress.md file with current state.
+ *
+ * Every caller-supplied string it embeds — `spec.title`, `spec.description`
+ * and each `contract.title` — goes through {@link scrubSensitive} first. This
+ * is a full-file `writeFile`, and in a user project the result may well be
+ * committed to a remote we do not control.
  */
 export async function updateProgress(
   projectRoot: string,
@@ -294,9 +315,13 @@ export async function updateProgress(
   if (spec) {
     lines.push("## Plan");
     lines.push("");
-    lines.push(`**${spec.title}**`);
+    // `spec.description` is the planner's prose, derived straight from the
+    // operator's feature request — the same provenance as the `userPrompt` the
+    // history log carries. Scrubbed, NOT capped: this document exists to be
+    // read, and a 200-char plan summary would be useless.
+    lines.push(`**${scrubSensitive(spec.title)}**`);
     lines.push("");
-    lines.push(spec.description);
+    lines.push(scrubSensitive(spec.description));
     lines.push("");
     lines.push(`- Features: ${spec.features.length}`);
     lines.push(`- Tech stack: ${spec.techStack.join(", ") || "not specified"}`);
@@ -345,7 +370,7 @@ export async function updateProgress(
     for (const contract of contracts) {
       const statusIcon = getStatusIcon(contract.status);
       lines.push(
-        `- ${statusIcon} **${contract.title}** (${contract.contractId})`,
+        `- ${statusIcon} **${scrubSensitive(contract.title)}** (${contract.contractId})`,
       );
       lines.push(`  - Status: ${contract.status}`);
 

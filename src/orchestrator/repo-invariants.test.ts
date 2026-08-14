@@ -205,9 +205,9 @@ describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
 });
 
 
-// ── The run record is never published ────────────────────────────────
+// ── The two persisted free-text artifacts ────────────────────────────
 
-describe(".bober/history.jsonl is untracked and stays that way", () => {
+describe("the two persisted free-text artifacts: history.jsonl unpublished, progress.md scrubbed", () => {
   /**
    * WHY THIS IS AN INVARIANT AND NOT A ONE-OFF CLEANUP.
    *
@@ -259,6 +259,47 @@ describe(".bober/history.jsonl is untracked and stays that way", () => {
     const tracked = ".bober/topology/coding.json";
     expect(gitSucceeds(["ls-files", "--error-unmatch", tracked])).toBe(true);
     expect(gitSucceeds(["check-ignore", "-q", tracked])).toBe(false);
+  });
+
+  /**
+   * The DELIBERATE asymmetry with the log, recorded so neither half drifts.
+   *
+   * `.bober/progress.md` stays TRACKED. Unlike the log it is a human-readable
+   * document the skill-driven pipeline curates by documented contract (17 sites
+   * across .claude/commands/*.md and .claude/agents/bober-planner.md, whose
+   * header template lives at .claude/commands/bober-plan.md:52), and its
+   * committed content carries no credentials, emails or home paths.
+   *
+   * What it DOES embed is `spec.description` — planner prose derived from the
+   * operator's feature request, the same provenance as the log's `userPrompt`.
+   * That is handled by scrubbing at the writer, not by unpublishing the file.
+   */
+  it("keeps progress.md tracked and unignored — the asymmetry is intentional", () => {
+    expect(gitSucceeds(["ls-files", "--error-unmatch", ".bober/progress.md"])).toBe(true);
+    expect(gitSucceeds(["check-ignore", "-q", ".bober/progress.md"])).toBe(false);
+  });
+
+  it("updateProgress scrubs every free-text string it embeds", async () => {
+    // Source scan, because the failure mode is a NEW interpolation added later:
+    // the behaviour tests only cover the three sites that exist today.
+    //
+    // Keyed on the property NAMES that carry prose (`.title` / `.description`)
+    // rather than on the specific fields, so a future `feature.description`
+    // pushed into the document is caught too. Numeric and id-shaped reads
+    // (`spec.features.length`, `contract.contractId`, `contract.status`) do not
+    // match and correctly need no scrubbing.
+    const src = await readFile(join(SRC_ROOT, "state", "history.ts"), "utf-8");
+    const body = src.slice(src.indexOf("export async function updateProgress"));
+    const embedded = body
+      .split("\n")
+      .filter((l) => !isCommentLine(l))
+      // Not keyed on `lines.push(` — the contract.title site wraps, leaving the
+      // call and the interpolation on different lines.
+      .filter((l) => /\.(title|description)\b/.test(l));
+
+    expect(embedded.length, "the scan found the free-text sites").toBeGreaterThanOrEqual(3);
+    const unscrubbed = embedded.filter((l) => !l.includes("scrubSensitive"));
+    expect(unscrubbed, "every prose string in progress.md must be scrubbed").toEqual([]);
   });
 
   it("appendHistory routes every persisted line through the redactor", async () => {

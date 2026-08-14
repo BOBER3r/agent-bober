@@ -22,8 +22,12 @@ import {
   appendHistory,
   redactHistoryEntry,
   redactHistoryString,
+  scrubSensitive,
+  updateProgress,
 } from "./history.js";
 import type { HistoryEntry } from "./history.js";
+import type { PlanSpec } from "../contracts/spec.js";
+import type { SprintContract } from "../contracts/sprint-contract.js";
 
 let root = "";
 
@@ -216,5 +220,119 @@ describe("appendHistory persists only redacted content", () => {
     await appendHistory(root, entry({ userPrompt: "z".repeat(400) }));
     const parsed: unknown = JSON.parse((await persistedLine()).trim());
     expect((parsed as HistoryEntry).event).toBe("pipeline-started");
+  });
+});
+
+// ── progress.md ──────────────────────────────────────────────────────
+//
+// `updateProgress` is the other persisted free-text artifact, and it embeds
+// three caller-supplied strings: `spec.title`, `spec.description` and every
+// `contract.title`. `spec.description` is planner prose derived from the
+// operator's feature request — the same provenance as the log's `userPrompt`.
+//
+// It takes the SCRUB half of the treatment and deliberately not the CAP: the
+// file is a human-readable status document, and a 200-char plan summary would
+// destroy the artifact in order to protect it.
+
+const NOW = "2026-08-14T00:00:00.000Z";
+
+function specWith(description: string, title = "A Plan"): PlanSpec {
+  return {
+    specId: "spec-1",
+    version: 1,
+    title,
+    description,
+    status: "in-progress",
+    mode: "brownfield",
+    features: [],
+    assumptions: [],
+    outOfScope: [],
+    clarificationQuestions: [],
+    resolvedClarifications: [],
+    techStack: ["TypeScript"],
+    nonFunctionalRequirements: [],
+    constraints: [],
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function contractWith(title: string): SprintContract {
+  return {
+    contractId: "sprint-1",
+    specId: "spec-1",
+    sprintNumber: 1,
+    title,
+    description: "d",
+    status: "completed",
+    dependsOn: [],
+    features: [],
+    successCriteria: [],
+    nonGoals: [],
+    stopConditions: [],
+    definitionOfDone: "done",
+    assumptions: [],
+    outOfScope: [],
+    ambiguityScore: 1,
+    estimatedFiles: [],
+    estimatedDuration: "small",
+    iterationHistory: [],
+    lastEvalId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+describe("scrubSensitive", () => {
+  it("removes secrets without changing anything else", () => {
+    expect(scrubSensitive("ran as /Users/bober4ik/repo")).toBe(`ran as ${HOME_PLACEHOLDER}/repo`);
+  });
+
+  it("leaves a long string at its original length", () => {
+    // The property that distinguishes it from redactHistoryString.
+    const long = "plan prose ".repeat(80);
+    expect(scrubSensitive(long)).toBe(long);
+    expect(scrubSensitive(long).length).toBeGreaterThan(MAX_HISTORY_STRING_LENGTH);
+  });
+});
+
+describe("updateProgress scrubs the strings it embeds", () => {
+  async function progress(): Promise<string> {
+    return await readFile(join(root, ".bober", "progress.md"), "utf-8");
+  }
+
+  it("removes a home-path username from the plan description", async () => {
+    await updateProgress(root, [], specWith("built under /Users/bober4ik/agent-bober today"));
+    const text = await progress();
+    expect(text).not.toContain("bober4ik");
+    expect(text).toContain(HOME_PLACEHOLDER);
+  });
+
+  it("removes a credential from the plan description", async () => {
+    await updateProgress(root, [], specWith(`deploy key ghp_${"A".repeat(36)} rotated`));
+    const text = await progress();
+    expect(text).not.toContain("ghp_");
+    expect(text).toContain(CREDENTIAL_PLACEHOLDER);
+  });
+
+  it("removes a credential from the plan title", async () => {
+    await updateProgress(root, [], specWith("body", `Plan ghp_${"B".repeat(36)}`));
+    expect(await progress()).not.toContain("ghp_");
+  });
+
+  it("removes a home-path username from a sprint title", async () => {
+    await updateProgress(root, [contractWith("fix /Users/bober4ik/x.ts")], specWith("body"));
+    const text = await progress();
+    expect(text).not.toContain("bober4ik");
+    expect(text).toContain(HOME_PLACEHOLDER);
+  });
+
+  it("does NOT truncate the plan description — the document exists to be read", async () => {
+    // Guards the deliberate asymmetry with the history log. If someone "unifies"
+    // the two by routing progress.md through redactHistoryString, the plan
+    // summary silently becomes a 200-char stub and this fails.
+    const long = "This plan covers a great deal of ground. ".repeat(12); // ~480 chars
+    await updateProgress(root, [], specWith(long));
+    expect(await progress()).toContain(long);
   });
 });
