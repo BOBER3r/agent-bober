@@ -1188,9 +1188,12 @@ serves both.
   `contracts` CLOSED at sprint 6 (see "The decision" below); neither is one of them any
   longer. `pipelineResult` no longer diverges through `contracts` (its contract-container
   portion closed alongside `contracts`) — it stays pinned for a separate, independent
-  reason found at sprint 6: `errors`, populated only on the graph side. The comparison was
+  reason found at sprint 6: `errors`, populated only on the graph side. **Both remaining
+  fields are ARCHITECTURAL rather than unbuilt, and they share one root cause: the graph has
+  a checkpoint-gated commit that the imperative engine lacks.** Every divergence that was a
+  missing writer is now closed; what is left cannot be closed by building. The comparison was
   non-vacuous: all conformance fields were present. The pins live in
-  `src/orchestrator/workflow/conformance.engines.test.ts`.
+  `src/orchestrator/workflow/conformance.engines.test.ts` (`:408-412`).
 - The most consequential divergence: **under the shipped autopilot configuration a PGE run
   does not commit.** The git-effect node `commit` is refused `FAIL_CLOSED` because the
   autopilot gate mechanism is `noop` and a noop mechanism grants nothing. The run
@@ -1331,6 +1334,39 @@ serves both.
   imperative engine never produces (which would misreport its actual behaviour). Closing it
   — an equivalent checkpoint-gated commit step for the imperative engine, or joining `audits`
   as a permanently-accepted divergence — is a decision for a future sprint.
+
+  **The finding was confirmed independently by sprint 6's evaluator, from source, and it is
+  what turned `sc-6-3` into a `pass` under an AMENDED DISPOSITION rather than a retry**
+  (`.bober/eval-results/eval-sprint-spec-20260814-pge-full-convergence-6-1.json`,
+  `architecturalFinding`; the amendment is mirrored on the contract itself under
+  `amendedDisposition`). Three checks, each reproducible: `PipelineResult.errors` has
+  **exactly one write site repo-wide**, `PgeEngine.run`, and both it and its doc comment
+  PRE-DATE this sprint — this sprint's diff does not touch the `PipelineResult` interface at
+  all. The imperative engine's auto-commit (`src/orchestrator/pipeline.ts:449-462`) calls
+  `commitAll` **unconditionally** when `config.generator.autoCommit` is true, inside a
+  `try`/`catch` that only `logger.debug`s and continues — no HITL gate at any point — and
+  `finalizePipelineRun` requests the `end-of-pipeline` checkpoint AFTER the completion marker
+  and the history event are written (`src/orchestrator/finalize.ts:21`, "ORDER IS
+  LOAD-BEARING") without gating on its outcome. The graph instead routes its git effect
+  through an explicit `hitl_commit` gate (`src/pge/topology/coding.graph.ts:911-923`) into a
+  separate `commit` tool node (`:926-937`) whose own `doc` says it is *"reachable only behind
+  the approval gate, which is what makes the git effect blockable fail-closed."* Adding
+  `errors` to `VOLATILE_KEYS` would also violate that set's own documented bar: a key belongs
+  there only when two runs of the **same** engine over the same input would differ on it, and
+  `errors` differs **between** engines on the **same** input — precisely the class
+  `VOLATILE_KEYS` exists not to hide. **Why nobody saw this earlier:** the divergence was
+  MASKED, because `contracts`/`version` was diverging under the same `pipelineResult` field
+  name; isolating the container portion from the whole is what exposed it. Full record:
+  [`docs/sprints/sprint-spec-20260814-pge-full-convergence-6.md`](./sprints/sprint-spec-20260814-pge-full-convergence-6.md).
+
+  **The two remaining divergences share ONE root cause, and it is architectural: the graph has
+  a checkpoint-gated commit that the imperative engine lacks.** `audits` diverges because a
+  graph run records at most two of the imperative pipeline's eight checkpoint ids;
+  `pipelineResult` diverges because the graph's gated `commit` can be refused FAIL_CLOSED and
+  the imperative engine's ungated `commitAll` can never be. Neither is a missing writer — the
+  two divergences that WERE missing writers, `history` and `contracts`, are both closed
+  (sprints 4 and 6). See point 1 under "What a flip would still require" below for the
+  disposition this implies and for the decision that is recommended but NOT yet taken.
 - **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — now
   dead for BOTH engines, not narrower for one, as of `spec-20260812-terminal-vocabulary`
   sprint 5.** `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict
@@ -1389,8 +1425,8 @@ disposition**. It made the engine able to run a real workload at all and gave a 
 a channel to say so, but the divergence set at that spec's close was still exactly
 `history`, `audits`, `contracts`, `pipelineResult` at `equivalent: false` — none of the four
 was in its scope — so PGE remains opt-in and `TsPipelineEngine` remains the oracle.
-(`history` left that set later, at sprint 4 of `spec-20260814-pge-full-convergence`; the
-other three still diverge. Point 1 below is the current record.)
+(`history` left that set later, at sprint 4 of `spec-20260814-pge-full-convergence`, and
+`contracts` at sprint 6; the other two still diverge. Point 1 below is the current record.)
 
 **`spec-20260812-terminal-vocabulary` closed at its sprint 6 having NOT moved this
 disposition either — and its own description said it would.** That description read "closes
@@ -1401,30 +1437,37 @@ shrank.** What the spec's six sprints actually did was close two things one leve
 the field: the `pipelineResult` MECHANISM (sprint 4 — the channel reducer stopped keeping
 the seeded `"proposed"` copy of a settled contract), and the `contracts` STATUS DELTA
 (sprint 5 — both engines write `"completed"` for a settled sprint, pinned by asserting one
-engine's answer against the other's, `conformance.engines.test.ts:435-437`). Neither closure
+engine's answer against the other's, `conformance.engines.test.ts:642-644`). Neither closure
 removed a field from the pinned set: `pipelineResult` remains, because
 `PipelineResult.completedSprints`/`failedSprints` are containers of whole `SprintContract`
 objects, so its divergence REDUCES to `contracts`'s and cannot close independently of it
-(`conformance.engines.test.ts:435-444`); `contracts` remains, because three deltas still sit
+(`conformance.engines.test.ts:698-699`) — **that last clause was true of the CONTAINER
+portion only, and reading it as a statement about the whole field is the error sprint 6 of
+`spec-20260814-pge-full-convergence` inherited and corrected: `contracts` closed, the
+container portion closed with it, and `pipelineResult` stayed in the set on an `errors` delta
+that never depended on `contracts` at all**; `contracts` remains, because three deltas still sit
 inside it — `evaluatorFeedback`, `generatorNotes` (PGE has no writer for either anywhere in
 `src/pge/`) and `version` (deliberately excluded from the ten-key `VOLATILE_KEYS`,
 `conformance.ts:65-76`, because stripping it would hide a real difference rather than close
-one). (Two of those three deltas are CLOSED today: sprint 5 of
+one). (All three of those deltas are CLOSED today, and so is the field: sprint 5 of
 `spec-20260814-pge-full-convergence` built the missing `evaluatorFeedback`/`generatorNotes`
-writer, so `contracts` now carries `version` ALONE — see the disposition bullet above. The
-divergence SET still did not move: `contracts` and `pipelineResult` remain pinned.) This is exactly this sprint's own stop condition, applied to itself: *"The divergence
+writer, narrowing `contracts` to `version` ALONE, and sprint 6 built the imperative `version`
+writer — `contracts` has left the divergence set entirely. `pipelineResult` did NOT leave with
+it: its contract-container portion closed, and sprint 6 isolated a separate `errors` delta
+underneath the same field name — see the disposition bullets above.) This is exactly this sprint's own stop condition, applied to itself: *"The divergence
 set is not what this spec predicted — record what it actually is and why, rather than
 adjusting anything to match the prediction."* No test and no production source were changed
 to make "two closed" come true; `conformance.engines.test.ts`'s pinned array was the same
-four literals it was before sprint 1. (It holds THREE literals today, at
-`conformance.engines.test.ts:377-381` — `history` left it at sprint 4 of
-`spec-20260814-pge-full-convergence`, by building the missing writer, not by adjusting the
-pin.)
+four literals it was before sprint 1. (It holds TWO literals today — `audits` and
+`pipelineResult`, at `conformance.engines.test.ts:408-412`. `history` left it at sprint 4 of
+`spec-20260814-pge-full-convergence` and `contracts` at sprint 6, each by building the missing
+writer, never by adjusting the pin.)
 
 **What a flip would still require beyond everything this spec did — four things, none of
 them this spec's to do (`nonGoals`):**
 
-1. **`audits` is recommended for permanent acceptance; `history` CLOSED at sprint 4.** A
+1. **`audits` is recommended for permanent acceptance — and since sprint 6, so is
+   `pipelineResult.errors`, on the same ground; `history` CLOSED at sprint 4.** A
    prior version of this paragraph paired the two under one "no curator node" ground. **That
    ground was FALSE:** the topology always declared TWO `role: "curator"` nodes —
    `sprint_curate_explain` (`src/pge/topology/coding.graph.ts:576`) and `sprint_curate_mocks`
@@ -1505,6 +1548,20 @@ them this spec's to do (`nonGoals`):**
    Closing `audits` fully is nonGoal 3's territory anyway ("closing history or audits");
    permanent acceptance, now for a smaller and more precisely named remainder, is the
    disposition this record states.
+
+   **`pipelineResult.errors` is RECOMMENDED to join that same acceptance — recommended, not
+   yet decided.** Sprint 6 established that the last remaining `pipelineResult` delta is
+   architectural for the SAME reason `audits` is, and that the two share one root cause: *the
+   graph has a checkpoint-gated commit that the imperative engine lacks* (the bullet above in
+   "The evidence" carries the source-level account). Both sprint 6's generator and its
+   evaluator recommended, independently, that the field be joined to `audits`' acceptance
+   rather than left as open work, and the contract's `amendedDisposition.carryTo` names the
+   owner: **sprint 11**, the flip-bar sprint. **No ADR has been written or amended for it.**
+   `arch-20260814-pge-full-convergence-adr-1` decides the fan-out interrupt question and
+   nothing else; extending its acceptance to `pipelineResult.errors` is a decision someone
+   must take deliberately, in the same place `audits`' was taken, before this document may
+   state it as settled. Until then this paragraph records a recommendation with two named
+   backers and an unowned decision — which is exactly what it is.
 2. **Option B success semantics.** The term of art, defined at
    `spec-20260812-pge-real-workload-errors.json`'s `resolvedClarifications` D3: making
    `PipelineResult.success` false when a gated-effect node is refused FAIL_CLOSED, instead of
@@ -1540,19 +1597,30 @@ them this spec's to do (`nonGoals`):**
    node coverage rather than in the harness that measures engine equivalence.
 4. **An explicit re-specification of the bar itself.** The bar as written above —
    *"requires sustained green conformance across real runs"*, operationally `equivalent:
-   true` — is now UNSATISFIABLE BY DESIGN: `audits` alone (point 1) is recommended for
-   permanent acceptance, and that is sufficient by itself — one field that can never close
-   means `diffs` can never become empty. `history` (point 1) no longer needs anything — it
-   CLOSED at sprint 4. The other two (`contracts`, `pipelineResult`) are unbuilt, not
-   architecturally barred: sprint 5 of this spec added the PGE-node writer for
-   `evaluatorFeedback` and `generatorNotes` that no earlier sprint had, narrowing both to a
-   single remaining delta — the `version` field this harness deliberately keeps visible
-   (`VOLATILE_KEYS`, `conformance.ts:65-76`). `diffs` can therefore never become empty under
-   the bar's current wording regardless, so a flip is not "closer" for one divergence having
-   closed and two others having narrowed below the field level — the bar itself has to be
-   re-specified, on purpose, before "flip the default" is a live question again. Doing that
-   re-specification is explicitly this spec's `nonGoals`/`outOfScope[2]`, not this record's
-   to perform.
+   true` — is UNSATISFIABLE BY DESIGN, and **since sprint 6 it is unsatisfiable for BOTH
+   remaining fields, not one.** `audits` (point 1) is recommended for permanent acceptance,
+   and that alone was always sufficient — one field that can never close means `diffs` can
+   never become empty. What changed at sprint 6 is the character of the remainder. An earlier
+   version of this paragraph read: *"The other two (`contracts`, `pipelineResult`) are
+   unbuilt, not architecturally barred."* **That is no longer true, and the two halves of it
+   failed for different reasons.** `contracts` was indeed unbuilt, and it is now **CLOSED** —
+   sprint 5 built the `evaluatorFeedback`/`generatorNotes` writer and sprint 6 built the
+   imperative `version` writer, so it has left the divergence set entirely.
+   `pipelineResult` was never merely unbuilt: it stayed in the set on its own
+   `errors` delta, which sprint 6 isolated for the first time and which has **no honest
+   imperative write site**, and it is therefore ARCHITECTURAL in exactly the sense `audits`
+   is. **The set is `['audits', 'pipelineResult']`, both entries architectural, both tracing
+   to one root cause — the graph has a checkpoint-gated commit the imperative engine lacks.**
+   `diffs` can never become empty under the bar's current wording, and now no amount of
+   further building would make it so: the bar itself has to be re-specified, on purpose,
+   before "flip the default" is a live question again. **What this implies for
+   `spec-20260814-pge-full-convergence`'s own sprint 11:** its `sc-11-1` asks the harness to
+   report `equivalent: true` on a real run, and that criterion cannot be met as written. The
+   satisfiable part of that sprint is its `sc-11-3`/`sc-11-5` — rewrite this disposition,
+   state plainly which fields did not converge and why, and re-specify the bar around a
+   named, accepted divergence set rather than around emptiness. Doing that re-specification
+   was explicitly this spec's earlier sprints' `nonGoals`/`outOfScope[2]`, and it is not this
+   record's to perform.
 
 **Two carried-forward facts, unchanged since sprint 5, worth restating here because a
 closing record is where a reader looks for them.** `verdictFrom`
@@ -1709,8 +1777,9 @@ ADR left open: `gate_plan_out` now carries
   message row.
 - **`audits` STAYS in the conformance divergence set** pinned in
   `src/orchestrator/workflow/conformance.engines.test.ts` (unchanged by this entry — four
-  fields at 1.5.0; sprint 4 of the same spec has since dropped `history` from that pin,
-  leaving three, and `audits` is unaffected either way).
+  fields at 1.5.0; sprint 4 of the same spec has since dropped `history` from that pin and
+  sprint 6 dropped `contracts`, leaving two — `audits` and `pipelineResult` — and `audits` is
+  unaffected either way).
   Declaring one more id narrows what the divergence records — the graph now records at
   most two distinct checkpoint ids per run (`post-sprint-contract`, `end-of-pipeline`)
   instead of one, against the imperative engine's eight — but the SET still diverges, so

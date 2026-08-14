@@ -213,6 +213,11 @@ flag afterward reproduces an identical (empty) diff — byte-stable. Golden gate
   What narrowed is the field CONTENT inside two of those three entries: `contracts` from three
   deltas to one (`version`), and `pipelineResult` identically, because it is a container for
   `SprintContract`. Do not read this record as "a divergence closed".
+  *(Update — sprint 6: it shrank to `["audits", "pipelineResult"]`. `contracts` CLOSED when the
+  imperative engine gained its own `version` writer. The "`pipelineResult` narrowed identically
+  because it is a container" claim above held for the CONTAINER PORTION only: that portion did
+  close with `contracts`, but sprint 6 isolated a second, independent `errors` delta under the
+  same field name, which is architectural rather than unbuilt.)*
 - **FAILED iteration 1 on sc-5-3, passed iteration 2.** Iteration 1 (`b03463b`, `412d967`,
   `ff7f8e1`, `59226b8`, `080967b`) shipped the whole implementation and five of six criteria
   verified clean; sc-5-3's proof was inert under mutation (see the sc-5-3 section above).

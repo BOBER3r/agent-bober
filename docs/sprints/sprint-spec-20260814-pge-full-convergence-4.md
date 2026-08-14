@@ -14,7 +14,10 @@ hits — a MISSING WRITER, not a missing place for one, since the topology alrea
 This sprint gives the graph engine that writer and wires it into nine node bodies, at the
 node's real lifecycle boundary. A real run of both engines now produces the IDENTICAL ordered
 event list, and `history` leaves the conformance harness's divergence set: three fields remain
-(`audits`, `contracts`, `pipelineResult`), down from four.
+(`audits`, `contracts`, `pipelineResult`), down from four. *(Update — sprint 6 closed
+`contracts` as well; the set is `audits` and `pipelineResult`, and both are architectural
+rather than unbuilt. See
+[`sprint-spec-20260814-pge-full-convergence-6.md`](./sprint-spec-20260814-pge-full-convergence-6.md).)*
 
 ## Sc-4-1: the mapping, recorded before any node was touched
 

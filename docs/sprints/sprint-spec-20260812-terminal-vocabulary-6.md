@@ -29,6 +29,17 @@ ordered event list, so `history` left the conformance divergence set — three f
 above as this record's state between the correction and that closure; `audits`' disposition
 is untouched by both.
 
+**Update (2026-08-14, sprint 6 of the same spec): `contracts` CLOSED too — the set is TWO
+fields, and neither of them is unbuilt.** `runSprintCycle` gained its own decisive-round
+counter (`settledAttempts`) and writes `version` at every settle site, so the two engines'
+settled contracts now compare canonically-equal with nothing stripped. `pipelineResult` did
+NOT leave with it: the same sprint isolated an independent `errors` delta underneath the field
+name — one write site repo-wide, `PgeEngine.run`, and no honest imperative equivalent, because
+the imperative engine's `commitAll` is unconditional and ungated while the graph's `commit` is
+reachable only behind `hitl_commit`. `audits` and `pipelineResult` are therefore both
+ARCHITECTURAL, sharing one root cause: the graph has a checkpoint-gated commit the imperative
+engine lacks.
+
 ## What this sprint added
 
 Nothing that runs. This is the spec's docs-only closing sprint: no production `.ts` file

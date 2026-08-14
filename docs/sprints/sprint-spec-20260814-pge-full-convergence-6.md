@@ -2,6 +2,16 @@
 
 **Contract:** sprint-spec-20260814-pge-full-convergence-6  ·  **Spec:** spec-20260814-pge-full-convergence  ·  **Completed:** 2026-08-14
 
+**Evaluation:** PASSED at iteration 1, **6 of 6 required criteria** — `sc-6-3` by an **AMENDED
+DISPOSITION**, not by the literal wording of the criterion
+(`.bober/eval-results/eval-sprint-spec-20260814-pge-full-convergence-6-1.json`; the amendment is
+recorded on the contract itself under `amendedDisposition`). The generator's own report filed
+`sc-6-3` as NOT MET and listed it as a blocker; the evaluator adjudicated it a pass because the
+CONTRACT's premise — not the implementation — was factually wrong. Read
+["The amended disposition"](#the-amended-disposition--what-the-evaluator-adjudicated-and-why-it-matters-beyond-this-sprint)
+before the sprint-local sections: it is the most consequential thing this sprint produced.
+Commit `1fd29e9`.
+
 ## What this sprint added
 
 `sprint_exit` has written a monotone `version: attempts` on the settled contract since sprint 3
@@ -97,13 +107,80 @@ would hide a real, engine-observable difference — exactly what that list's own
 forbids) and fabricating an `errors` entry for the imperative engine (which would misreport an
 event that architecturally cannot happen there). Neither was done.
 
-**Result: sc-6-3 is NOT fully met.** The divergence set after this sprint is `["audits",
-"pipelineResult"]`, verified by running the harness — `contracts` is gone (sc-6-1's claim), but
-`pipelineResult` stays, now for `errors` alone rather than for the reason the contract assumed.
-This is recorded as a finding for a future sprint, not silently absorbed into this one's scope:
-closing it means either giving the imperative engine an equivalent checkpoint-gated commit step
-(a real behaviour change) or formally joining `audits` as a permanently-accepted divergence — a
-decision, not a default.
+**Result as the generator filed it: `sc-6-3` NOT fully met.** The divergence set after this
+sprint is `["audits", "pipelineResult"]`, verified by running the harness — `contracts` is gone
+(sc-6-1's claim), but `pipelineResult` stays, now for `errors` alone rather than for the reason
+the contract assumed. It was recorded as a finding for a future sprint, not silently absorbed
+into this one's scope: closing it means either giving the imperative engine an equivalent
+checkpoint-gated commit step (a real behaviour change) or formally joining `audits` as a
+permanently-accepted divergence — a decision, not a default.
+
+**The evaluator adjudicated it a PASS under an amended disposition** — the section below is the
+authoritative account of the outcome, and it says something stronger than "a finding for a
+future sprint".
+
+## The amended disposition — what the evaluator adjudicated, and why it matters beyond this sprint
+
+`sc-6-3` reads *"Neither 'contracts' nor 'pipelineResult' appears in the divergence set"*. It was
+adjudicated **`pass-AMENDED`**, and the reason is recorded in two places that outlive this record:
+`amendedDisposition` on
+`.bober/contracts/sprint-spec-20260814-pge-full-convergence-6.json` and `architecturalFinding` on
+`.bober/eval-results/eval-sprint-spec-20260814-pge-full-convergence-6-1.json`.
+
+**What was wrong was the contract, not the implementation.** The contract's own description
+asserted that closing `contracts` would close `pipelineResult` "since that field is a container
+for the same objects". Half of that is true and was verified: the container portion
+(`completedSprints`/`failedSprints`) closed as a genuine consequence, now asserted on BOTH
+engines against each engine's own settled contract. The other half was never true —
+`pipelineResult.errors` diverges independently of `contracts` and always did; it was simply
+**masked**, because `contracts`/`version` was diverging under the same `pipelineResult` field
+name and nobody had isolated the container portion from the whole.
+
+**The evaluator confirmed the gap independently, from source rather than from the report:**
+
+- `PipelineResult.errors` has **exactly one write site repo-wide** — `PgeEngine.run`
+  (`src/pge/engine/pge-engine.ts:551-572`), spreading `errors` from the interpreter's own
+  `TaskFailure` records, only when `failures.length > 0`. That code and its doc comment
+  **pre-date this sprint** (introduced by `spec-20260812-pge-real-workload-errors` sprint 5), and
+  this sprint's diff does not touch the `PipelineResult` interface at all.
+- The imperative side has no honest equivalent write site — not a missing write, a missing
+  SOURCE. `runSprintCycle`'s auto-commit (`src/orchestrator/pipeline.ts:449-462`) calls
+  `commitAll` **unconditionally** when `config.generator.autoCommit` is true, inside a
+  `try`/`catch` that only `logger.debug`s and continues; there is no HITL gate at all.
+  `finalizePipelineRun` requests the end-of-pipeline checkpoint AFTER the completion marker and
+  the history event are written, and does not gate on its outcome.
+- The graph, by contrast, has an explicit `hitl_commit` gate node
+  (`src/pge/topology/coding.graph.ts:911-923`) feeding a separate `commit` tool node
+  (`:926-937`), whose own `doc` says it is *"reachable only behind the approval gate, which is
+  what makes the git effect blockable fail-closed"*.
+
+**Both rejected fixes were rejected for stated reasons, not taste.** Adding `errors` to
+`VOLATILE_KEYS` violates that set's own documented bar — a key belongs there only when two runs
+of the **same** engine over the same input would differ on it; `errors` differs **between**
+engines on the **same** input, which is exactly the class `VOLATILE_KEYS` must never hide.
+Fabricating an imperative `errors` entry would misreport behaviour the architecture cannot
+produce.
+
+**The consequential conclusion — the part that changes how the spec's remaining sprints should
+be read.** The divergence set is `['audits', 'pipelineResult']`, and **both remaining entries are
+ARCHITECTURAL, not unbuilt**, and they share **one root cause**: *the graph has a
+checkpoint-gated commit that the imperative engine lacks.* `audits` diverges because a graph run
+records at most two of the imperative pipeline's eight checkpoint ids; `pipelineResult` diverges
+because the graph's gated `commit` can be refused and the imperative engine's ungated
+`commitAll` can never be. `history` (sprint 4) and `contracts` (this sprint) are closed; nothing
+is left in the set that a missing writer would close.
+
+**Where the decision this record cannot take needs to be taken.** Sprint 3 of this spec
+established `audits`' architectural acceptance through an ADR
+(`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`, "Fan-out checkpoints stay
+illegal — the runtime cannot hold a per-branch interrupt"). **Both the generator and the
+evaluator independently recommend that `pipelineResult.errors` be joined to that same
+acceptance.** That is a recommendation on the record, not a decision taken: this record does not
+author or amend an ADR. The contract's `amendedDisposition.carryTo` names the owner —
+**sprint 11**, the flip-bar sprint, whose `sc-11-1` currently asks for `equivalent: true` on a
+real run. That criterion is unsatisfiable as written under a divergence set both of whose
+members are architectural; sprint 11 must re-specify the bar (its own `sc-11-3`/`sc-11-5`
+territory) rather than chase an equivalence that no amount of building can reach.
 
 ## Testing
 
@@ -156,20 +233,44 @@ changed only the imperative engine, so a graph-only replay cannot observe the ch
   rewritten in place (not deleted) to record the container-portion closure AND the `errors`
   finding; the "The evidence" summary bullet and the oracle-retention enforcement paragraph
   updated from three pinned fields to two.
-- **This record** (`docs/sprints/sprint-spec-20260814-pge-full-convergence-6.md`).
+- **This record** (`docs/sprints/sprint-spec-20260814-pge-full-convergence-6.md`) — written in
+  `1fd29e9`, then corrected post-evaluation to record the amended disposition rather than the
+  generator's self-report.
+
+A **separate, docs-only follow-up commit** (no source, test or config file touched) carried the
+amended disposition into the documents the sprint made stale: `docs/pge-graph.md`'s "The
+evidence" bullet, its `pipelineResult` bullet, flip-prerequisite points 1 and 4 and the 1.5.0
+changelog entry; `docs/sprints/README.md`'s spec intro, this sprint's table row and the two
+prior-spec closing paragraphs that still described `pipelineResult` as a container closing as a
+consequence; and the point-in-time notes in the sprint-4, sprint-5 and
+`spec-20260812-terminal-vocabulary` sprint-6 records.
 
 ## Notes for maintainers
 
-- **sc-6-3 is the one required criterion NOT fully met.** `contracts` closed as designed;
-  `pipelineResult` did not, for a reason (`errors`) outside this sprint's anticipated scope and
-  outside its nonGoals/estimatedFiles. See "The discovery" above for the full account and the
-  two closure paths a future sprint would choose between.
+- **`sc-6-3` passed under an AMENDED DISPOSITION, and the amendment is the finding.** The
+  generator filed it NOT MET; the evaluator adjudicated a pass because the CONTRACT's premise
+  ("closing `contracts` closes `pipelineResult`") was factually incomplete, and the gap the
+  sprint surfaced is real, pre-existing and architectural. `contracts` closed as designed;
+  `pipelineResult` remains for `errors` alone. See "The amended disposition" above — do not cite
+  this sprint as "one criterion failed", and do not cite it as "everything converged" either.
+- **The divergence set is `['audits', 'pipelineResult']`, and BOTH are architectural.** They
+  share one root cause — the graph has a checkpoint-gated commit the imperative engine lacks —
+  so no further building closes either one. Joining `pipelineResult.errors` to `audits`'
+  ADR-backed acceptance is RECOMMENDED by both the generator and the evaluator and is
+  **undecided**; the decision belongs to sprint 11, whose `sc-11-1` (`equivalent: true`) cannot
+  be met as written.
 - **`VOLATILE_KEYS` is unchanged** — still the same ten keys
   (`createdAt`, `updatedAt`, `startedAt`, `completedAt`, `timestamp`, `duration`, `runId`,
   `totalCost`, `durationMs`, `approverId`). Neither `version` nor `errors` was added to it
   (sc-6-4, and the same principle applied to the new finding).
 - **The schema's `version` field is untouched** — still `.optional()`, never `.default(...)`
   (nonGoal 1). `SprintContractSchema`'s own doc comment now names both writers.
-- Final gate, re-run on a clean detached worktree: suite **467 files / 7104 passed, 2 skipped, 0
-  failed**; typecheck (both tsconfigs), lint (0 errors, 2 pre-existing warnings in
-  `eval-persist.test.ts`) and build green; golden gate **7/7 (100%)**, dataset unchanged.
+- Final gate, re-run on a clean detached worktree: **467 files**, typecheck (both tsconfigs),
+  lint (0 errors, 2 pre-existing warnings in `eval-persist.test.ts`) and build green; golden gate
+  **7/7 (100%)**, dataset unchanged; `pge validate` and `pge docs --check` (44 nodes) both `ok`,
+  `pge diff` against the pre-sprint topology artifact empty. The two runs of the suite agree on
+  the total (**7106**) and on **0 failed**, but split it differently: the generator recorded
+  7104 passed / 2 skipped, the evaluator's fresh `git worktree --detach` + `npm ci` at `1fd29e9`
+  recorded **7100 passed / 6 skipped**. Four tests skipped in one environment and ran in the
+  other; neither run reports a failure, and the difference is unexplained here rather than
+  explained away.
