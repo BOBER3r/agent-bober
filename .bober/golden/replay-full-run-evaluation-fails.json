@@ -1054,7 +1054,9 @@
           "iterationHistory": [],
           "createdAt": "2026-08-05T00:00:00.000Z",
           "updatedAt": "2026-08-05T00:00:00.000Z",
-          "version": 2
+          "version": 2,
+          "evaluatorFeedback": "criteria failed",
+          "generatorNotes": "generated sprint-spec-20260805-pge-conformance-01"
         }
       },
       "response": {
@@ -1095,7 +1097,9 @@
           "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
           "assumptions": [],
           "outOfScope": [],
+          "generatorNotes": "generated sprint-spec-20260805-pge-conformance-01",
           "estimatedFiles": [],
+          "evaluatorFeedback": "criteria failed",
           "iterationHistory": [],
           "version": 2,
           "createdAt": "2026-08-05T00:00:00.000Z",
@@ -1194,7 +1198,9 @@
           "iterationHistory": [],
           "version": 2,
           "createdAt": "2026-08-05T00:00:00.000Z",
-          "updatedAt": "2026-08-05T00:00:00.000Z"
+          "updatedAt": "2026-08-05T00:00:00.000Z",
+          "evaluatorFeedback": "criteria failed",
+          "generatorNotes": "generated sprint-spec-20260805-pge-conformance-01"
         }
       },
       "response": {
@@ -1257,9 +1263,11 @@
           "dependsOn": [],
           "description": "Compile and run the plan region end to end.",
           "estimatedFiles": [],
+          "evaluatorFeedback": "criteria failed",
           "features": [
             "feat-1"
           ],
+          "generatorNotes": "generated sprint-spec-20260805-pge-conformance-01",
           "iterationHistory": [],
           "nonGoals": [
             "Do not modify a shipped agent function."
@@ -1398,9 +1406,11 @@
               "dependsOn": [],
               "description": "Compile and run the plan region end to end.",
               "estimatedFiles": [],
+              "evaluatorFeedback": "criteria failed",
               "features": [
                 "feat-1"
               ],
+              "generatorNotes": "generated sprint-spec-20260805-pge-conformance-01",
               "iterationHistory": [],
               "nonGoals": [
                 "Do not modify a shipped agent function."
