@@ -864,7 +864,16 @@ describe("the settled contract carries evaluatorFeedback and generatorNotes from
     expect(channelCopy?.generatorNotes).toBe(written[0].generatorNotes);
   }, 30_000);
 
-  it("the settled contract's evaluatorFeedback and generatorNotes are the PRODUCING NODE's, never the SEEDED contract's — even when the seed disagrees (sc-5-3 negative control)", async () => {
+  it("on a PASSING branch, the settled evaluatorFeedback/generatorNotes equal the node's raw values even when the seed disagrees (sc-5-1, sc-5-2)", async () => {
+    // NOT a proof that the strip at sprint-review.ts:276-279 is load-bearing, despite the
+    // seeded contract disagreeing with the outcome below: on THIS branch `outcome.
+    // evaluatorFeedback`/`generatorNotes` are always defined, and object-spread's
+    // last-key-wins semantics mean the outcome's value overrides the seed whether or not the
+    // seed was stripped first. Deleting the destructure-then-spread at sprint-review.ts:
+    // 276-279 (`...contractWithoutFeedback` -> `...contract`, no destructure) does NOT make
+    // this test fail — confirmed by running it against that mutation. The discriminating test
+    // is the one immediately below, which routes through a path where `outcome` carries no
+    // raw value to override with.
     const contract = sprintContractFixture({
       generatorNotes: "SEEDED — must not survive",
       evaluatorFeedback: "SEEDED — must not survive",
@@ -886,6 +895,52 @@ describe("the settled contract carries evaluatorFeedback and generatorNotes from
     expect(written[0].generatorNotes).toBe(`generated ${contract.contractId}`);
     expect(written[0].evaluatorFeedback).not.toBe("SEEDED — must not survive");
     expect(written[0].generatorNotes).not.toBe("SEEDED — must not survive");
+  }, 30_000);
+
+  it("the SEEDED evaluatorFeedback/generatorNotes do NOT survive when the decisive verdict carries neither raw value — proves the strip at sprint-review.ts:276-279 is load-bearing (sc-5-3)", async () => {
+    // `underDeliveringExplain(1)` makes the curate region's own admission check refuse before
+    // `sprint_generate` — let alone `sprint_evaluate` — ever runs, so `sprint_exit`'s
+    // `outcome.evaluatorFeedback`/`generatorNotes` are genuinely `undefined` (the same
+    // refusal short-circuit the curator test below exercises, but seeded with a STALE value
+    // here, which that one deliberately is not). With no raw value for `outcome` to
+    // contribute, the ONLY thing standing between the seeded string below and `settled` is
+    // the destructure-then-spread that strips `evaluatorFeedback`/`generatorNotes` off
+    // `contract` BEFORE the settled object is built (sprint-review.ts:276-279).
+    //
+    // MUTATION VERIFIED: deleting the destructure at :276-278 and changing
+    // `...contractWithoutFeedback` to `...contract` at :279 makes this test FAIL — the seeded
+    // string below survives onto `settled` because nothing else overrides it (`outcome`
+    // contributes `{}` for both fields on this branch). Restoring the shipped code makes it
+    // pass again. The test above does not detect that same mutation.
+    const contract = sprintContractFixture({
+      evaluatorFeedback: "SEEDED — must not survive",
+      generatorNotes: "SEEDED — must not survive",
+    });
+    const written: SprintContract[] = [];
+    const run = await runSprint({
+      projectRoot: root,
+      bindings: stubSprintBindings({
+        explain: underDeliveringExplain(1),
+        writeContract: async (_projectRoot, contractWritten) => {
+          written.push(contractWritten);
+        },
+      }),
+      contracts: [contract],
+    });
+
+    expect(enteredNodes(run)).toContain("sprint_exit");
+    expect(run.handlerLog.calls["sprint_generate"]).toBeUndefined();
+    expect(written.length).toBeGreaterThanOrEqual(1);
+    for (const entry of written) {
+      expect(entry.status).toBe("failed");
+      // ABSENT, not merely different from the stale string — the doc comment's claim
+      // (sprint-review.ts:266-274) is that omission is what protects this field when
+      // `outcome` carries nothing, and this is the assertion that backs it.
+      expect("evaluatorFeedback" in entry).toBe(false);
+      expect("generatorNotes" in entry).toBe(false);
+      expect(entry.evaluatorFeedback).not.toBe("SEEDED — must not survive");
+      expect(entry.generatorNotes).not.toBe("SEEDED — must not survive");
+    }
   }, 30_000);
 
   it("on a FAILING branch that exhausts its retry budget, evaluatorFeedback/generatorNotes still carry the last decisive attempt's raw values, not a synthesised fallback", async () => {
