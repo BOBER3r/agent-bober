@@ -72,6 +72,26 @@ function defaultedConfig(): BoberConfig {
   return configWith({});
 }
 
+/**
+ * A TypeScript source with its comments removed.
+ *
+ * Load-bearing for the retention checks below, which are about LIVE ASSERTIONS and not
+ * about a file's prose. Two of the four fields they name — `history` and `contracts` —
+ * closed at sprints 4 and 6 of `spec-20260814-pge-full-convergence`, and the closures are
+ * recorded at length in `conformance.engines.test.ts`'s explanatory comments. A bare
+ * substring search therefore found both names in PARAGRAPHS from that point on, and would
+ * have kept passing with the corresponding pins deleted outright — a guard satisfied by the
+ * story of a pin rather than by the pin. Stripping comments first is what makes it a
+ * retention check again.
+ *
+ * Whole-line `//` comments only, so a `//` inside a string or a URL is left alone; block
+ * comments go entirely. It does not need to be a parser — an assertion that survives this
+ * is code, which is the whole question being asked.
+ */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+}
+
 // ── 1. The default ──────────────────────────────────────────────────
 
 describe("sc-14-9: config.pipeline.engine still defaults to 'ts'", () => {
@@ -154,15 +174,42 @@ describe("sc-14-9: the oracle is still exercised by the conformance job", () => 
   });
 
   it("still pins sprint 13's verdict, which is why the default has not moved", async () => {
-    const source = await readFile(CONFORMANCE_TEST, "utf8");
+    // COMMENTS STRIPPED — see `withoutComments`. Asserted against code, because a
+    // divergence that is only DISCUSSED in that file is not pinned by it.
+    const source = withoutComments(await readFile(CONFORMANCE_TEST, "utf8"));
 
     // The evidence the disposition in docs/pge-graph.md cites. If a future change makes
     // the engines equivalent, this assertion is the one that should be revisited FIRST —
     // deliberately, with the disposition — rather than the default quietly flipping.
     expect(source).toContain("report.equivalent");
     expect(source).toMatch(/expect\(report\.equivalent\)\.toBe\(false\)/);
+
+    // The two committed pins themselves, each named by its SUBJECT rather than by the
+    // literal it is compared against. A bare `toEqual(["audits", "pipelineResult"])` search
+    // would also be satisfied by any synthetic report a later test hand-builds out of the
+    // same two names — the same "something else satisfies the guard" mistake, one level in.
+    //
+    //  1. What the REAL RUN reports diverging on, and
+    //  2. what the frozen accepted set contains.
+    //
+    // They are separate commitments and are pinned separately: the first can drift while
+    // the second stays put, and that is precisely the drift worth catching.
+    expect(source, "the real-run divergence-set pin is gone").toMatch(
+      /report\.diffs\.map\(\(diff\) => diff\.field\)[\s\S]{0,80}?toEqual\(\[\s*"audits",\s*"pipelineResult",?\s*\]\)/,
+    );
+    expect(source, "the accepted-set pin is gone").toMatch(
+      /Object\.keys\(ARCHITECTURALLY_ACCEPTED_DIVERGENCES\)[\s\S]{0,80}?toEqual\(\[\s*"audits",\s*"pipelineResult",?\s*\]\)/,
+    );
+
+    // Each of the four historical fields as a QUOTED STRING LITERAL in live code. Quoted
+    // rather than bare, so an incidental mention cannot stand in for a pin: the import
+    // path `"../../state/history.js"` contains `history`, and satisfied the bare form of
+    // this check on its own. `audits` and `pipelineResult` are the two divergences still
+    // reported; `history` and `contracts` are the two that CLOSED, and are named by the
+    // direction-1 regression control that fails the pin if either re-appears — losing that
+    // control would mean a closed divergence could come back unremarked.
     for (const field of ["history", "audits", "contracts", "pipelineResult"]) {
-      expect(source, `the ${field} divergence is no longer pinned`).toContain(field);
+      expect(source, `the ${field} divergence is no longer pinned`).toContain(`"${field}"`);
     }
   });
 });
