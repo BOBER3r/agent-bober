@@ -129,6 +129,41 @@ export const SprintVerdictSchema = z.object({
   verdict: SprintVerdictOutcomeSchema,
   summary: z.string(),
   evalId: z.string().nullable().default(null),
+  /**
+   * The RAW evaluator summary (`EvaluationRunResult.summary`), undecorated — what
+   * `pipeline.ts:592` and `:719` write VERBATIM into `SprintContract.evaluatorFeedback`.
+   * `summary` above is DECORATED for this channel's own reader (a bracketed suite reason, or
+   * the `[anchor-regression]` encoding `anchors.ts:179-212` documents) and is NOT
+   * interchangeable with this field: sc-5-1 requires the settled contract's
+   * `evaluatorFeedback` to MATCH the imperative engine's value, not merely be non-empty, so
+   * the raw form has to ride separately from the decorated one. Optional because not every
+   * decisive verdict has one — see `sprint-evaluate.ts`'s `sprintVerdict` doc comment for
+   * exactly which call sites populate it and why the others deliberately leave it absent.
+   *
+   * ── Why a field on this schema, not a new channel (engages `anchors.ts:179-196`) ──
+   *
+   * `anchors.ts` rejected widening `SprintVerdictSchema` for the broken-anchor list, on the
+   * ground that the fact is LOCAL to one edge (`sprint_evaluate` -> `gate_anchor_regression`)
+   * and a channel would be disproportionate for something that narrow. This field's fact is
+   * not local to one edge: it has to survive `sprint_evaluate` -> (`gate_anchor_regression` /
+   * `sprint_route` /) `sprint_correct` -> `sprint_generate` -> ... -> `sprint_exit`, i.e.
+   * cross the whole retry loop to reach the settle node — exactly the shape a channel exists
+   * for, and `evaluations` already is that channel. An OPTIONAL field on an existing schema
+   * adds no new channel and does not move {@link OVERALL_STATE_KEY_BUDGET}; it is a field, not
+   * a channel, so the anchors note's proportionality objection does not apply here.
+   */
+  evaluatorFeedback: z.string().optional(),
+  /**
+   * The RAW generator notes (`GeneratorResult.notes`) this branch's `sprint_generate`
+   * produced for the attempt this verdict was decided on — what `pipeline.ts:428` writes
+   * VERBATIM into `SprintContract.generatorNotes`. Carried the same way as
+   * {@link evaluatorFeedback} above and for the identical reason: `sprint_generate` cannot
+   * write it directly (its declared `writes` is `messages, refs, branchStatus, ledger` — no
+   * `evaluations`, `coding.graph.ts`), so the node that reads the offloaded result back
+   * (`readGeneratorResult`, `sprint-evaluate.ts`) is the one that can carry it onto the
+   * verdict it already emits.
+   */
+  generatorNotes: z.string().optional(),
 });
 export type SprintVerdict = z.infer<typeof SprintVerdictSchema>;
 

@@ -9,6 +9,7 @@ import { replaceIfNewer } from "../registry/reducers.js";
 import { createFixedClock } from "../runtime/commit.js";
 import { readFailureArtifact } from "../runtime/graceful-failure.js";
 import { CODING_GRAPH } from "../topology/coding.graph.js";
+import type { SprintContract } from "../../contracts/sprint-contract.js";
 import { anchorId } from "./anchors.js";
 import { SPRINT_GATE_IDS, gatePolicyOf, loopBoundOf } from "./gates.js";
 import { isCorrectionPayload } from "./sprint-correct.js";
@@ -31,6 +32,7 @@ import {
   stubEvaluator,
   stubGenerator,
   stubSprintBindings,
+  underDeliveringExplain,
 } from "./__fixtures__/sprint-harness.js";
 import type { SprintRun } from "./__fixtures__/sprint-harness.js";
 
@@ -823,6 +825,132 @@ describe("the sprint subgraph, compiled from the committed artifact (sc-12-12)",
     // over the same input rebuilds identically — no clock, superstep, or spanId involved.
     expect(versions[0]).toBeDefined();
     expect(versions[0]).toBe(versions[1]);
+  }, 30_000);
+});
+
+// ── sc-5-1, sc-5-2, sc-5-3: the settled contract carries the RAW pair, from the
+// producing node, not the seed (sprint 5 of spec-20260814-pge-full-convergence) ──
+
+describe("the settled contract carries evaluatorFeedback and generatorNotes from the node that owns them (sc-5-1, sc-5-2, sc-5-3)", () => {
+  it("the settled contract's evaluatorFeedback is the RAW evaluator summary and generatorNotes is the RAW generator notes, on a passing branch", async () => {
+    const contract = sprintContractFixture();
+    const written: SprintContract[] = [];
+    const run = await runSprint({
+      projectRoot: root,
+      bindings: stubSprintBindings({
+        writeContract: async (_projectRoot, contractWritten) => {
+          written.push(contractWritten);
+        },
+      }),
+      contracts: [contract],
+    });
+
+    expect(run.result.status).toBe("completed");
+    expect(written).toHaveLength(1);
+    // `stubEvaluation`'s raw summary is "all criteria met" (`sprint-harness.ts:222`) — NOT
+    // decorated with a `[decision.reason]` suffix, which is what `evaluations[].summary`
+    // (the channel's own DECORATED copy) would carry instead.
+    expect(written[0].evaluatorFeedback).toBe("all criteria met");
+    expect(written[0].evaluatorFeedback).not.toContain("[");
+    // `stubGenerator`'s raw notes are `generated ${contractId}` (`sprint-harness.ts:184`).
+    expect(written[0].generatorNotes).toBe(`generated ${contract.contractId}`);
+
+    // And the channel copy the commit boundary flushes to `.bober/contracts/` carries the
+    // identical pair — the same object `written` above, not a second one built differently.
+    const channelCopy = run.finalState.sprintContracts.find(
+      (entry) => entry.contractId === contract.contractId,
+    );
+    expect(channelCopy?.evaluatorFeedback).toBe(written[0].evaluatorFeedback);
+    expect(channelCopy?.generatorNotes).toBe(written[0].generatorNotes);
+  }, 30_000);
+
+  it("the settled contract's evaluatorFeedback and generatorNotes are the PRODUCING NODE's, never the SEEDED contract's — even when the seed disagrees (sc-5-3 negative control)", async () => {
+    const contract = sprintContractFixture({
+      generatorNotes: "SEEDED — must not survive",
+      evaluatorFeedback: "SEEDED — must not survive",
+    });
+    const written: SprintContract[] = [];
+    const run = await runSprint({
+      projectRoot: root,
+      bindings: stubSprintBindings({
+        writeContract: async (_projectRoot, contractWritten) => {
+          written.push(contractWritten);
+        },
+      }),
+      contracts: [contract],
+    });
+
+    expect(run.result.status).toBe("completed");
+    expect(written).toHaveLength(1);
+    expect(written[0].evaluatorFeedback).toBe("all criteria met");
+    expect(written[0].generatorNotes).toBe(`generated ${contract.contractId}`);
+    expect(written[0].evaluatorFeedback).not.toBe("SEEDED — must not survive");
+    expect(written[0].generatorNotes).not.toBe("SEEDED — must not survive");
+  }, 30_000);
+
+  it("on a FAILING branch that exhausts its retry budget, evaluatorFeedback/generatorNotes still carry the last decisive attempt's raw values, not a synthesised fallback", async () => {
+    const contract = sprintContractFixture();
+    const written: SprintContract[] = [];
+    const run = await runSprint({
+      projectRoot: root,
+      bindings: stubSprintBindings({
+        evaluator: stubEvaluator(
+          stubEvaluation({ details: [{ criterion: "sc-f-1", passed: false }] }),
+        ),
+        writeContract: async (_projectRoot, contractWritten) => {
+          written.push(contractWritten);
+        },
+      }),
+      contracts: [contract],
+      maxSupersteps: 200,
+    });
+
+    expect(run.result.status).toBe("completed");
+    // `sprint_exit` is entered MORE THAN ONCE on this shape: `sprint_route` and
+    // `sprint_correct` share the `sprintIterations` counter (`coding.graph.ts:709,730`) and
+    // both declare `onExhausted: "sprint_exit"`, so a branch that exhausts the budget while
+    // still failing can revisit the settle node — a pre-existing engine characteristic of
+    // this exact loop shape, unrelated to this sprint (reproduced identically before any
+    // sprint-5 edit). Every write must still agree, so every one is checked rather than
+    // asserting a literal count this sprint did not create and is not scoped to fix.
+    expect(written.length).toBeGreaterThanOrEqual(1);
+    for (const entry of written) {
+      expect(entry.status).toBe("failed");
+      // `stubEvaluation`'s raw failing summary, undecorated (`sprint-harness.ts:222`).
+      expect(entry.evaluatorFeedback).toBe("criteria failed");
+      expect(entry.generatorNotes).toBe(`generated ${contract.contractId}`);
+    }
+  }, 30_000);
+
+  it("a curator short-circuit reaches sprint_exit via a refusal and settles the branch WITHOUT either field — absent, not a synthesised placeholder", async () => {
+    // `underDeliveringExplain(1)` makes the curate region's own admission check refuse
+    // before `sprint_generate` — let alone `sprint_evaluate` — ever runs, exactly the
+    // `sprint-curate.test.ts` fixture that proves the same short-circuit reaches
+    // `sprint_exit` (`gatePolicyOf(CODING_GRAPH, "gate_sprint_in").onFail === "sprint_exit"`,
+    // `enteredNodes(run)` contains `"sprint_exit"`). No generator result is ever offloaded
+    // and no evaluation verdict is ever recorded for this branch, so there is nothing for
+    // `sprint_exit` to carry — the honest answer sc-5-3/the stop condition ask for.
+    const contract = sprintContractFixture();
+    const written: SprintContract[] = [];
+    const run = await runSprint({
+      projectRoot: root,
+      bindings: stubSprintBindings({
+        explain: underDeliveringExplain(1),
+        writeContract: async (_projectRoot, contractWritten) => {
+          written.push(contractWritten);
+        },
+      }),
+      contracts: [contract],
+    });
+
+    expect(enteredNodes(run)).toContain("sprint_exit");
+    expect(run.handlerLog.calls["sprint_generate"]).toBeUndefined();
+    expect(written.length).toBeGreaterThanOrEqual(1);
+    for (const entry of written) {
+      expect(entry.status).toBe("failed");
+      expect("evaluatorFeedback" in entry).toBe(false);
+      expect("generatorNotes" in entry).toBe(false);
+    }
   }, 30_000);
 });
 

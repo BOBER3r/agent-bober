@@ -119,7 +119,18 @@ export function iterationOf(state: Readonly<OverallState>, contractId: string): 
   return state.evaluations.filter((entry) => entry.contractId === contractId).length + 1;
 }
 
-/** A `SprintVerdict` for this branch, with an identity the `appendById` reducer can union. */
+/**
+ * A `SprintVerdict` for this branch, with an identity the `appendById` reducer can union.
+ *
+ * `evaluatorFeedback`/`generatorNotes` (sc-5-1, sc-5-2) are OPTIONAL and deliberately not
+ * populated by every call site in this file: only `:394-425`'s final pass/fail verdict — the
+ * one built from a genuinely-completed `EvaluationRunResult` — carries them, matching exactly
+ * the two `pipeline.ts` writes (`:592` pass, `:719` fail) that use the same raw expressions on
+ * both outcomes. The earlier fail branches (evaluator threw or returned malformed output, the
+ * expensive suite failed, an anchor regressed) have no `EvaluationRunResult.summary` to carry
+ * — pitfall 8 of the sprint-5 briefing: synthesising one for those paths would be exactly the
+ * plausible-looking placeholder the contract's stop condition forbids, so they stay absent.
+ */
 export function sprintVerdict(args: {
   ctx: NodeContext;
   contract: SprintContract;
@@ -127,6 +138,8 @@ export function sprintVerdict(args: {
   verdict: SprintVerdict["verdict"];
   summary: string;
   evalId?: string | null;
+  evaluatorFeedback?: string;
+  generatorNotes?: string;
 }): SprintVerdict {
   return SprintVerdictSchema.parse({
     id: `${args.contract.contractId}:${args.ctx.nodeId}:${String(args.iteration)}`,
@@ -137,11 +150,21 @@ export function sprintVerdict(args: {
     verdict: args.verdict,
     summary: args.summary,
     evalId: args.evalId ?? null,
+    ...(args.evaluatorFeedback === undefined ? {} : { evaluatorFeedback: args.evaluatorFeedback }),
+    ...(args.generatorNotes === undefined ? {} : { generatorNotes: args.generatorNotes }),
   });
 }
 
-/** The generator result this branch offloaded, or `null`. */
-async function readGeneratorResult(
+/**
+ * The generator result this branch offloaded, or `null`.
+ *
+ * Exported (sc-5-2) so `sprint-evaluate.test.ts` and `sprint-review.ts`'s doc comment can cite
+ * the one reader rather than a second copy; `sprint_review`/`sprint_exit` do NOT call this —
+ * neither declares `refs` in its `reads` (Pattern A, sprint-5 briefing) — so the raw
+ * `GeneratorResult.notes` this function reads back is carried onward on the `SprintVerdict`
+ * {@link sprintVerdict} builds, not re-read at the settle node.
+ */
+export async function readGeneratorResult(
   state: Readonly<OverallState>,
   ctx: NodeContext,
   contractId: string,
@@ -391,6 +414,26 @@ export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unk
         });
       }
 
+      // sc-5-1/sc-5-2: the RAW pair `pipeline.ts:592`/`:719` (evaluatorFeedback) and `:428`
+      // (generatorNotes) write verbatim, carried onto whichever verdict this attempt decides
+      // — pass or fail alike, matching the imperative engine's identical expression on both
+      // branches. `generated` was loaded at handler entry via `readGeneratorResult`; its
+      // `notes` is required once a result exists, so this is present whenever this branch's
+      // `sprint_generate` actually ran for this attempt.
+      // bober: `summary` above already carries one copy of `result.summary` (undecorated on
+      // the fail path, or wrapped in `[decision.reason]`/anchor-encoded otherwise); this
+      // verdict now carries a second, independent copy in `evaluatorFeedback`, which roughly
+      // doubles the entry's share of `evaluations`' 4096-byte `maxInlineBytes` cap
+      // (`commit.ts:388-400`). Tens of bytes on this fixture's stub evaluator; a real
+      // evaluator's `summary` could be large enough to make the doubling matter. If this
+      // becomes a real StateBloatError source, the fix is to stop decorating `summary` for
+      // the `pass` case (where it and `evaluatorFeedback` would then be identical) rather
+      // than to truncate either copy.
+      const rawFeedback = {
+        evaluatorFeedback: result.summary,
+        ...(generated?.notes === undefined ? {} : { generatorNotes: generated.notes }),
+      };
+
       return {
         update: {
           messages: [
@@ -406,6 +449,7 @@ export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unk
               iteration,
               verdict: passed ? "pass" : "fail",
               summary,
+              ...rawFeedback,
             }),
           ],
           // `setUnion`, so concurrent branches cannot lose an anchor and a replayed
@@ -421,6 +465,7 @@ export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unk
           iteration,
           verdict: passed ? "pass" : "fail",
           summary,
+          ...rawFeedback,
         }),
       };
     },
