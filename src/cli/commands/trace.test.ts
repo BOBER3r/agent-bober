@@ -76,7 +76,7 @@ async function writeTrace(projectRoot: string, runId: string): Promise<void> {
 async function writeProgress(root: string, body: string): Promise<void> {
   await mkdir(join(root, ".bober"), { recursive: true });
   await writeFile(
-    join(root, ".bober", "progress.md"),
+    join(root, ".bober", "progress.generated.md"),
     `# Progress\nLast updated: ${new Date().toISOString()}\n${body}\n`,
     "utf-8",
   );
@@ -205,7 +205,7 @@ describe("bober trace replay — outcomes", () => {
 
     expect(code).toBe(EXIT_FAILED);
     expect(err.join("\n")).toContain("diverged");
-    expect(err.join("\n")).toContain(".bober/progress.md");
+    expect(err.join("\n")).toContain(".bober/progress.generated.md");
   });
 
   it("exits 1 and reports the error class when the re-execution throws", async () => {

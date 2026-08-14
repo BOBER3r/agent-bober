@@ -141,9 +141,9 @@ interface AllowedOffender {
 const ALLOWLIST: AllowedOffender[] = [
   // ── §2: NOT a contract-terminal check — a different type shares the `.status` spelling ──
   {
-    location: "src/mcp/tools/status.ts:69",
+    location: "src/mcp/tools/status.ts:80",
     reason:
-      "RunState.status ('running'|'completed'|'failed'|'aborted'|'input-required'|'paused', src/mcp/run-manager.ts) — a run's state, not a SprintContract.",
+      "RunState.status ('running'|'completed'|'failed'|'aborted'|'input-required'|'paused', src/mcp/run-manager.ts) — a run's state, not a SprintContract. Line shifted from :69 by the progress.md/progress.generated.md read fallback, added earlier in this file.",
   },
   {
     location: "src/evaluators/builtin/playwright.ts:530",
@@ -182,9 +182,9 @@ const ALLOWLIST: AllowedOffender[] = [
 
   // ── A genuine SprintContract.status check, deliberately kept literal ──
   {
-    location: "src/state/history.ts:344",
+    location: "src/state/history.ts:368",
     reason:
-      "SprintContract.status, but intentionally the SEPARATE 'Failed' row in .bober/progress.md (see :339-342's comment right above :343's now-migrated 'Passed' row) — folding it into isSettledContractStatus/isTerminalContractStatus would double-count every failed sprint. Line shifted from :199 by the history-redaction layer (scrubSensitive/redactHistoryString/redactHistoryEntry), added earlier in this file.",
+      "SprintContract.status, but intentionally the SEPARATE 'Failed' row in .bober/progress.generated.md (see :363-366's comment right above :367's now-migrated 'Passed' row) — folding it into isSettledContractStatus/isTerminalContractStatus would double-count every failed sprint. Line shifted from :199 by the history-redaction layer (scrubSensitive/redactHistoryString/redactHistoryEntry) and then by PROGRESS_FILE's doc comment, both added earlier in this file.",
   },
 
   // ── §3: genuine contract-terminal-shaped reads, outside the five named readers ──

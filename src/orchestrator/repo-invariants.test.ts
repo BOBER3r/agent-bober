@@ -226,7 +226,14 @@ describe("the two persisted free-text artifacts: history.jsonl unpublished, prog
    * event-stream, the conformance harness) resolves the path under its own
    * `projectRoot`, and the whole test suite writes to temp roots.
    */
-  const IGNORED_RUN_RECORDS = [".bober/history.jsonl", ".bober/history.archive.jsonl"];
+  const IGNORED_RUN_RECORDS = [
+    ".bober/history.jsonl",
+    ".bober/history.archive.jsonl",
+    // The ENGINE-generated progress document. Regenerated per run and embeds
+    // `spec.description`, so it is unpublished for the same reason the log is.
+    // Its curated namesake `.bober/progress.md` stays tracked — see below.
+    ".bober/progress.generated.md",
+  ];
 
   /** Exit status only — `git` writes the interesting part to its status code. */
   function gitSucceeds(args: readonly string[]): boolean {
@@ -300,6 +307,22 @@ describe("the two persisted free-text artifacts: history.jsonl unpublished, prog
     expect(embedded.length, "the scan found the free-text sites").toBeGreaterThanOrEqual(3);
     const unscrubbed = embedded.filter((l) => !l.includes("scrubSensitive"));
     expect(unscrubbed, "every prose string in progress.md must be scrubbed").toEqual([]);
+  });
+
+  it("the engine's progress writer does not aim at the curated tracker", async () => {
+    // `updateProgress` ends in a full-file `writeFile`. Pointed back at
+    // `progress.md` it would silently replace the skill pipeline's curated
+    // narrative — a one-word edit, with no other test failing, because the
+    // behaviour tests build their own temp roots and would simply follow it.
+    const src = await readFile(join(SRC_ROOT, "state", "history.ts"), "utf-8");
+    const decl = src
+      .split("\n")
+      .filter((l) => !isCommentLine(l))
+      .find((l) => l.includes("const PROGRESS_FILE"));
+
+    expect(decl, "history.ts must declare PROGRESS_FILE").toBeDefined();
+    expect(decl).toContain("progress.generated.md");
+    expect(decl).not.toMatch(/["'`]progress\.md["'`]/);
   });
 
   it("appendHistory routes every persisted line through the redactor", async () => {

@@ -10,7 +10,7 @@
 // DOWNSTREAM projects the published CLI runs in, where the same log may be
 // committed to a remote we do not control.
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -296,9 +296,51 @@ describe("scrubSensitive", () => {
   });
 });
 
+describe("updateProgress never touches the skill pipeline's curated tracker", () => {
+  const CURATED = "# Bober Progress\n\nProject: agent-bober\nMode: greenfield\n\n---\n\n## Active Run: spec-1\n";
+
+  async function writeCurated(): Promise<void> {
+    await mkdir(join(root, ".bober"), { recursive: true });
+    await writeFile(join(root, ".bober", "progress.md"), CURATED, "utf-8");
+  }
+
+  it("writes the generated document to its own path", async () => {
+    await updateProgress(root, [], specWith("body"));
+    const generated = await readFile(join(root, ".bober", "progress.generated.md"), "utf-8");
+    expect(generated).toContain("# Bober Progress");
+    expect(generated).toContain("## Sprints");
+  });
+
+  it("creates no .bober/progress.md of its own", async () => {
+    await updateProgress(root, [], specWith("body"));
+    await expect(readFile(join(root, ".bober", "progress.md"), "utf-8")).rejects.toThrow();
+  });
+
+  it("leaves an EXISTING curated progress.md byte-identical", async () => {
+    // The data-loss regression. `updateProgress` ends in a full-file writeFile;
+    // aimed at .bober/progress.md it would replace a curated narrative (846 lines
+    // in this repo, written by the skill pipeline under a documented contract)
+    // with its own much shorter table, silently and unrecoverably.
+    await writeCurated();
+    await updateProgress(root, [contractWith("some sprint")], specWith("a plan"));
+
+    expect(await readFile(join(root, ".bober", "progress.md"), "utf-8")).toBe(CURATED);
+  });
+
+  it("still overwrites its OWN document on a second run", async () => {
+    // Separation must not accidentally turn the generated file append-only.
+    await updateProgress(root, [], specWith("first description"));
+    await updateProgress(root, [], specWith("second description"));
+
+    const generated = await readFile(join(root, ".bober", "progress.generated.md"), "utf-8");
+    expect(generated).toContain("second description");
+    expect(generated).not.toContain("first description");
+  });
+});
+
 describe("updateProgress scrubs the strings it embeds", () => {
   async function progress(): Promise<string> {
-    return await readFile(join(root, ".bober", "progress.md"), "utf-8");
+    return await readFile(join(root, ".bober", "progress.generated.md"), "utf-8");
   }
 
   it("removes a home-path username from the plan description", async () => {

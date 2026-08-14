@@ -219,7 +219,12 @@ function firstDivergence(
 // ── Readers ──────────────────────────────────────────────────────────
 
 /**
- * `.bober/progress.md`, with its one volatile line removed.
+ * `.bober/progress.generated.md`, with its one volatile line removed.
+ *
+ * The ENGINE-written document, not the skill pipeline's curated
+ * `.bober/progress.md` — this channel compares what an engine run produced, and
+ * pointing it at a file no engine writes would mean an engine divergence in
+ * progress could never be detected. See PROGRESS_FILE in state/history.ts.
  *
  * Markdown, so {@link VOLATILE_KEYS} cannot reach it: `updateProgress` stamps
  * `Last updated: <ISO>` (state/history.ts:169) into the body. The line is dropped
@@ -228,7 +233,7 @@ function firstDivergence(
  */
 async function readProgress(projectRoot: string): Promise<string | null> {
   try {
-    const text = await readFile(join(projectRoot, ".bober", "progress.md"), "utf-8");
+    const text = await readFile(join(projectRoot, ".bober", "progress.generated.md"), "utf-8");
     return text
       .split("\n")
       .filter((line) => !line.startsWith("Last updated: "))
@@ -397,7 +402,7 @@ const FIELD_SPECS: readonly FieldSpec[] = [
   {
     field: "progress",
     artifact: "progress",
-    path: ".bober/progress.md",
+    path: ".bober/progress.generated.md",
     identityOf: () => "progress",
   },
   {

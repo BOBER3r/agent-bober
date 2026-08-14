@@ -699,7 +699,7 @@ describe("EngineConformanceHarness — every new field diverges loudly (sc-13-2)
     });
   }
 
-  it("reports a diff for progress.md body changes", async () => {
+  it("reports a diff for progress.generated.md body changes", async () => {
     const harness = new EngineConformanceHarness();
     const base = makeElevenFieldRunner();
     const diverged = makeElevenFieldRunner({
@@ -717,14 +717,14 @@ describe("EngineConformanceHarness — every new field diverges loudly (sc-13-2)
     const diff = report.diffs.find((d) => d.field === "progress");
     expect(diff).toBeDefined();
     expect(diff?.artifact).toBe("progress");
-    expect(diff?.path).toBe(".bober/progress.md");
+    expect(diff?.path).toBe(".bober/progress.generated.md");
   });
 });
 
 // ── Normalization: what is stripped, and what is NOT ──────────────────
 
 describe("EngineConformanceHarness — normalization boundaries (sc-13-2)", () => {
-  it("ignores progress.md's `Last updated:` line, which no VOLATILE_KEY can reach", async () => {
+  it("ignores progress.generated.md's `Last updated:` line, which no VOLATILE_KEY can reach", async () => {
     const harness = new EngineConformanceHarness();
     // `updateProgress` stamps `Last updated: <new Date().toISOString()>` into MARKDOWN,
     // which `normalize()` cannot see because it only walks objects. The stamp is written
@@ -734,7 +734,7 @@ describe("EngineConformanceHarness — normalization boundaries (sc-13-2)", () =
       return async (root: string) => {
         await ensureBoberDir(root);
         await writeFile(
-          join(root, ".bober", "progress.md"),
+          join(root, ".bober", "progress.generated.md"),
           `# Bober Progress\n\nLast updated: ${stamp}\n\n## Plan\n\nidentical body\n`,
           "utf-8",
         );
@@ -768,7 +768,7 @@ describe("EngineConformanceHarness — normalization boundaries (sc-13-2)", () =
           ? async (root: string) => {
               await ensureBoberDir(root);
               await writeFile(
-                join(root, ".bober", "progress.md"),
+                join(root, ".bober", "progress.generated.md"),
                 "# Bober Progress\n\nLast updated: 2026-01-01T00:00:00.000Z\n\n## Plan\n\nDIFFERENT body\n",
                 "utf-8",
               );

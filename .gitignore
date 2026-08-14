@@ -54,6 +54,13 @@ pnpm-debug.log*
 .bober/history.jsonl
 .bober/history.archive.jsonl
 
+# The ENGINE-generated progress document — runtime state, regenerated per run.
+# The skill pipeline's curated `.bober/progress.md` is a different file with a
+# different writer and STAYS TRACKED; see PROGRESS_FILE in src/state/history.ts.
+# This one embeds `spec.description`, i.e. prose derived from the operator's
+# feature request, so it is unpublished for the same reason the log is.
+.bober/progress.generated.md
+
 # Regenerable runtime state
 .bober/memory/*.db
 .bober/graph/.hook-queue.jsonl

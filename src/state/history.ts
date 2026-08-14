@@ -13,7 +13,31 @@ import { rotateIfNeeded, historyArchivePath } from "./history-rotation.js";
 
 const BOBER_DIR = ".bober";
 const HISTORY_FILE = "history.jsonl";
-const PROGRESS_FILE = "progress.md";
+
+/**
+ * The ENGINE-generated progress document.
+ *
+ * Deliberately NOT `.bober/progress.md`. That path belongs to the
+ * skill-driven pipeline, which curates a hand-written project narrative there
+ * under a documented contract — 17 instruction sites across
+ * `.claude/commands/*.md` and `.claude/agents/bober-planner.md`, whose header
+ * template is `.claude/commands/bober-plan.md:52`. README and VISION both
+ * describe that file as the project's human-readable progress tracker.
+ *
+ * `updateProgress` produces a structurally different document (a status table
+ * plus per-sprint detail) and ends in a FULL-FILE `writeFile`. Pointed at the
+ * same path, it would silently replace the curated narrative with its own
+ * shorter table the first time an engine ran with `projectRoot` at a project
+ * that uses the skill pipeline.
+ *
+ * That has never happened, because `updateProgress`'s only call site is
+ * `RunResultFlusher.flush` (workflow/flusher.ts), reachable only through
+ * `WorkflowEngine`, which `selectPipelineEngine` never constructs while
+ * `isWorkflowEligible` returns a hardcoded `false`. The collision is latent,
+ * not live — and the moment to separate the two writers is BEFORE that gate is
+ * flipped, not after it eats someone's log.
+ */
+const PROGRESS_FILE = "progress.generated.md";
 
 function historyPath(projectRoot: string): string {
   return join(projectRoot, BOBER_DIR, HISTORY_FILE);
@@ -403,7 +427,7 @@ export async function updateProgress(
  * history.test.ts. Before sprint 5 of spec-20260812-terminal-vocabulary this
  * switched on the bare literal `"passed"`, so once `runSprintCycle` and the
  * workflow flusher started writing `"completed"` for a settled sprint, every
- * settled row in `.bober/progress.md` silently fell through to the
+ * settled row in `.bober/progress.generated.md` silently fell through to the
  * `default: "[PENDING]"` branch. Routed through `isSettledContractStatus`
  * (the sprint-1 predicate) instead of a literal so a THIRD settled word
  * cannot reintroduce the same defect.

@@ -1442,8 +1442,9 @@ All bober state lives in the `.bober/` directory:
     INDEX.md         Distilled lessons index (planner-read)
     QUARANTINE.md    Pruned/contradictory lessons (moved, never deleted)
     facts.db         Bi-temporal SQLite semantic-facts store (auto-produced, planner-read)
-  progress.md      Human-readable progress tracker
-  history.jsonl    Machine-readable event log
+  progress.md      Human-readable progress tracker (skill pipeline; version-controlled)
+  progress.generated.md  Engine-written progress table (updateProgress; git-ignored)
+  history.jsonl    Machine-readable event log (git-ignored — free-text run record)
 ```
 
 ---

@@ -20,7 +20,7 @@ export function registerStatusTool(): void {
     description:
       "Check the status of the running or most recent Bober pipeline. " +
       "Returns progress when active, or the final result when complete. " +
-      "When idle, returns the contents of .bober/progress.md.",
+      "When idle, returns the contents of .bober/progress.md, falling back to .bober/progress.generated.md.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -32,12 +32,23 @@ export function registerStatusTool(): void {
       // No run has ever been started
       if (state === null) {
         const projectRoot = cwd();
-        const progressPath = join(projectRoot, ".bober", "progress.md");
+        // The skill pipeline's curated tracker first, then the engine-generated
+        // one. Two writers, two files (see PROGRESS_FILE in state/history.ts) —
+        // reading only the first would leave a project driven by the workflow
+        // engine with no idle readout at all.
         let progressContent: string;
         try {
-          progressContent = await readFile(progressPath, "utf-8");
+          progressContent = await readFile(join(projectRoot, ".bober", "progress.md"), "utf-8");
         } catch {
-          progressContent = "No progress information available yet. Run bober_run to start a pipeline.";
+          try {
+            progressContent = await readFile(
+              join(projectRoot, ".bober", "progress.generated.md"),
+              "utf-8",
+            );
+          } catch {
+            progressContent =
+              "No progress information available yet. Run bober_run to start a pipeline.";
+          }
         }
 
         return JSON.stringify(
