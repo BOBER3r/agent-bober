@@ -1368,7 +1368,10 @@ objects, so its divergence REDUCES to `contracts`'s and cannot close independent
 inside it — `evaluatorFeedback`, `generatorNotes` (PGE has no writer for either anywhere in
 `src/pge/`) and `version` (deliberately excluded from the ten-key `VOLATILE_KEYS`,
 `conformance.ts:65-76`, because stripping it would hide a real difference rather than close
-one). This is exactly this sprint's own stop condition, applied to itself: *"The divergence
+one). (Two of those three deltas are CLOSED today: sprint 5 of
+`spec-20260814-pge-full-convergence` built the missing `evaluatorFeedback`/`generatorNotes`
+writer, so `contracts` now carries `version` ALONE — see the disposition bullet above. The
+divergence SET still did not move: `contracts` and `pipelineResult` remain pinned.) This is exactly this sprint's own stop condition, applied to itself: *"The divergence
 set is not what this spec predicted — record what it actually is and why, rather than
 adjusting anything to match the prediction."* No test and no production source were changed
 to make "two closed" come true; `conformance.engines.test.ts`'s pinned array was the same

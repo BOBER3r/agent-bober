@@ -24,8 +24,9 @@ summary onto the settled contract") compiles, is non-empty, and is WRONG: it wou
 `"all criteria met"` verbatim. sc-5-1 requires the values MATCH, not merely be present, and the
 decoration is not reversible by stripping a trailing `[...]` — the same field carries the
 anchor-regression encoding or a sandbox critique on other paths. Sprint 4 had already hit an
-identical decorated-vs-raw fork for `sprint-passed`'s `feedback` detail
-(`sprint-evaluate.ts:379-392`) and resolved it by carrying the RAW value separately, with a
+identical decorated-vs-raw fork for `sprint-passed`'s `feedback` detail (the `if (passed)`
+history emission, `sprint-evaluate.ts:402-414` after this sprint's insertions shifted it down)
+and resolved it by carrying the RAW value separately, with a
 comment citing the imperative line number; this sprint follows the same pattern for a second
 field, `evaluatorFeedback`, and adds a third, `generatorNotes`.
 
@@ -86,13 +87,41 @@ carries neither field, genuinely absent, rather than a placeholder.
 
 `sprint_exit`'s settle site now destructures `evaluatorFeedback`/`generatorNotes` OFF the seeded
 contract before spreading it, then conditionally re-adds them from `branchOutcome`'s decisive
-verdict. This means a stale seed (however it got there) can never survive by omission — the
-field is either the producing node's own value, or genuinely absent. A node-level negative
-control (`sprint-evaluate.test.ts`) seeds a contract with `generatorNotes: "SEEDED — must not
-survive"` and `evaluatorFeedback` to match, and asserts the settled contract carries the
-STUB's real values instead.
+verdict (`sprint-review.ts:276-279`, with the claim spelled out at `:267-275`). This means a
+stale seed (however it got there) can never survive by omission — the field is either the
+producing node's own value, or genuinely absent.
 
-## A pre-existing engine characteristic this sprint's new fields made visible, not created
+**The proof took two iterations, and the reason is worth keeping.** Iteration 1 shipped a
+"negative control" that seeded `"SEEDED — must not survive"` into both fields, ran a PASSING
+branch, and asserted the stub's real values came out instead. It passes on the shipped code —
+and it also passes on the mutant. The evaluator deleted the destructure at `:276-278` and
+changed `...contractWithoutFeedback` back to `...contract` at `:279`, and **all 32 tests in
+`sprint-evaluate.test.ts` still passed**, that control among them. The reason is object-spread
+semantics, not a weak assertion: on a passing branch `outcome.evaluatorFeedback` and
+`outcome.generatorNotes` are always defined, so the later key wins over the seed whether or not
+the seed was ever stripped. The test looked like a proof of the strip and was actually a proof
+of last-key-wins. sc-5-3 failed on that ground (a `definitionOfDone` violation too — the doc
+comment at `:267-275` asserted something no test could falsify).
+
+Iteration 2 changed **no production code** (`23a1718` touches only `sprint-evaluate.test.ts`)
+and replaced the control with one that discriminates: seed the same stale pair, but route the
+branch through `underDeliveringExplain(1)` so the curate region's admission check refuses
+before `sprint_generate` — let alone `sprint_evaluate` — ever runs. `outcome` then carries
+NEITHER raw value, both conditional spreads contribute `{}`, and the strip is the only thing
+standing between the seeded string and `settled`. The test asserts `"evaluatorFeedback" in
+entry === false` (absence, not merely difference) on every write. Under the same mutation it is
+the ONE failing test out of 33; reverted, 33/33 pass. The iteration-1 test was kept but
+**renamed** to what it actually proves (the passing-branch sc-5-1/sc-5-2 claim) and carries a
+comment stating outright that it cannot detect the strip's removal.
+
+The generalisable lesson: a negative control that seeds a value only discriminates if the code
+path under test has nothing else that would overwrite that value. Route through the path where
+the overwrite is absent, or the control is decorative.
+
+## KNOWN ISSUE (pre-existing, unfixed): `sprint_exit` is entered twice on a multi-round branch
+
+This sprint's new fields made it visible; they did not create it, and this sprint deliberately
+did not fix it (out of scope). **A future sprint looking for it should start here.**
 
 `sprint_route` and `sprint_correct` share the `sprintIterations` loop counter and both declare
 `onExhausted: "sprint_exit"`. On the one multi-round golden case
@@ -107,15 +136,24 @@ settled contract, `version: 2`), which was already true of the committed dataset
 `pinnedResponses` entries before this sprint and 19 after, only the CONTENT of the contract
 objects inside three of them changed.
 
+**Why it is harmless today, and what would make it stop being harmless:** every write agrees in
+content, because the second entry re-derives the settled contract from the same channel state as
+the first. If a future change ever makes the two entries disagree — a non-idempotent write at
+the settle site, or a field derived from something that moves between the two entries — the
+last writer silently wins and nothing in the suite would notice. The two loop declarations are
+`coding.graph.ts:709,730`.
+
 ## Testing
 
 - `src/pge/state/overall.test.ts` — unaffected; the `SprintVerdictSchema` round-trip test still
   holds with the two new fields absent from its input.
-- `src/pge/nodes/sprint-evaluate.test.ts` — four new tests: the raw pair on a passing branch,
-  the sc-5-3 negative control against a differing seed, the raw pair surviving a multi-round
-  failing branch to loop exhaustion, and a refusal settling with neither field present. All
-  pre-existing tests in the file (including the two anchor-regression `summary` assertions)
-  stay green unchanged.
+- `src/pge/nodes/sprint-evaluate.test.ts` — **five** new tests: the raw pair on a passing branch;
+  the same claim against a DISAGREEING seed (renamed in iteration 2 — it is an sc-5-1/sc-5-2
+  test, not the sc-5-3 proof it was first labelled); the sc-5-3 discriminating test (stale seed
+  + refusal path, the only one in the file that fails when the strip is deleted); the raw pair
+  surviving a multi-round failing branch to loop exhaustion; and a refusal settling with neither
+  field present. All pre-existing tests in the file (including the two anchor-regression
+  `summary` assertions) stay green unchanged.
 - `src/orchestrator/workflow/conformance.engines.test.ts` — the four literal
   `toBeUndefined()`/`toBeDefined()` assertions at the old gap flip to Pattern D (asserted
   against the OTHER engine's own answer). A new sc-5-4 assertion compares the two contracts'
@@ -133,7 +171,8 @@ objects inside three of them changed.
 ## Golden recapture
 
 `GOLDEN_CAPTURE=1 npx vitest run src/pge/golden/capture.test.ts`, every hunk read. SIX of the
-seven replay cases move, each in three places (`expected.artifacts.contracts[0]`,
+seven replay cases move — four hunks each, across three kinds of location
+(`expected.artifacts.contracts[0]`,
 `expected.artifacts.pipelineResult[0].completedSprints[0]`/`.failedSprints[0]`, and the
 `pinnedResponses` entries whose request embeds the settled contract — `sprint.exit` and
 `documenter.summary`, never `reviewer.sprint`, which runs BEFORE the settle node). The seventh,
@@ -141,7 +180,9 @@ seven replay cases move, each in three places (`expected.artifacts.contracts[0]`
 `research.*`/`planner.draft`/`run.gracefulFailure` only, and the sprint region never runs on
 that fixture. `replay-full-run-evaluation-fails` (the multi-round case) gains an EXTRA hunk
 versus the other five, for the pre-existing double-entry behaviour described above — five
-hunks instead of four, all additive, no entry count change. Re-running the capture WITHOUT the
+hunks instead of four, all additive, no entry count change: its three changed
+`pinnedResponses` entries are `sprint_exit`/`sprint.exit` **twice** and
+`sprint_curate_mocks`/`curator.mocks` once, 19 entries before and 19 after. Re-running the capture WITHOUT the
 flag afterward reproduces an identical (empty) diff — byte-stable. Golden gate: **7/7 (100%)**.
 
 ## Files touched outside `src/pge/nodes/`, `src/pge/state/` and `.bober/golden/`
@@ -154,7 +195,10 @@ flag afterward reproduces an identical (empty) diff — byte-stable. Golden gate
   paragraphs (the `spec-20260812-terminal-vocabulary` sprint-1/sprint-5 record) are left
   byte-identical, with one added sentence pointing forward to the new bullet, per the same
   discipline sprint 4 used for `history`'s closure.
-- **`docs/sprints/README.md`** — row 5 added.
+- **`docs/sprints/README.md`** — row 5 added, plus the `spec-20260812-terminal-vocabulary`
+  preamble's "`evaluatorFeedback` and `generatorNotes` need a PGE-node writer" open item marked
+  closed, in that document's existing parenthetical-update style.
+- **This record** (`docs/sprints/sprint-spec-20260814-pge-full-convergence-5.md`).
 
 ## Notes for maintainers
 
@@ -164,9 +208,20 @@ flag afterward reproduces an identical (empty) diff — byte-stable. Golden gate
   `sprint_evaluate`'s final block carries the raw pair; `sprint_security`'s blocked-verdict
   call site does not, matching the recommendation to keep this sprint's surface to the single
   call site that has a genuine `EvaluationRunResult` to read from.
-- Passed **iteration 1**, all 6 of 6 required criteria, every gate re-run against a clean
-  detached worktree: suite **467 files / 7099 passed, 2 skipped, 0 failed**; typecheck (both
-  tsconfigs), lint (0 errors, 2 pre-existing warnings) and build green; golden gate **7/7
-  (100%)**; `pge validate --mode full` and `pge docs --check` both `ok` (44 nodes); `pge diff`
-  against the pre-sprint topology artifact is empty (no schema/topology change this sprint).
-  Commits `b03463b`, `412d967`, `ff7f8e1`, `59226b8`.
+- **The divergence SET did not shrink.** `["audits", "contracts", "pipelineResult"]` is the same
+  three-element array before and after this sprint, and `report.equivalent` is still `false`.
+  What narrowed is the field CONTENT inside two of those three entries: `contracts` from three
+  deltas to one (`version`), and `pipelineResult` identically, because it is a container for
+  `SprintContract`. Do not read this record as "a divergence closed".
+- **FAILED iteration 1 on sc-5-3, passed iteration 2.** Iteration 1 (`b03463b`, `412d967`,
+  `ff7f8e1`, `59226b8`, `080967b`) shipped the whole implementation and five of six criteria
+  verified clean; sc-5-3's proof was inert under mutation (see the sc-5-3 section above).
+  Iteration 2 (`23a1718`) is a **test-only** commit — zero lines of production code and zero
+  golden bytes changed — replacing that control with a discriminating one and renaming the old
+  one to what it actually proves.
+- Final gate, every check re-run by the evaluator against a clean detached worktree at
+  `23a1718`: suite **467 files / 7096 passed, 6 skipped, 0 failed**; typecheck (both tsconfigs),
+  lint (0 errors, 2 pre-existing warnings) and build green; golden gate **7/7 (100%)**;
+  `pge validate --mode full` and `pge docs --check` both `ok` (44 nodes); `pge diff` against the
+  pre-sprint topology artifact is empty (no schema/topology change this sprint). Commits
+  `b03463b`, `412d967`, `ff7f8e1`, `59226b8`, `080967b`, `23a1718`.
