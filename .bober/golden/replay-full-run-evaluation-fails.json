@@ -1287,6 +1287,79 @@
       "history": [
         {
           "details": {
+            "userPrompt": "Accept an optional retry block in the pipeline config and validate it."
+          },
+          "event": "pipeline-start",
+          "phase": "init"
+        },
+        {
+          "details": {
+            "featureCount": 1,
+            "specId": "spec-20260805-pge-conformance"
+          },
+          "event": "planning-complete",
+          "phase": "planning"
+        },
+        {
+          "details": {
+            "title": "Wire the region"
+          },
+          "event": "curator-start",
+          "phase": "curating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "filesAnalyzed": 0,
+            "patternsFound": 1,
+            "utilsIdentified": 1
+          },
+          "event": "curator-complete",
+          "phase": "curating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "iteration": 1
+          },
+          "event": "generator-start",
+          "phase": "generating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "iteration": 1
+          },
+          "event": "evaluator-start",
+          "phase": "evaluating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "iteration": 2
+          },
+          "event": "generator-start",
+          "phase": "generating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "iteration": 2
+          },
+          "event": "evaluator-start",
+          "phase": "evaluating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
+            "title": "Wire the region"
+          },
+          "event": "curator-start",
+          "phase": "curating",
+          "sprintId": "sprint-spec-20260805-pge-conformance-01"
+        },
+        {
+          "details": {
             "completed": 0,
             "failed": 1
           },

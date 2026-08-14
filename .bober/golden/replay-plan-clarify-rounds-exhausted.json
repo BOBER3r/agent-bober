@@ -406,7 +406,15 @@
       "completionMarker": [],
       "contracts": [],
       "evalResults": [],
-      "history": [],
+      "history": [
+        {
+          "details": {
+            "userPrompt": "Accept an optional retry block in the pipeline config and validate it."
+          },
+          "event": "pipeline-start",
+          "phase": "init"
+        }
+      ],
       "pipelineResult": [
         {
           "completedSprints": [],
