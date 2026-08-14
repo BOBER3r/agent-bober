@@ -8,7 +8,7 @@
  * Sprint 9 — colocated CLI command per Sprint 8/10 precedent.
  */
 
-import { writeFile } from "node:fs/promises";
+
 import { join } from "node:path";
 
 import chalk from "chalk";
@@ -16,6 +16,7 @@ import type { Command } from "commander";
 
 import { findProjectRoot } from "../../utils/fs.js";
 import { pendingExists } from "../../state/approval-state.js";
+import { writeFileAtomic } from "../../state/helpers.js";
 
 async function resolveRoot(): Promise<string> {
   const root = await findProjectRoot();
@@ -57,10 +58,9 @@ export function registerRejectCommand(program: Command): void {
         feedback: opts.feedback,
       };
 
-      await writeFile(
+      await writeFileAtomic(
         rejectedPath,
         JSON.stringify(payload, null, 2) + "\n",
-        "utf-8",
       );
 
       process.stdout.write(

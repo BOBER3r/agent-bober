@@ -10,7 +10,7 @@
  * Sprint 9 — colocated in mechanisms/ per Sprint 7+8 precedent.
  */
 
-import { readFile, writeFile, readdir, unlink, mkdir } from "node:fs/promises";
+import { readFile, readdir, unlink, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   CheckpointArtifact,
@@ -19,6 +19,7 @@ import type {
   CheckpointOutcome,
 } from "../types.js";
 import { render } from "../renderers/registry.js";
+import { writeFileAtomic } from "../../../state/helpers.js";
 
 const DEFAULT_POLL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -44,6 +45,58 @@ function artifactStub(artifact: CheckpointArtifact): { type?: string } {
   const stub: { type?: string } = {};
   if (typeof a["type"] === "string") stub.type = a["type"];
   return stub;
+}
+
+/**
+ * Read and parse a resolution marker.
+ *
+ * Returns undefined when the marker cannot be read or parsed *yet* — the caller
+ * treats that as "not resolved" and retries on the next poll instead of failing
+ * the checkpoint. Two things make a marker briefly unreadable even though its
+ * directory entry already exists:
+ *
+ *   - a non-atomic writer publishes the entry before its bytes (open(2) creates
+ *     the name, and payloads over 512 KiB land in several chunks), so a poll
+ *     landing mid-write reads zero bytes or a prefix. Every writer in this repo
+ *     now publishes via writeFileAtomic, but a hand-edited marker or a
+ *     third-party tool still can tear;
+ *   - a concurrent resolver can unlink the marker between our readdir and our
+ *     readFile.
+ *
+ * Waiting is the fail-closed outcome for a gate that authorises effects: a
+ * marker that never becomes readable degrades to TIMEOUT — which denies the
+ * checkpoint — rather than being approved or throwing out of request().
+ */
+async function readMarker<T>(
+  path: string,
+  warned: Set<string>,
+): Promise<T | undefined> {
+  // Warn at most once per marker, so a genuinely stuck marker is diagnosable
+  // rather than looking like a silent hang until the timeout fires.
+  const warnOnce = (reason: string): void => {
+    if (warned.has(path)) return;
+    warned.add(path);
+    process.stderr.write(`warn: checkpoint marker ${path} ${reason}; retrying.\n`);
+  };
+
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf-8");
+  } catch (err) {
+    // ENOENT is benign: a concurrent resolver removed the marker between our
+    // readdir and this read. Anything else (permissions, I/O) would otherwise
+    // be indistinguishable from "still waiting for the approver".
+    if ((err as { code?: unknown } | null)?.code !== "ENOENT") {
+      warnOnce(`could not be read (${err instanceof Error ? err.message : String(err)})`);
+    }
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    warnOnce("is not readable JSON yet");
+    return undefined;
+  }
 }
 
 export class DiskCheckpointMechanism implements CheckpointMechanism {
@@ -95,15 +148,16 @@ export class DiskCheckpointMechanism implements CheckpointMechanism {
       requestedAt,
       timeoutAt,
     };
-    await writeFile(
+    await writeFileAtomic(
       pendingPath,
       JSON.stringify(pending, null, 2) + "\n",
-      "utf-8",
     );
 
     // 2) Poll until resolution OR timeout.
     const startedAt = this.now();
     let pollHandle: ReturnType<typeof setTimeout> | undefined;
+    // Markers already warned about, so a retrying poll does not spam stderr.
+    const warnedMarkers = new Set<string>();
 
     try {
       return await new Promise<CheckpointOutcome>((resolve, reject) => {
@@ -115,38 +169,46 @@ export class DiskCheckpointMechanism implements CheckpointMechanism {
             );
 
             if (entries.has(`${checkpoint}.approved.json`)) {
-              const raw = await readFile(approvedPath, "utf-8");
-              const parsed = JSON.parse(raw) as { editDelta?: unknown };
-              // Cleanup — delete pending + approved markers.
-              await unlink(pendingPath).catch(() => {});
-              await unlink(approvedPath).catch(() => {});
-              if (parsed.editDelta !== undefined) {
-                resolve({ approved: true, editDelta: parsed.editDelta });
-              } else {
-                resolve({ approved: true });
+              const parsed = await readMarker<{ editDelta?: unknown }>(
+                approvedPath,
+                warnedMarkers,
+              );
+              // undefined = torn or vanished mid-write; fall through and retry.
+              if (parsed !== undefined) {
+                // Cleanup — delete pending + approved markers.
+                await unlink(pendingPath).catch(() => {});
+                await unlink(approvedPath).catch(() => {});
+                if (parsed.editDelta !== undefined) {
+                  resolve({ approved: true, editDelta: parsed.editDelta });
+                } else {
+                  resolve({ approved: true });
+                }
+                return;
               }
-              return;
             }
 
             if (entries.has(`${checkpoint}.rejected.json`)) {
-              const raw = await readFile(rejectedPath, "utf-8");
-              const parsed = JSON.parse(raw) as { feedback: string };
-              // Cleanup — delete pending + rejected markers.
-              await unlink(pendingPath).catch(() => {});
-              await unlink(rejectedPath).catch(() => {});
-              resolve({ approved: false, feedback: parsed.feedback });
-              return;
+              const parsed = await readMarker<{ feedback: string }>(
+                rejectedPath,
+                warnedMarkers,
+              );
+              if (parsed !== undefined) {
+                // Cleanup — delete pending + rejected markers.
+                await unlink(pendingPath).catch(() => {});
+                await unlink(rejectedPath).catch(() => {});
+                resolve({ approved: false, feedback: parsed.feedback });
+                return;
+              }
             }
 
             // Check timeout.
             if (this.now() - startedAt >= timeoutMs) {
-              await writeFile(
+              await writeFileAtomic(
                 timeoutPath,
                 JSON.stringify({
                   checkpointId: checkpoint,
                   timedOutAt: new Date(this.now()).toISOString(),
                 }) + "\n",
-                "utf-8",
               );
               await unlink(pendingPath).catch(() => {});
               resolve({ approved: false, feedback: "TIMEOUT" });

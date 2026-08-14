@@ -256,9 +256,11 @@ const criticalAuditResult: SecurityAuditResult = {
 };
 
 async function makeTmpRoot(prefix: string): Promise<string> {
-  const tmpRoot = path.join(os.tmpdir(), `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  await fs.mkdir(tmpRoot, { recursive: true });
-  return tmpRoot;
+  // mkdtemp is atomic and OS-guaranteed unique. A hand-built
+  // Date.now()+Math.random() path can repeat, and mkdir(recursive) succeeds
+  // silently on an existing directory — two tests would then quietly share one
+  // root instead of failing loudly.
+  return fs.mkdtemp(path.join(os.tmpdir(), `${prefix}_`));
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
