@@ -15,6 +15,7 @@
 //     nobody is writing yet and quietly stops being reviewed.
 
 import { readFile, readdir, stat } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
@@ -200,5 +201,142 @@ describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
     expect(await exists(join(REPO_ROOT, ".bober", "topology", "coding.json"))).toBe(true);
     const gitignore = await readFile(join(REPO_ROOT, ".gitignore"), "utf-8");
     expect(gitignore).not.toContain(".bober/topology");
+  });
+});
+
+
+// ── The two persisted free-text artifacts ────────────────────────────
+
+describe("the two persisted free-text artifacts: history.jsonl unpublished, progress.md scrubbed", () => {
+  /**
+   * WHY THIS IS AN INVARIANT AND NOT A ONE-OFF CLEANUP.
+   *
+   * `.bober/history.jsonl` is an append-only free-text log. Every writer puts
+   * caller-supplied prose in it — feature requests, evaluator summaries, audit
+   * notes — and there are ~40 `appendHistory`/`emitPhaseEvent` call sites across
+   * BOTH engines, with more added every sprint. Nothing bounds what a future one
+   * may write.
+   *
+   * It was tracked and committed until this change, and this repo's remote is
+   * public, so the log was published on every push. Re-adding it is a single
+   * `git add -f` away and would look like an innocuous "commit the run record"
+   * diff, which is exactly why it needs a test rather than a comment.
+   *
+   * Nothing depends on the committed copy: every consumer (completion-tailer,
+   * event-stream, the conformance harness) resolves the path under its own
+   * `projectRoot`, and the whole test suite writes to temp roots.
+   */
+  const IGNORED_RUN_RECORDS = [
+    ".bober/history.jsonl",
+    ".bober/history.archive.jsonl",
+    // The ENGINE-generated progress document. Regenerated per run and embeds
+    // `spec.description`, so it is unpublished for the same reason the log is.
+    // Its curated namesake `.bober/progress.md` stays tracked — see below.
+    ".bober/progress.generated.md",
+  ];
+
+  /** Exit status only — `git` writes the interesting part to its status code. */
+  function gitSucceeds(args: readonly string[]): boolean {
+    try {
+      execFileSync("git", [...args], { cwd: REPO_ROOT, stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  it("ignores the active log and its rotated sibling", () => {
+    for (const path of IGNORED_RUN_RECORDS) {
+      expect(gitSucceeds(["check-ignore", "-q", path]), `.gitignore must cover ${path}`).toBe(true);
+    }
+  });
+
+  it("does not track the active log or its rotated sibling", () => {
+    for (const path of IGNORED_RUN_RECORDS) {
+      expect(
+        gitSucceeds(["ls-files", "--error-unmatch", path]),
+        `${path} must not be tracked — 'git rm --cached' it`,
+      ).toBe(false);
+    }
+  });
+
+  it("positive control: a genuinely tracked .bober artifact is tracked and not ignored", () => {
+    // Proves the two assertions above read a real index and a real .gitignore,
+    // rather than passing because every `git` invocation fails.
+    const tracked = ".bober/topology/coding.json";
+    expect(gitSucceeds(["ls-files", "--error-unmatch", tracked])).toBe(true);
+    expect(gitSucceeds(["check-ignore", "-q", tracked])).toBe(false);
+  });
+
+  /**
+   * The DELIBERATE asymmetry with the log, recorded so neither half drifts.
+   *
+   * `.bober/progress.md` stays TRACKED. Unlike the log it is a human-readable
+   * document the skill-driven pipeline curates by documented contract (17 sites
+   * across .claude/commands/*.md and .claude/agents/bober-planner.md, whose
+   * header template lives at .claude/commands/bober-plan.md:52), and its
+   * committed content carries no credentials, emails or home paths.
+   *
+   * What it DOES embed is `spec.description` — planner prose derived from the
+   * operator's feature request, the same provenance as the log's `userPrompt`.
+   * That is handled by scrubbing at the writer, not by unpublishing the file.
+   */
+  it("keeps progress.md tracked and unignored — the asymmetry is intentional", () => {
+    expect(gitSucceeds(["ls-files", "--error-unmatch", ".bober/progress.md"])).toBe(true);
+    expect(gitSucceeds(["check-ignore", "-q", ".bober/progress.md"])).toBe(false);
+  });
+
+  it("updateProgress scrubs every free-text string it embeds", async () => {
+    // Source scan, because the failure mode is a NEW interpolation added later:
+    // the behaviour tests only cover the three sites that exist today.
+    //
+    // Keyed on the property NAMES that carry prose (`.title` / `.description`)
+    // rather than on the specific fields, so a future `feature.description`
+    // pushed into the document is caught too. Numeric and id-shaped reads
+    // (`spec.features.length`, `contract.contractId`, `contract.status`) do not
+    // match and correctly need no scrubbing.
+    const src = await readFile(join(SRC_ROOT, "state", "history.ts"), "utf-8");
+    const body = src.slice(src.indexOf("export async function updateProgress"));
+    const embedded = body
+      .split("\n")
+      .filter((l) => !isCommentLine(l))
+      // Not keyed on `lines.push(` — the contract.title site wraps, leaving the
+      // call and the interpolation on different lines.
+      .filter((l) => /\.(title|description)\b/.test(l));
+
+    expect(embedded.length, "the scan found the free-text sites").toBeGreaterThanOrEqual(3);
+    const unscrubbed = embedded.filter((l) => !l.includes("scrubSensitive"));
+    expect(unscrubbed, "every prose string in progress.md must be scrubbed").toEqual([]);
+  });
+
+  it("the engine's progress writer does not aim at the curated tracker", async () => {
+    // `updateProgress` ends in a full-file `writeFile`. Pointed back at
+    // `progress.md` it would silently replace the skill pipeline's curated
+    // narrative — a one-word edit, with no other test failing, because the
+    // behaviour tests build their own temp roots and would simply follow it.
+    const src = await readFile(join(SRC_ROOT, "state", "history.ts"), "utf-8");
+    const decl = src
+      .split("\n")
+      .filter((l) => !isCommentLine(l))
+      .find((l) => l.includes("const PROGRESS_FILE"));
+
+    expect(decl, "history.ts must declare PROGRESS_FILE").toBeDefined();
+    expect(decl).toContain("progress.generated.md");
+    expect(decl).not.toMatch(/["'`]progress\.md["'`]/);
+  });
+
+  it("appendHistory routes every persisted line through the redactor", async () => {
+    // The second layer: this repo untracks the log, but `appendHistory` ships in
+    // the published CLI and runs in user projects that may commit theirs. If the
+    // redaction call is dropped from the write path, that protection is gone with
+    // no other test failing — the entry would still be valid JSONL.
+    const src = await readFile(join(SRC_ROOT, "state", "history.ts"), "utf-8");
+    const writeLine = src
+      .split("\n")
+      .filter((l) => !isCommentLine(l))
+      .find((l) => l.includes("JSON.stringify") && l.includes("entry"));
+
+    expect(writeLine, "history.ts must serialise the entry on one line").toBeDefined();
+    expect(writeLine).toContain("redactHistoryEntry");
   });
 });

@@ -63,7 +63,8 @@ bober run "feature description" --mode autopilot
   briefings/<contractId>.md    Curator briefings (codebase context per sprint)
   eval-results/<id>.json       Evaluator output per sprint
   approvals/                   Empty in autopilot (no pending checkpoints)
-  progress.md                  Human-readable progress tracker
+  progress.md                  Human-readable progress tracker (skill pipeline; version-controlled)
+  progress.generated.md        Engine-written progress table (updateProgress; git-ignored)
   history.jsonl                Machine-readable event log
 ```
 

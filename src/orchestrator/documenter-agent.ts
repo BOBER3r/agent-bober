@@ -56,9 +56,12 @@ function resolveDocsDir(dir: string, projectRoot: string): string {
  * - `committed` with `docsDir` unset: the repo-relative literal
  *   `docs/sprints/<id>.md` — byte-identical to the pre-sprint-1 hardcoded
  *   path. This string is embedded verbatim in the documenter prompt and
- *   persisted into the git-tracked `.bober/history.jsonl`
- *   (pipeline.ts:627), so it MUST stay a portable, projectRoot-relative
- *   literal rather than an absolute, machine-specific path (nonGoals[0]).
+ *   persisted into `.bober/history.jsonl` (untracked — see .gitignore; the
+ *   log is per-project runtime state, not a committed artifact), so it MUST
+ *   stay a portable, projectRoot-relative literal rather than an absolute,
+ *   machine-specific path (nonGoals[0]). The portability requirement is
+ *   unchanged by untracking: the same doc path is read back on resume, and
+ *   `appendHistory` now rewrites absolute home paths to `<home>` anyway.
  * - `local` with `docsDir` unset: `docs/sprints/<id>.md` resolved to an
  *   absolute path under `projectRoot`. This is new behavior (no
  *   pre-existing compatibility constraint) and needs an absolute path

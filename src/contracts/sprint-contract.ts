@@ -58,13 +58,13 @@ export type ContractStatus = z.infer<typeof ContractStatusSchema>;
  * "completed": mcp/tools/sprint.ts, mcp/tools/eval.ts, cli/commands/sprint.ts,
  * cli/commands/eval.ts (all build a `completedContracts` list fed into a
  * handoff's `sprintHistory`), and state/history.ts's "Passed" row in
- * `.bober/progress.md`.
+ * `.bober/progress.generated.md`.
  *
  * Deliberately EXCLUDES "failed": a failed sprint has stopped (see
  * TERMINAL_CONTRACT_STATUSES below) but it is not something a resumed run
  * should skip over, and state/history.ts counts it in a SEPARATE "Failed"
  * row — folding it in here would double-count every failed sprint in
- * progress.md.
+ * progress.generated.md.
  */
 export const SETTLED_CONTRACT_STATUSES: ReadonlySet<ContractStatus> = new Set([
   "passed",

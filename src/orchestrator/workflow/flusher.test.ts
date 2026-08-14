@@ -255,7 +255,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     expect(typeof terminal[0]!.details["durationMs"]).toBe("number");
   });
 
-  it("writes progress.md containing the contract title (C3)", async () => {
+  it("writes progress.generated.md containing the contract title (C3)", async () => {
     const flusher = new RunResultFlusher();
     const config = createDefaultConfig("test", "brownfield");
     const contract = makeSyntheticContract();
@@ -264,7 +264,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
 
     await flusher.flush(tmpDir, config, result);
 
-    const progressPath = join(tmpDir, ".bober", "progress.md");
+    const progressPath = join(tmpDir, ".bober", "progress.generated.md");
     expect(existsSync(progressPath)).toBe(true);
     const content = await readFile(progressPath, "utf-8");
     expect(content).toContain(contract.title);

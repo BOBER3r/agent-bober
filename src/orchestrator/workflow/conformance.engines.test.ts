@@ -202,8 +202,12 @@ async function compare(): Promise<ConformanceReport> {
  *  - `runState` (`.bober/runs/<runId>/state.json`) has no writer in either engine. It is
  *    written by the CHAT layer (`src/chat/run-spawner.ts`, `src/chat/chat-session.ts`)
  *    around a spawned run, and a `PipelineEngine.run` never produces one.
- *  - `progress` (`.bober/progress.md`) is written by `updateProgress`, which has no call
- *    site in `runTsPipeline` and none in the graph runtime.
+ *  - `progress` (`.bober/progress.generated.md`) is written by `updateProgress`, which has
+ *    no call site in `runTsPipeline` and none in the graph runtime. Its only caller is
+ *    `RunResultFlusher.flush`, reachable solely through `WorkflowEngine` — which
+ *    `selectPipelineEngine` never constructs while `isWorkflowEligible` returns a
+ *    hardcoded `false`. The skill pipeline's curated `.bober/progress.md` is a DIFFERENT
+ *    file with a different writer and is not an engine artifact at all.
  *
  * Both are recorded as KNOWN-EMPTY rather than counted as matches: `emptyOnAllEnginesFields`
  * exists precisely so an equivalence cannot rest on two absences.
