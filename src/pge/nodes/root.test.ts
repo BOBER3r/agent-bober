@@ -1,3 +1,6 @@
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { BoberConfig } from "../../config/schema.js";
@@ -15,12 +18,18 @@ import type {
   SemanticCache,
   TraceWriter,
 } from "../registry/nodes.js";
-import { initialOverallState } from "../state/overall.js";
+import { BRANCH_STATES, initialOverallState } from "../state/overall.js";
 import type { BranchStatus, OverallState, SprintVerdict } from "../state/overall.js";
 import { CODING_GRAPH } from "../topology/coding.graph.js";
 import { stubContracts, stubPlanSpec } from "./__fixtures__/region-harness.js";
-import { loopBoundOf, nodeSpecOf } from "./gates.js";
-import { ROOT_NODE_IDS, evalRouterNode, reworkRoundsTaken, reworkRouterNode } from "./root.js";
+import { SPRINT_GATE_IDS, gatePolicyOf, loopBoundOf, nodeSpecOf, reduceSprintsGate } from "./gates.js";
+import {
+  ROOT_NODE_IDS,
+  evalRouterNode,
+  reworkRoundsTaken,
+  reworkRouterNode,
+  unsucceededBranches,
+} from "./root.js";
 import { dispatchableContracts } from "./sprint-fanout.js";
 import { EVALUATE_LABEL, SPRINTS_LABEL, supervisorNode } from "./supervisor.js";
 
@@ -65,6 +74,26 @@ import { EVALUATE_LABEL, SPRINTS_LABEL, supervisorNode } from "./supervisor.js";
  * supply. Sprint 9 of `spec-20260814-pge-full-convergence` added this file: the reasoning
  * was already recorded in `coverage.test.ts` and `docs/pge-graph.md` by sprint 8, but
  * nothing backed it with a test the way `context_compact`'s block is backed.
+ *
+ * ── Claims 5 and 6: the SECOND chain, and the state nobody writes ──
+ *
+ * Claims 1-4 are chain A. `coverage.test.ts` argues a SECOND, independent chain to the same
+ * conclusion — `reduce_sprints`'s gate has already refused every badly-settled state by the
+ * time `rework_route` can run — and that one was prose only. Claim 5 encodes it. The two
+ * chains fail independently, and chain A alone keeps the `NEVER_EXECUTED` entry correct, so
+ * a chain-B regression would otherwise be SILENT.
+ *
+ * Claim 6 pins the fact both chains lean on: `"abandoned"` is a legal `BranchState` that no
+ * shipped code writes. It also records, as an executable fact, that the two rules which READ
+ * it disagree about what it would mean — `reduceSprintsGate` demands re-dispatch,
+ * `dispatchableContracts` refuses to supply one.
+ *
+ * ── What this file does NOT prove ──
+ *
+ * Unreachability is a property of the ROUTERS, and it is not a safety mechanism. The commit
+ * boundary does not rely on it: `nodes/commit.ts` refuses on the run's global verdict
+ * directly, so a future edge that makes `partial` live cannot turn a failed run into a
+ * whole-tree commit. That refusal and these claims are deliberately independent.
  */
 
 // ── A context whose every collaborator throws (gates.test.ts / supervisor.test.ts style) ──
@@ -339,5 +368,210 @@ describe("CLAIM 4 — evalRouterNode's 'partial'/'exhausted' branches are correc
     const router = evalRouterNode(CODING_GRAPH);
     const command = await router.handler(failingGlobalVerdict(), state, rootContext());
     expect(command.goto).toEqual({ kind: "label", label: "exhausted" });
+  });
+});
+
+
+// ── Claim 5 ─────────────────────────────────────────────────────────
+
+/**
+ * CHAIN B, the one sprint 9 argued in prose and never encoded.
+ *
+ * Chain A (claims 1-4) reaches the same conclusion through `supervisorNode`'s dispatch
+ * guard. Chain B reaches it through the SPRINT gate instead: by the time `rework_route` can
+ * run at all, `reduce_sprints` has already refused every state in which a branch settled
+ * badly, so every branch it can see is `"succeeded"` and `dispatchableContracts` — which
+ * excludes exactly `"succeeded"` and `"abandoned"` — is empty.
+ *
+ * Encoding it matters because the two chains fail INDEPENDENTLY. Chain A alone keeps
+ * `coverage.test.ts`'s `NEVER_EXECUTED` entry for `synthesize` correct, so a chain-B
+ * regression would be silent: the entry would still be true, for one reason instead of two,
+ * and nothing would say the second reason had gone. These tests make that audible.
+ */
+describe("CLAIM 5 — reduce_sprints is a barrier: rework_route can only run from an all-succeeded state (chain B)", () => {
+  const REDUCE_ON_FAIL = gatePolicyOf(CODING_GRAPH, SPRINT_GATE_IDS.reduce).onFail;
+
+  it("REFUSES — routing back to the fan-out, not onward — while any branch is still settled badly", async () => {
+    const [a, b] = twoContracts();
+    const state: OverallState = {
+      ...baseState([a, b]),
+      branchStatus: { [a.contractId]: succeeded(), [b.contractId]: failedBranch() },
+    };
+
+    const gate = reduceSprintsGate(CODING_GRAPH);
+    const command = await gate.handler(
+      undefined,
+      state,
+      rootContext({ nodeId: SPRINT_GATE_IDS.reduce }),
+    );
+    // The refusal routes to the gate's DECLARED onFail (`fanout_sprints`), read off the
+    // artifact rather than written as a literal — so re-pointing the edge fails this test
+    // instead of silently changing what the barrier means.
+    expect(command.goto).toEqual({ kind: "node", node: REDUCE_ON_FAIL });
+  });
+
+  it("ADMITS only when every branch has succeeded — and that state's dispatch set is empty, which is what makes rework_route select 'exhausted'", async () => {
+    const [a, b] = twoContracts();
+    const state: OverallState = {
+      ...baseState([a, b]),
+      branchStatus: { [a.contractId]: succeeded(), [b.contractId]: succeeded(2) },
+    };
+
+    const gate = reduceSprintsGate(CODING_GRAPH);
+    const command = await gate.handler(
+      undefined,
+      state,
+      rootContext({ nodeId: SPRINT_GATE_IDS.reduce }),
+    );
+    expect(command.goto).not.toEqual({ kind: "node", node: REDUCE_ON_FAIL });
+
+    // The link that makes the barrier mean something downstream: the only states the gate
+    // admits are states `dispatchableContracts` reports nothing for.
+    expect(dispatchableContracts(state, state.sprintContracts)).toEqual([]);
+  });
+
+  it("'succeeded', NOT 'abandoned', is the exclusion that actually bites — the mechanism an earlier analysis got wrong", () => {
+    const [a, b] = twoContracts();
+    const succeededOnly: OverallState = {
+      ...baseState([a, b]),
+      branchStatus: { [a.contractId]: succeeded(), [b.contractId]: succeeded() },
+    };
+    expect(dispatchableContracts(succeededOnly, succeededOnly.sprintContracts)).toEqual([]);
+
+    // Remove `succeeded` from the picture and the set is non-empty again, proving the empty
+    // result above is produced by `succeeded` and not by anything to do with `abandoned`.
+    const failedInstead: OverallState = {
+      ...baseState([a, b]),
+      branchStatus: { [a.contractId]: failedBranch(), [b.contractId]: failedBranch() },
+    };
+    expect(
+      dispatchableContracts(failedInstead, failedInstead.sprintContracts).map((c) => c.contractId),
+    ).toEqual([a.contractId, b.contractId]);
+  });
+});
+
+// ── Claim 6 ─────────────────────────────────────────────────────────
+
+/**
+ * `"abandoned"` is a legal {@link BranchState} with NO production writer, and until now
+ * nothing pinned that absence — not a test, a type, or a lint rule.
+ *
+ * The absence is load-bearing in two directions, which is why it is worth a test rather than
+ * a comment:
+ *
+ *  1. Chain B above quotes `dispatchableContracts`'s exclusion of `"succeeded"` OR
+ *     `"abandoned"`. If a writer ever appeared, that second exclusion would start biting and
+ *     the chain would change meaning.
+ *  2. The two production rules that READ it DISAGREE about what it means.
+ *     `reduceSprintsGate` (`gates.ts`) classes it with `"failed"` — settled badly, must be
+ *     re-dispatched — while `dispatchableContracts` (`sprint-fanout.ts`) excludes it from
+ *     re-dispatch entirely. A branch in that state would therefore be demanded by the gate
+ *     and supplied by nothing: silently dropped from every dispatch set, with no record that
+ *     it was skipped. The third test below pins that disagreement as a FACT about today's
+ *     code, so whoever adds the first writer meets it as a failing test rather than as a
+ *     production stall.
+ *
+ * It can enter through any path that reconstitutes state without going through the writers —
+ * including a checkpoint deserialised from `.bober/` on resume — so "no writer" is not the
+ * same as "impossible", and the scan below says only what it can actually prove.
+ */
+describe("CLAIM 6 — no production code writes the 'abandoned' BranchState", () => {
+  /** Every shipped `.ts` under `src/`: no tests, no fixtures, no test-only helpers. */
+  async function productionSources(dir: string): Promise<string[]> {
+    const found: string[] = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "__fixtures__" || entry.name === "__tests__") continue;
+        found.push(...(await productionSources(full)));
+        continue;
+      }
+      if (!entry.name.endsWith(".ts")) continue;
+      if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".d.ts")) continue;
+      found.push(full);
+    }
+    return found;
+  }
+
+  it("is still a DECLARED BranchState — this claim is about the missing writer, not a missing value", () => {
+    expect(BRANCH_STATES).toContain("abandoned");
+  });
+
+  it("no shipped file constructs a branch status in the 'abandoned' state", async () => {
+    const files = await productionSources("src");
+    expect(files.length).toBeGreaterThan(100);
+
+    // The shape of a WRITE: `state: "abandoned"` is how every BranchStatus is built
+    // (`BranchStatusSchema`), so a writer cannot avoid this token without going through a
+    // variable — which the next test's broader scan would still catch.
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, "utf-8");
+      if (/state:\s*["'`]abandoned["'`]/.test(source)) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("every shipped mention of 'abandoned' in the PGE is a comparison, never an assignment", async () => {
+    const files = (await productionSources(join("src", "pge"))).filter(
+      (file) => !file.endsWith(join("state", "overall.ts")),
+    );
+
+    const mentions: { file: string; line: string }[] = [];
+    for (const file of files) {
+      const source = await readFile(file, "utf-8");
+      for (const line of source.split("\n")) {
+        if (!line.includes('"abandoned"')) continue;
+        // Comment lines explain the state; they cannot write it.
+        if (line.trimStart().startsWith("*") || line.trimStart().startsWith("//")) continue;
+        mentions.push({ file, line: line.trim() });
+      }
+    }
+
+    // The two readers, and only those two. A NEW entry here is the signal: it means somebody
+    // has begun to care about `abandoned` in shipped code, and claims 5 and 6 both need
+    // re-reading before it lands.
+    expect(mentions.map((m) => m.file).sort()).toEqual([
+      join("src", "pge", "nodes", "gates.ts"),
+      join("src", "pge", "nodes", "sprint-fanout.ts"),
+    ]);
+    for (const mention of mentions) {
+      expect(mention.line, `${mention.file} should only COMPARE against "abandoned"`).toMatch(
+        /[!=]==\s*"abandoned"|"abandoned"\s*[!=]==/,
+      );
+    }
+  });
+
+  it("the two readers DISAGREE about what an abandoned branch means — pinned, because nothing else records it", async () => {
+    const [a] = twoContracts();
+    const state: OverallState = {
+      ...baseState([a]),
+      branchStatus: { [a.contractId]: { state: "abandoned", attempts: 1 } },
+    };
+
+    // `reduceSprintsGate`: settled badly -> must be re-dispatched. It REFUSES.
+    const gate = reduceSprintsGate(CODING_GRAPH);
+    const command = await gate.handler(
+      undefined,
+      state,
+      rootContext({ nodeId: SPRINT_GATE_IDS.reduce }),
+    );
+    expect(command.goto).toEqual({
+      kind: "node",
+      node: gatePolicyOf(CODING_GRAPH, SPRINT_GATE_IDS.reduce).onFail,
+    });
+
+    // `dispatchableContracts`: deliberately given up on -> excluded from re-dispatch. It
+    // offers NOTHING to satisfy the refusal above. That is the silent drop.
+    expect(dispatchableContracts(state, state.sprintContracts)).toEqual([]);
+  });
+
+  it("the fail-closed verdict still holds for such a branch — unsucceededBranches counts it as not-succeeded", () => {
+    const [a] = twoContracts();
+    const state: OverallState = {
+      ...baseState([a]),
+      branchStatus: { [a.contractId]: { state: "abandoned", attempts: 1 } },
+    };
+    expect(unsucceededBranches(state)).toEqual([a.contractId]);
   });
 });

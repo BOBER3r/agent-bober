@@ -266,6 +266,35 @@ export function isGlobalVerdict(verdict: SprintVerdict): boolean {
   return verdict.id.startsWith("global:");
 }
 
+/**
+ * The run's own latest global verdict, or `null` when no global evaluation was ever recorded.
+ *
+ * `evaluations` is an append-joined channel, so "latest" cannot be "the last element" — a
+ * join has no recency. The round is carried IN the id ({@link globalVerdictId}), which makes
+ * it the only ordering fact that survives the join, so the highest round wins and a tie
+ * falls back to encounter order.
+ *
+ * Exported because the COMMIT boundary needs it: `commit` must be able to ask "did this run
+ * pass?" rather than infer it from whether anything happened to settle. See
+ * `./commit.ts`'s own doc block for why that distinction is the whole point.
+ */
+export function latestGlobalVerdict(state: Readonly<OverallState>): SprintVerdict | null {
+  let latest: SprintVerdict | null = null;
+  let latestRound = -1;
+  for (const verdict of state.evaluations) {
+    if (!isGlobalVerdict(verdict)) continue;
+    const round = Number.parseInt(verdict.id.slice("global:".length), 10);
+    // An unparseable round is still a global row; treat it as round 0 rather than dropping
+    // it, so a malformed id can never make a FAILING run look like an unevaluated one.
+    const ordinal = Number.isNaN(round) ? 0 : round;
+    if (ordinal >= latestRound) {
+      latestRound = ordinal;
+      latest = verdict;
+    }
+  }
+  return latest;
+}
+
 /** What the recorded verdicts say about one contract. */
 export type ContractGrade = "pass" | "fail" | "ungraded";
 

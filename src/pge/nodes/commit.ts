@@ -9,6 +9,7 @@ import { EFFECTS } from "./effects.js";
 import type { GitCommitResponseSchema } from "./effects.js";
 import { gatePolicyOf, nodeSpecOf, portOf, successorOrEnd } from "./gates.js";
 import { documentedContracts } from "./documenter.js";
+import { latestGlobalVerdict } from "./root.js";
 
 /**
  * The commit approval gate and the git commit (sc-12-9).
@@ -36,6 +37,23 @@ import { documentedContracts } from "./documenter.js";
  * `EffectRegistry.invoke` independently refuses `git.commit` for any node whose artifact
  * declaration does not list `git` (`registry/effects.ts:147`). Two locks, one door, neither
  * reachable from a node body.
+ *
+ * ── The third lock, and why it is not redundant ──
+ *
+ * Both locks above answer "is this node ALLOWED to commit". Neither answers "did this run
+ * EARN a commit", and neither constrains WHICH FILES get staged — `commitAll` runs
+ * `git add -A` over the whole working tree. So a run that FAILED its global evaluation but
+ * had some sprint succeed could reach here with an approval, stage every branch's changes
+ * including the unevaluated ones, and describe the result using only the sprints that
+ * passed. The route that does it is `route_after_eval`'s `partial` label -> `synthesize` ->
+ * `documenter` -> `hitl_commit` -> `commit`: `synthesize`'s sole outbound edge is the same
+ * successor `pass` takes (`coding.graph.ts`, `e-eval-synthesized`).
+ *
+ * That path is currently unreachable — `nodes/root.test.ts`'s CLAIM tests prove
+ * `route_after_eval` runs at most once and never selects `partial`. But unreachability is a
+ * property of the ROUTERS, proven elsewhere, and it was the only thing standing between a
+ * failing run and a whole-tree commit. The handler below therefore refuses on the global
+ * verdict directly, so the guarantee survives any future edge that makes `partial` live.
  */
 
 export const COMMIT_NODE_IDS = {
@@ -207,11 +225,44 @@ export function commitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
     inputSchema: z.unknown(),
     outputSchema: z.unknown(),
     handler: async (_input, state, ctx) => {
+      // ── Lock three: the run itself must have PASSED (sc-12-9) ──
+      //
+      // Read the verdict, not the wreckage. `documentedContracts` below answers "did
+      // anything settle", which is a DIFFERENT question from "did this run pass" and is the
+      // question this guard used to ask by accident: on the `partial` route the global
+      // evaluation has FAILED and succeeded contracts still exist, so a length check admits
+      // exactly the run that must not be committed. `git add -A` stages the whole working
+      // tree (`utils/git.ts`), including the failed branches' unevaluated changes, while the
+      // message below is built only from what passed — so admitting a failed run here
+      // produces a commit of everything described as only the part that worked.
+      //
+      // Absent is refused, not admitted. A state that reached this node with no global
+      // verdict at all — a projection, or a checkpoint deserialised from `.bober/` on resume
+      // — has not shown the evidence, and "no evidence" is not "passed". A terminal-region
+      // projection that means to commit must seed the passing verdict a real run would have.
+      const global = latestGlobalVerdict(state);
+      if (global === null || global.verdict !== "pass") {
+        return {
+          update: {
+            messages: [
+              note(
+                ctx,
+                global === null
+                  ? "no global verdict recorded — nothing may be committed"
+                  : `global verdict is "${global.verdict}" — a failing run produces no commit`,
+              ),
+            ],
+          },
+          goto: { kind: "node", node: next },
+          output: { commit: null, message: null },
+        };
+      }
+
       const contracts = documentedContracts(state);
       if (contracts.length === 0) {
-        // A failing run produces NO COMMIT (sc-12-9). The approval authorises the effect; it
-        // does not manufacture something to commit, and an empty `bober(sprint): 0 sprints`
-        // object in a user's history is worse than no object at all.
+        // The approval authorises the effect; it does not manufacture something to commit,
+        // and an empty `bober(sprint): 0 sprints` object in a user's history is worse than
+        // no object at all.
         return {
           update: { messages: [note(ctx, "no settled contract to commit")] },
           goto: { kind: "node", node: next },

@@ -168,6 +168,20 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    `"partial"`/`"exhausted"` branches are themselves correctly implemented (unlike
  *    `context_compact`'s label-selection code, which does not exist at all) — the
  *    precondition is what is unreachable, not the code that would react to it.
+ *
+ *    Those four pieces are CHAIN A (the `supervisorNode` guard). The chain-B argument in the
+ *    paragraph above — `reduce_sprints`'s gate having already refused every badly-settled
+ *    state — was itself prose only until it was encoded as CLAIM 5 in the same file, with
+ *    CLAIM 6 pinning the `"abandoned"` fact both chains rest on: it is a legal `BranchState`
+ *    with no shipped writer, and the two rules that read it disagree about what it would
+ *    mean. The chains fail INDEPENDENTLY, and chain A alone keeps this entry correct, so
+ *    without CLAIM 5 a chain-B regression would have been silent.
+ *
+ *    None of this is a safety mechanism, and nothing downstream may treat it as one. The
+ *    commit boundary does NOT rely on `partial` being unreachable: `nodes/commit.ts` refuses
+ *    on the run's own global verdict, so a future edge that makes `partial` live cannot turn
+ *    a failed run into a whole-tree `git add -A` commit described as only the sprints that
+ *    passed.
  */
 const NEVER_EXECUTED = ["context_compact", "synthesize"] as const;
 
