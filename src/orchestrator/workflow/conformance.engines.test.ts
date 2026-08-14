@@ -514,6 +514,137 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     );
   });
 
+  // ── The two comparison-integrity holes the post-spec security audit found ──
+  //
+  // Neither was exploitable when it was found — the sole diff producer
+  // (`EngineConformanceHarness.assertEquivalent`) names a `field` on every diff it emits,
+  // and only `ts` and `pge` are ever compared, so there is exactly one engine pair. Both
+  // are nonetheless the exact class of hole this predicate exists to close: a divergence
+  // that is REPORTED but not COUNTED by the bar. They are pinned here rather than left to
+  // the current producer's good behaviour, in the same synthetic idiom as `sc-11-2` above.
+
+  it("a diff that names no field is treated as an UNACCEPTED divergence, not as an absent one", () => {
+    const diffFor = (field: ConformanceField): ConformanceReport["diffs"][number] => ({
+      artifact: "audit",
+      path: `.bober/${field}/`,
+      engines: ["ts", "pge"],
+      field,
+    });
+
+    // `ConformanceDiff.field` is REQUIRED as of this change, which is the structural half
+    // of the fix — every in-repo producer is type-checked into naming one. The cast is the
+    // point of this test: it stands in for a producer that reached the predicate from
+    // outside the type system (a JavaScript caller, a report round-tripped through JSON, a
+    // cast exactly like this one), which is the only remaining way a field-less diff can
+    // arrive. The bar must not trust the type it is checking.
+    const fieldless = {
+      artifact: "audit",
+      path: ".bober/somewhere/",
+      engines: ["ts", "pge"],
+    } as unknown as ConformanceReport["diffs"][number];
+
+    const baseline: ConformanceReport = {
+      equivalent: false,
+      vacuous: false,
+      fields: [],
+      diffs: [diffFor("audits"), diffFor("pipelineResult")],
+    };
+    expect(equivalentModuloAcceptedDivergences(baseline)).toBe(true);
+
+    // The whole defect, in one report: it carries THREE divergences, and
+    // `report.equivalent`'s own formula (`diffs.length === 0 && !vacuous`) counts every
+    // one of them. A bar that DISCARDED the field-less diff would call this report
+    // equivalent-modulo-accepted while an unaccepted divergence sat in the same report —
+    // the two claims disagreeing, with the narrower one the more permissive.
+    const withFieldless: ConformanceReport = {
+      ...baseline,
+      diffs: [...baseline.diffs, fieldless],
+    };
+    expect(withFieldless.diffs).toHaveLength(3);
+    expect(withFieldless.diffs.length === 0 && !withFieldless.vacuous).toBe(false);
+    expect(equivalentModuloAcceptedDivergences(withFieldless)).toBe(false);
+
+    // Same rule for a field that is PRESENT but is not one of the eleven known fields —
+    // an unrecognised divergence is unaccepted for the same reason an unnamed one is.
+    const unknownField = {
+      ...fieldless,
+      field: "somethingNew",
+    } as unknown as ConformanceReport["diffs"][number];
+    expect(
+      equivalentModuloAcceptedDivergences({
+        ...baseline,
+        diffs: [...baseline.diffs, unknownField],
+      }),
+    ).toBe(false);
+
+    // And it is not merely that a THIRD diff fails: a field-less diff standing in for one
+    // of the two accepted ones fails too, because it proves nothing about which field
+    // diverged.
+    expect(
+      equivalentModuloAcceptedDivergences({
+        ...baseline,
+        diffs: [diffFor("audits"), fieldless],
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses a report whose diffs span more than one engine pair, rather than judging their union", () => {
+    const diffFor = (
+      field: ConformanceField,
+      engines: ConformanceReport["diffs"][number]["engines"],
+    ): ConformanceReport["diffs"][number] => ({
+      artifact: "audit",
+      path: `.bober/${field}/`,
+      engines,
+      field,
+    });
+
+    // One pair, exactly the accepted set — today's real shape, and the only shape this
+    // bar is defined for.
+    const onePair: ConformanceReport = {
+      equivalent: false,
+      vacuous: false,
+      fields: [],
+      diffs: [diffFor("audits", ["ts", "pge"]), diffFor("pipelineResult", ["ts", "pge"])],
+    };
+    expect(equivalentModuloAcceptedDivergences(onePair)).toBe(true);
+
+    // The pair is UNORDERED — `[ts, pge]` and `[pge, ts]` are the same comparison, and
+    // must not read as two pairs.
+    expect(
+      equivalentModuloAcceptedDivergences({
+        ...onePair,
+        diffs: [diffFor("audits", ["pge", "ts"]), diffFor("pipelineResult", ["ts", "pge"])],
+      }),
+    ).toBe(true);
+
+    // The defect: with a third engine, each pair diverges on only ONE accepted field, so
+    // NEITHER pair meets the bar — but the flattened union of their fields is exactly the
+    // accepted set. A union-based bar calls this equivalent.
+    const twoPairs: ConformanceReport = {
+      ...onePair,
+      diffs: [
+        diffFor("audits", ["ts", "pge"]),
+        diffFor("pipelineResult", ["ts", "workflow"]),
+      ],
+    };
+    expect([...new Set(twoPairs.diffs.map((diff) => diff.field))].sort()).toEqual([
+      "audits",
+      "pipelineResult",
+    ]);
+    expect(equivalentModuloAcceptedDivergences(twoPairs)).toBe(false);
+
+    // Even a report where one pair DOES meet the bar on its own is refused while a second
+    // pair is present: the bar answers about one comparison, so it declines the question
+    // rather than picking a pair.
+    expect(
+      equivalentModuloAcceptedDivergences({
+        ...onePair,
+        diffs: [...onePair.diffs, diffFor("audits", ["ts", "workflow"])],
+      }),
+    ).toBe(false);
+  });
+
   // ── sc-4-3/sc-6-3: the divergence-set pin fails in BOTH directions ────
   //
   // A pure-function control over the SAME transform the pin above applies

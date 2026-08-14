@@ -707,15 +707,54 @@ export const ARCHITECTURALLY_ACCEPTED_DIVERGENCES: Readonly<
  * fields, zero everything else) is not this function's job to celebrate quietly; it is the
  * literal bar this function stands in for until it is re-decided, and `report.equivalent`
  * remains the assertion for that unamended claim.
+ *
+ * Two integrity rules sit underneath the set comparison, both added in the follow-up to
+ * sprint 11 after a security audit found them missing. Neither was exploitable at the time
+ * — the sole diff producer names every field, and only `ts` and `pge` are ever compared —
+ * and both are the exact class of hole this predicate exists to close, so they are checked
+ * rather than argued from the current producer's good behaviour:
+ *
+ *  1. A diff whose `field` is not a known {@link ConformanceField} makes this `false`. It is
+ *     an UNACCEPTED divergence, not an absent one — see the comment at the check.
+ *  2. Every diff must come from the SAME unordered engine pair. A field set flattened
+ *     across pairs can equal the accepted set without any single pair equalling it.
  */
 export function equivalentModuloAcceptedDivergences(report: ConformanceReport): boolean {
   if (report.vacuous) return false;
+
+  const observed = new Set<ConformanceField>();
+  const pairs = new Set<string>();
+
+  for (const diff of report.diffs) {
+    // A diff whose `field` is not one of the eleven known fields is an UNACCEPTED
+    // divergence, never an absent one. This function used to FILTER such diffs out before
+    // comparing, which is the one way a reported divergence could read as non-existent:
+    // `report.equivalent` counts every diff (`diffs.length === 0 && !vacuous`), so a
+    // field-less diff made the two claims disagree about the same report, with this — the
+    // amended, narrower one — the more permissive of the two. `field` is required by the
+    // type as of this change, so what remains here binds a diff that reached the predicate
+    // from outside the type system: a cast, a JavaScript caller, a report round-tripped
+    // through JSON. The bar does not trust the type it is checking.
+    if (!CONFORMANCE_FIELDS.includes(diff.field)) return false;
+    observed.add(diff.field);
+    // Unordered: `assertEquivalent` emits `[nameA, nameB]` in `engines` iteration order,
+    // and (A,B) and (B,A) are the same comparison.
+    pairs.add([...diff.engines].sort().join("|"));
+  }
+
+  // This bar is defined for ONE engine pair, and says so rather than averaging over
+  // several. `assertEquivalent` compares every unordered pair, tagging each diff with the
+  // pair it came from; flattening those into one field set means a report where (A,B)
+  // diverges only on `audits` and (A,C) only on `pipelineResult` has a UNION equal to the
+  // accepted set while NEITHER pair matches it — two engines that each fail the bar,
+  // reported as passing. `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`'s two reasons are both
+  // stated about the graph-vs-imperative pair specifically (ADR-1; sprint 6), so what the
+  // set even means for a third engine is a decision to take deliberately — the same as
+  // widening the set is — not one to infer here. Until it is taken, a multi-pair report
+  // gets `false`: refusing to answer, rather than answering with a bar weaker than it reads.
+  if (pairs.size > 1) return false;
+
   const accepted = Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES) as ConformanceField[];
-  const observed = new Set(
-    report.diffs
-      .map((diff) => diff.field)
-      .filter((field): field is ConformanceField => field !== undefined),
-  );
   if (observed.size !== accepted.length) return false;
   return accepted.every((field) => observed.has(field));
 }

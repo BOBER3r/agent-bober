@@ -1945,6 +1945,42 @@ them this spec's to do (`nonGoals`):**
    immediately above it: the record keeps both statements side by side rather than only the
    one that reads as progress.
 
+   **Two comparison-integrity rules were added underneath that set comparison as a follow-up,
+   after the spec closed.** A post-spec security audit found the predicate reading its
+   divergence set in two ways that could each report a bar weaker than it looked. Neither was
+   exploitable when found — the sole diff producer names a `field` on every diff, and only
+   `ts` and `pge` are ever compared — and both are the exact class of hole the predicate
+   exists to close, so they are now checked rather than argued from the producer's current
+   good behaviour:
+
+   1. **A field-less diff is UNACCEPTED, not absent.** The predicate used to FILTER diffs
+      whose `field` was `undefined` out of the observed set before comparing, while
+      `report.equivalent`'s own formula (`diffs.length === 0 && !vacuous`) counted every diff
+      regardless — so a producer that omitted `field` would emit a real, REPORTED divergence
+      that the amended bar treated as non-existent, and the amended bar was then the more
+      permissive of the two claims about the same report. Any diff whose field is not one of
+      the eleven known fields now forces `false`. `ConformanceDiff.field` was also made
+      REQUIRED (`types.ts`) — the optionality was what created the hole, and nothing was
+      buying it — with the runtime membership check kept, because a report can reach the
+      predicate from outside the type system.
+   2. **The engine-pair dimension is no longer collapsed.** `assertEquivalent` compares every
+      unordered pair and tags each diff with the pair it came from; flattening those into one
+      field set means a report where (A,B) diverges only on `audits` and (A,C) only on
+      `pipelineResult` has a UNION equal to the accepted set while NEITHER pair meets it. The
+      predicate now requires every diff to come from the same unordered pair and returns
+      `false` otherwise. This is deliberately a REFUSAL, not a generalisation: both accepted
+      reasons are stated about the graph-vs-imperative pair specifically (ADR-1; sprint 6), so
+      what the set means for a third engine is a decision to take deliberately — the same as
+      widening the set is — rather than one inferred inside a comparison.
+
+   Both are pinned by synthetic tests in `conformance.engines.test.ts`, in the same
+   `coverage.test.ts:311-354` idiom as `sc-11-2`, and both were proven to bite by live
+   mutation of the shipped source, observed red, then reverted byte-identical: restoring the
+   filter turned the field-less test red (`expected true to be false`), and widening the
+   pair check to `> 99` turned the multi-pair test red with the same text. `report.equivalent`
+   is untouched, and `ARCHITECTURALLY_ACCEPTED_DIVERGENCES` still has exactly its two frozen
+   members.
+
    **The amended assertion was proven to fail in both directions by mutation, not by reading
    it (sc-11-2)** — the sprint-6 house precedent this record follows, applied twice: once as a
    PERMANENT synthetic test in this file's own established idiom (`coverage.test.ts:311-354`
@@ -2168,6 +2204,28 @@ byte-for-byte UNMODIFIED (sc-11-4)** — it still names all four historical fiel
 `equivalent: false`, which is the reading a checkout with no other context should trust. The
 amended, satisfiable claim `equivalentModuloAcceptedDivergences` makes lives beside it, in
 `conformance.engines.test.ts` — a NEW assertion, not a replacement for this one.
+
+**The same post-spec follow-up strengthened this file's retention check, which had quietly
+become satisfiable by PROSE.** It asserted only that `conformance.engines.test.ts` CONTAINS
+the substrings `history`, `audits`, `contracts` and `pipelineResult`. Once sprints 4 and 6
+closed `history` and `contracts`, those two substrings were satisfied by the explanatory
+comments recording the closure rather than by any live assertion — so the guard would have
+kept passing with the corresponding pins deleted outright, which is the one thing an
+anti-relaxation guard exists to prevent. (Sprint 11's contract required this file to pass
+UNMODIFIED, `sc-11-4`, which is why it was correctly left alone at the time; that constraint
+lapsed with the spec.) It now strips comments before asserting, requires each of the four
+fields as a QUOTED string literal in live code — bare `history` was satisfied by the import
+path `"../../state/history.js"` alone — and pins the two committed assertions by their
+SUBJECT rather than by the literal they compare against: the real-run divergence set
+(`report.diffs.map(...)`) and the frozen accepted set
+(`Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES)`), separately, so a synthetic report a
+later test hand-builds out of the same two names cannot stand in for either. It remains a
+SOURCE-level check, not a behavioural one — running the conformance file here would buy a
+second, expensive copy of evidence it already produces — but it is now a check on that
+file's code rather than on its paragraphs. Proven by mutation: deleting the `history` and
+`contracts` regression controls while leaving every comment about them in place turns it red,
+where the old form stayed green on all four fields; laundering either committed pin into a
+variable turns it red on that pin alone.
 
 If a future change makes the two engines equivalent, the assertion that pins
 `equivalent: false` is the one to revisit **first and deliberately** — accompanied by an

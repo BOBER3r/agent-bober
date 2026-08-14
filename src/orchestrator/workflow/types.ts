@@ -111,8 +111,21 @@ export type ConformanceDiff = {
   artifact: ConformanceArtifactName;
   path: string;
   engines: PipelineEngineName[];
-  /** The harness field this diff came from. */
-  field?: ConformanceField;
+  /**
+   * The harness field this diff came from. REQUIRED, and deliberately so.
+   *
+   * It was optional until the follow-up to `spec-20260814-pge-full-convergence` sprint 11,
+   * and the optionality was the whole hole: every consumer that reasons over the reported
+   * DIVERGENCE SET has to narrow `field` before it can use it, and the cheapest narrowing —
+   * dropping the diffs that have none — silently converts a reported divergence into an
+   * absent one. `report.equivalent` counts diffs, not fields, so the two claims could
+   * disagree about the very same report. The sole producer (`EngineConformanceHarness`)
+   * always set it; nothing was buying the optionality except that disagreement.
+   *
+   * `equivalentModuloAcceptedDivergences` still checks membership at runtime rather than
+   * trusting this type, because a report can reach it from outside the type system.
+   */
+  field: ConformanceField;
   /** Human-readable statement of what differed at `path`. */
   detail?: string;
 };
