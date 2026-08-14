@@ -457,6 +457,70 @@ describe("finalizePipelineRun — pinned emission order", () => {
   });
 });
 
+// ── The audit label tracks the mechanism actually invoked (regression) ─
+
+describe("finalizePipelineRun — the audit label matches the resolved mechanism, not just the global default", () => {
+  /**
+   * `getCheckpointMechanismFor` two lines below the label (`finalize.ts`) resolves through
+   * the FULL override-aware ladder — `resolveCheckpointMechanismName`, the SAME expression
+   * `interrupt.ts`'s controller uses for this checkpoint's own hitl-branch and gated-effect-
+   * branch calls. The label used to read only `config.pipeline?.checkpointMechanism`,
+   * silently ignoring `checkpointOverrides` (tier 2 of that ladder,
+   * `checkpoints/registry.ts:76-77`).
+   *
+   * A config setting `checkpointMechanism: "disk"` GLOBALLY and `checkpointOverrides: {
+   * "end-of-pipeline": "noop" }` PER-CHECKPOINT — a combination `config/schema.ts` accepts —
+   * therefore resolved the ACTUAL request through `noop` (auto-approved, nobody asked) while
+   * the audit line still claimed `"disk"`. `runWithAudit` resolves `approverId` from exactly
+   * that label (`checkpoints/audit.ts`'s `resolveApproverId`): the `"disk"` branch shells out
+   * to `git config user.name`, so the audit trail credited a named human with an approval
+   * autopilot rubber-stamped. This test fails if the two ever diverge again.
+   */
+  it("labels the end-of-pipeline record with the OVERRIDE mechanism, not the global default", async () => {
+    const base = createDefaultConfig("test", "brownfield");
+    const config = {
+      ...base,
+      pipeline: {
+        ...base.pipeline,
+        checkpointMechanism: "disk" as const,
+        checkpointOverrides: { "end-of-pipeline": "noop" as const },
+      },
+    };
+
+    await finalizePipelineRun({
+      projectRoot: root,
+      runId: "run-label-override",
+      config,
+      spec: makeSpec(),
+      completedSprints: [makeContract("c1")],
+      failedSprints: [],
+      startedAtMs: Date.now(),
+    });
+
+    // The wrapped mock's own captured argument — what finalizePipelineRun actually passed.
+    const call = vi
+      .mocked(runWithAudit)
+      .mock.calls.find((c) => c[0].checkpointId === "end-of-pipeline");
+    expect(call?.[0].mechanism).toBe("noop");
+
+    // ...and the DURABLE artifact agrees: this is what `resolveApproverId` saw, and what an
+    // operator reading `.bober/audits/<runId>.jsonl` sees.
+    const raw = await readFile(
+      join(root, ".bober", "audits", "run-label-override.jsonl"),
+      "utf-8",
+    );
+    const lines = raw
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as { checkpointId: string; mechanism: string; approverId: string });
+    const line = lines.find((l) => l.checkpointId === "end-of-pipeline");
+    expect(line?.mechanism).toBe("noop");
+    // noop's approverId is the fixed constant "autopilot" — never a git-config-derived human
+    // name for a request the durable "disk" mechanism never actually saw.
+    expect(line?.approverId).toBe("autopilot");
+  });
+});
+
 // ── Wire shapes the tailer depends on ────────────────────────────────
 
 describe("finalizePipelineRun — emitted wire shapes", () => {

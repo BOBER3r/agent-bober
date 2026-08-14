@@ -184,9 +184,22 @@ function isApprovedConfigInput(config: Readonly<Record<string, unknown>>): boole
  * Shared by the executor (replay) and `capture.ts` (the recorded run), so a case's capture
  * and its replay can never resolve to two different configs by accident — both call this
  * with the same `input.config`.
+ *
+ * Gates on {@link isApprovedConfigInput} — the SAME predicate {@link assertExecutable}
+ * checks a case against — rather than merely "is `configInput` defined". The replay path is
+ * already refused earlier by `assertExecutable` if the shape is wrong, so this mostly
+ * protects the capture path, which calls this function directly with no such guard in
+ * front of it: a `configInput` that is defined but not `{ approved: true }` must not
+ * silently resolve to the approved config.
  */
 export function resolveGoldenConfig(configInput: Readonly<Record<string, unknown>> | undefined): BoberConfig {
-  return configInput === undefined ? goldenConfig() : goldenApprovedConfig();
+  if (configInput === undefined) return goldenConfig();
+  if (!isApprovedConfigInput(configInput)) {
+    throw new Error(
+      `resolveGoldenConfig received an unsupported config input (keys: ${Object.keys(configInput).sort().join(", ")}); the only shape this executor honours is ${JSON.stringify(GOLDEN_APPROVED_CONFIG_INPUT)}`,
+    );
+  }
+  return goldenApprovedConfig();
 }
 
 // ── The sandbox ─────────────────────────────────────────────────────

@@ -39,7 +39,7 @@ import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import { appendHistory } from "../state/index.js";
-import { getCheckpointMechanismFor } from "./checkpoints/index.js";
+import { getCheckpointMechanismFor, resolveCheckpointMechanismName } from "./checkpoints/index.js";
 import { runWithAudit, type MechanismName } from "./checkpoints/audit.js";
 import { logger } from "../utils/logger.js";
 import type { PipelineResult } from "./pipeline.js";
@@ -215,10 +215,26 @@ export async function finalizePipelineRun(
     throw new FinalizeVerdictMismatchError(runId, args.verdict, derived);
   }
 
-  // Resolved here rather than passed in, so both engines audit under the same
-  // mechanism name for the same config (pipeline.ts used this exact expression).
-  const mechanism: MechanismName =
-    (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
+  // Resolved through the SAME override-aware expression `interrupt.ts`'s controller uses
+  // for this checkpoint (`resolveCheckpointMechanismName(checkpointId, ctx.config)`, at
+  // both its hitl-branch and its gated-effect-branch call sites) — not the bare
+  // `config.pipeline?.checkpointMechanism` this used to read.
+  //
+  // That bare read ignored `checkpointOverrides` (tier 2 of `resolveCheckpointMechanismName`,
+  // `registry.ts:76-77`) while `getCheckpointMechanismFor` two lines below always honoured
+  // it, so the two could name DIFFERENT mechanisms for the identical `end-of-pipeline`
+  // call: `checkpointMechanism: "disk"` with `checkpointOverrides: { "end-of-pipeline":
+  // "noop" }` (a combination `schema.ts` accepts) resolved the ACTUAL request through
+  // `noop` — auto-approved, nobody asked — while this label still read `"disk"`, and
+  // `runWithAudit` resolves `approverId` from exactly this label (`audit.ts`'s
+  // `resolveApproverId`): `"disk"` shells out to `git config user.name`. The audit record
+  // would then credit a named human with an approval autopilot rubber-stamped. Both engines
+  // still audit under the same mechanism name for the same config — that guarantee is
+  // unchanged — it is now the name the request was actually resolved under.
+  const mechanism: MechanismName = resolveCheckpointMechanismName(
+    "end-of-pipeline",
+    config,
+  ) as MechanismName;
 
   logger.phase("Pipeline Complete");
 

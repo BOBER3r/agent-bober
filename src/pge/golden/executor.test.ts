@@ -245,6 +245,21 @@ describe("resolveGoldenConfig — the ONE enumerated exception to the config pin
     // point of the allowlist is that this ONE shape is honoured rather than rejected.
     await expect(execute(approved)).resolves.toBeDefined();
   }, 120_000);
+
+  /**
+   * `assertExecutable` already refuses a malformed `input.config` before a REPLAY ever
+   * reaches this function, so this specifically protects the OTHER caller — `capture.ts`,
+   * which calls `resolveGoldenConfig` directly with no such guard in front of it. One
+   * predicate (`isApprovedConfigInput`), not two: this must reject exactly what
+   * `assertExecutable`'s own check rejects.
+   */
+  it("throws for a defined config input that is not exactly { approved: true }", () => {
+    expect(() => resolveGoldenConfig({ autopilot: true })).toThrow(/unsupported config input/);
+    expect(() => resolveGoldenConfig({ approved: false })).toThrow(/unsupported config input/);
+    expect(() => resolveGoldenConfig({ approved: true, extra: 1 })).toThrow(
+      /unsupported config input/,
+    );
+  });
 });
 
 // ── The run is offline, and it lands in its own root ────────────────

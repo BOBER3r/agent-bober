@@ -953,7 +953,7 @@
           "checkpointId": "end-of-pipeline",
           "editDeltaSummary": null,
           "iteration": 1,
-          "mechanism": "noop",
+          "mechanism": "disk",
           "outcome": "approved"
         }
       ],
