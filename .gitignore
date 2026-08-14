@@ -43,6 +43,17 @@ pnpm-debug.log*
 .bober/medical/
 .bober/chat/
 
+# Run record — never commit (same public-remote reason as the block above).
+# `.bober/history.jsonl` is an append-only free-text log: every writer puts
+# caller-supplied prose in it (feature requests, evaluator summaries, audit
+# notes), and there is no bound on what a future writer may add. It is runtime
+# state like `.bober/{scratch,traces,checkpoints,failures,logs}/` above, not a
+# published artifact — nothing in src/ reads the committed copy (every consumer
+# resolves it under its own `projectRoot`). `.archive.` is the rotated sibling
+# produced by rotateIfNeeded once the active log passes maxActiveLines.
+.bober/history.jsonl
+.bober/history.archive.jsonl
+
 # Regenerable runtime state
 .bober/memory/*.db
 .bober/graph/.hook-queue.jsonl
