@@ -22,10 +22,13 @@ import { CODING_GRAPH } from "../topology/coding.graph.js";
 import { COMMIT_NODE_IDS, commitMessage, commitSubject } from "./commit.js";
 import {
   DOCUMENTATION_REF_KEY,
+  documentedContracts,
   DOCUMENTER_NODE_ID,
   DOCUMENTER_NO_COMMIT_INSTRUCTION,
 } from "./documenter.js";
 import { TERMINAL_REGION, regionSpec, terminalTriple } from "./regions.js";
+import { globalVerdictId } from "./root.js";
+import type { OverallState } from "../state/overall.js";
 import {
   registeredIds,
   runSprint,
@@ -150,6 +153,38 @@ function startApprover(approvalsDir: string): { stop: () => Promise<string[]> } 
 }
 
 const COMPLETED = { ...sprintContractFixture(), status: "completed" as const };
+
+/**
+ * Seed the passing GLOBAL verdict a real run always carries into the terminal region.
+ *
+ * `commit`'s third lock refuses unless the run's own global evaluation passed, and it
+ * refuses an ABSENT verdict too (`./commit.ts`). The terminal region is a projection: it
+ * contains the documenter, the approval gate and the commit, and NOT `evaluate_global`, so
+ * nothing inside it can produce that row. A whole-graph run reaches `commit` only through
+ * `route_after_eval`, which cannot select `pass` without one — so seeding it here supplies
+ * what the projection elided rather than relaxing anything the shipped graph enforces.
+ *
+ * The positive commit cases below use it. The fail-closed cases deliberately do NOT: their
+ * subject is the approval gate, and they must keep failing for the reason they name.
+ */
+function passedGlobally(state: OverallState): Promise<OverallState> {
+  return Promise.resolve({
+    ...state,
+    evaluations: [
+      ...state.evaluations,
+      {
+        id: globalVerdictId(0),
+        seq: 0,
+        contractId: COMPLETED.contractId,
+        sprintNumber: COMPLETED.sprintNumber,
+        iteration: 1,
+        verdict: "pass" as const,
+        summary: "every branch succeeded",
+        evalId: null,
+      },
+    ],
+  });
+}
 
 // ── The conventional message ────────────────────────────────────────
 
@@ -316,6 +351,129 @@ describe("the commit node without an approval record (sc-12-9)", () => {
   }, 30_000);
 });
 
+// ── A failing run is refused the commit, approval or not ────────────
+
+/**
+ * The whole-tree commit a FAILED run must never produce.
+ *
+ * The audited chain: `route_after_eval` selects `partial` when the GLOBAL verdict failed but
+ * something passed (`root.ts`), `synthesize`'s sole outbound edge is `-> documenter` — the
+ * same successor `pass` takes — so the partial path continues into `hitl_commit` and
+ * `commit`. `commitAll` then runs `git add -A` over the entire working tree
+ * (`utils/git.ts`), including the failed branches' unevaluated changes, while
+ * `commitMessage` is built from `documentedContracts`, which filters to succeeded/completed
+ * contracts only (`documenter.ts`). A failed run would commit EVERYTHING, described as only
+ * the sprints that passed.
+ *
+ * These cases pin the guarantee at the commit node, where it is now a DESIGNED refusal. They
+ * deliberately do not depend on `partial` being unreachable: each seeds the state that route
+ * would produce and asserts the repository is untouched. `nodes/root.test.ts` proves the
+ * unreachability separately — that proof and this refusal are independent, which is the
+ * point of having both.
+ */
+describe("the commit node when the run's global verdict did NOT pass", () => {
+  /** The `partial` shape exactly: a FAILED global verdict alongside a settled contract. */
+  function failedGlobally(state: OverallState): Promise<OverallState> {
+    return Promise.resolve({
+      ...state,
+      evaluations: [
+        ...state.evaluations,
+        {
+          id: globalVerdictId(0),
+          seq: 0,
+          contractId: COMPLETED.contractId,
+          sprintNumber: COMPLETED.sprintNumber,
+          iteration: 1,
+          verdict: "fail" as const,
+          summary: "the run did not pass its global evaluation",
+          evalId: null,
+        },
+      ],
+    });
+  }
+
+  it("creates NO commit even WITH an approval, and stages none of the working tree", async () => {
+    await initTempRepo(root);
+    // The unevaluated change a failed branch leaves behind. `git add -A` would sweep it in.
+    await writeFile(join(root, "unevaluated.txt"), "a failed branch's work\n", "utf-8");
+    const before = await headSha(root);
+    const countBefore = await commitCount(root);
+    // Approval GRANTED: this test is about the verdict, not the gate. Both locks that
+    // already existed are open, and the commit must still not happen.
+    scriptApproval([{ approved: true }]);
+
+    const run = await runSprint({
+      projectRoot: root,
+      region: TERMINAL_REGION,
+      // The SHIPPED `commitAll`, in the temp repo — if the node committed, git would show it.
+      bindings: stubTerminalBindings(),
+      config: sprintConfig({}, { checkpointMechanism: "disk" }),
+      contracts: [COMPLETED],
+      seed: failedGlobally,
+    });
+
+    // The handler DID run — this is not the fail-closed path, and proving that matters:
+    // the refusal below is the node's own decision, not the interrupt controller's.
+    expect(run.handlerLog.calls[COMMIT_NODE_IDS.commit]).toBe(1);
+
+    // The repository is byte-for-byte where it was.
+    expect(await headSha(root)).toBe(before);
+    expect(await commitCount(root)).toBe(countBefore);
+    // And specifically: the failed branch's file was never staged.
+    expect(await commitFiles(root)).not.toContain("unevaluated.txt");
+
+    expect(run.finalState.messages.map((entry) => entry.text ?? "")).toContain(
+      'global verdict is "fail" — a failing run produces no commit',
+    );
+  }, 30_000);
+
+  it("refuses when NO global verdict was recorded at all — absent is not passed", async () => {
+    await initTempRepo(root);
+    await writeFile(join(root, "unevaluated.txt"), "work nothing evaluated\n", "utf-8");
+    const before = await headSha(root);
+    scriptApproval([{ approved: true }]);
+
+    // No `seed`: `evaluations` is empty, which is what a state reconstituted from a
+    // checkpoint — or any projection lacking `evaluate_global` — looks like.
+    const run = await runSprint({
+      projectRoot: root,
+      region: TERMINAL_REGION,
+      bindings: stubTerminalBindings(),
+      config: sprintConfig({}, { checkpointMechanism: "disk" }),
+      contracts: [COMPLETED],
+    });
+
+    expect(run.handlerLog.calls[COMMIT_NODE_IDS.commit]).toBe(1);
+    expect(await headSha(root)).toBe(before);
+    expect(await commitFiles(root)).not.toContain("unevaluated.txt");
+    expect(run.finalState.messages.map((entry) => entry.text ?? "")).toContain(
+      "no global verdict recorded — nothing may be committed",
+    );
+  }, 30_000);
+
+  it("is decided by the VERDICT, not by whether anything settled — the old predicate's blind spot", async () => {
+    // `documentedContracts` is NON-EMPTY here (COMPLETED carries `status: "completed"`), so
+    // the superseded `contracts.length === 0` guard would have admitted this exact state and
+    // committed the whole tree. Asserting the two facts together is what pins the fix rather
+    // than the symptom.
+    await initTempRepo(root);
+    const countBefore = await commitCount(root);
+    scriptApproval([{ approved: true }]);
+
+    const run = await runSprint({
+      projectRoot: root,
+      region: TERMINAL_REGION,
+      bindings: stubTerminalBindings(),
+      config: sprintConfig({}, { checkpointMechanism: "disk" }),
+      contracts: [COMPLETED],
+      seed: failedGlobally,
+    });
+
+    expect(documentedContracts(run.finalState).length).toBeGreaterThan(0);
+    expect(await commitCount(root)).toBe(countBefore);
+  }, 30_000);
+});
+
 // ── Approved: exactly one conventional commit ───────────────────────
 
 describe("the commit node behind a recorded approval (sc-12-9)", () => {
@@ -332,6 +490,7 @@ describe("the commit node behind a recorded approval (sc-12-9)", () => {
       bindings: stubTerminalBindings(),
       config: sprintConfig({}, { checkpointMechanism: "disk" }),
       contracts: [COMPLETED],
+      seed: passedGlobally,
     });
 
     // The gate was asked, through the shipped checkpoint subsystem, under the ARTIFACT's
@@ -460,6 +619,7 @@ describe("the commit node behind a DURABLE disk approval, not a scripted one (sc
       bindings: stubTerminalBindings(),
       config: sprintConfig({}, { checkpointMechanism: "disk" }),
       contracts: [COMPLETED],
+      seed: passedGlobally,
     });
     const answered = await approver.stop();
 

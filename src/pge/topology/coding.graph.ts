@@ -926,12 +926,15 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "commit",
       kind: "tool",
       title: "Commit the working tree",
-      doc: "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
+      doc: "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed, and refuses outright unless the run's own global verdict passed.",
       subgraph: null,
       role: "utility",
       inputPorts: [],
       outputPorts: [],
-      reads: ["messages"],
+      // `evaluations` is what the node's third lock reads: the commit refuses unless the
+      // run's latest GLOBAL verdict passed, so the dependency is declared here where a diff
+      // of the artifact can see it rather than hidden in the body (`nodes/commit.ts`).
+      reads: ["messages", "evaluations"],
       writes: ["messages"],
       effects: ["git"],
       toolRef: "git.commit",
