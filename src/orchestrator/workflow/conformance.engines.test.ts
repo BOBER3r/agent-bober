@@ -77,7 +77,12 @@ import {
 } from "../../pge/engine/__fixtures__/whole-graph.js";
 import type { BoberConfig } from "../../config/schema.js";
 import { withGoldenApproval } from "../../pge/golden/executor.js";
-import { EngineConformanceHarness, emptyOnAllEnginesFields, fullyPopulatedFields } from "./conformance.js";
+import {
+  EngineConformanceHarness,
+  canonical,
+  emptyOnAllEnginesFields,
+  fullyPopulatedFields,
+} from "./conformance.js";
 import type { EngineRunner } from "./conformance.js";
 import type { PipelineEngineName } from "./engine.js";
 import { TsPipelineEngine } from "./ts-engine.js";
@@ -342,20 +347,27 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    ACCEPTANCE, on architectural grounds this closure paragraph does not touch — unlike
     //    `history` above, which was open work rather than architecturally barred, and is now
     //    closed.
-    //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
-    //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
-    //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
-    //    writes `"completed"`, exactly what `sprint_exit` already wrote. What remains is that
-    //    the graph never populates `evaluatorFeedback` or `generatorNotes` — PGE has no
-    //    writer for either field anywhere in `src/pge/`, so this is a missing-writer gap, not
-    //    a word disagreement — and, since sprint 3, `sprint_exit` also writes `version` (the
-    //    graph's monotone ordering discriminator for `versionRank`,
-    //    `registry/reducers.ts:366-393`) where the imperative engine writes none.
-    //    `evaluatorFeedback`/`generatorNotes` would need a new writer inside a PGE node body;
-    //    `version` is deliberately NOT one of `VOLATILE_KEYS` (`conformance.ts:65-76`) because
-    //    stripping it would hide a real divergence rather than close one. None of the three
-    //    is closable by a vocabulary change, which is what sprint 5's stop condition
-    //    pre-authorises recording rather than forcing.
+    //  - `contracts`: ONE field delta on the one contract now — `version` alone — down from
+    //    THREE before sprint 5 of `spec-20260814-pge-full-convergence` (and from FOUR before
+    //    sprint 5 of `spec-20260812-terminal-vocabulary`). `iterationHistory` is NOT one of
+    //    them — it is `[]` on both sides for this fixture. `status` was CLOSED earlier:
+    //    `runSprintCycle` writes `"completed"`, exactly what `sprint_exit` already wrote.
+    //    **`evaluatorFeedback`/`generatorNotes` CLOSED at sprint 5 of
+    //    `spec-20260814-pge-full-convergence`:** `sprint_evaluate` now carries the RAW
+    //    `EvaluationRunResult.summary` and the RAW `GeneratorResult.notes` onto the decisive
+    //    `SprintVerdict` it emits (`nodes/sprint-evaluate.ts`'s `sprintVerdict`,
+    //    `evaluatorFeedback`/`generatorNotes` params), and `sprint_exit` writes them onto the
+    //    settled contract from that verdict — not from the seeded copy — exactly matching
+    //    `pipeline.ts:592`/`:719` (`evaluatorFeedback := evaluation.summary`, both branches)
+    //    and `pipeline.ts:428` (`generatorNotes := generatorResult.notes`). Asserted below
+    //    against the OTHER engine's own answer (Pattern D), not a literal. What remains is
+    //    that, since sprint 3, `sprint_exit` also writes `version` (the graph's monotone
+    //    ordering discriminator for `versionRank`, `registry/reducers.ts:366-393`) where the
+    //    imperative engine writes none; `version` is deliberately NOT one of `VOLATILE_KEYS`
+    //    (`conformance.ts:65-76`) because stripping it would hide a real divergence rather
+    //    than close one. `contracts` stays in the pinned set for `version` alone — asserted
+    //    down to that one field below (sc-5-4), not assumed — which is sprint 6's business,
+    //    not this sprint's (nonGoal 1).
     //  - `pipelineResult`: NO LONGER the seeded-copy defect closed at sprint 4 of
     //    spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
     //    `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`/`mergeEntries`)
@@ -365,11 +377,11 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    gone (verified below in "4. pipelineResult"). What remains is NOT independently
     //    closable: `PipelineResult.completedSprints`/`failedSprints` carry whole
     //    `SprintContract` objects, so `pipelineResult`'s divergence REDUCES EXACTLY to the
-    //    `contracts` divergence above (the same `evaluatorFeedback`/`generatorNotes`/
-    //    `version` deltas, none of them `VOLATILE_KEYS`, `conformance.ts:65-76`) — it is a
-    //    CONTAINER for the contract, and the `status` field inside that container is now
-    //    identical on both engines (sprint 5 of spec-20260812-terminal-vocabulary). It closes
-    //    exactly when `contracts` closes, not before.
+    //    `contracts` divergence above — as of sprint 5, that reduction is to `version` ALONE,
+    //    not `VOLATILE_KEYS` (`conformance.ts:65-76`) — it is a CONTAINER for the contract,
+    //    and the `status`/`evaluatorFeedback`/`generatorNotes` fields inside that container
+    //    are now identical on both engines. It closes exactly when `contracts` closes, not
+    //    before.
     //
     // Everything else — specs, evalResults, briefings, reviews, completionMarker — is
     // IDENTICAL across the two engines, which is the positive half of the claim and is
@@ -414,6 +426,43 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // an evaluator that only checked "history is absent" would pass on this too.
     const contractsSilentlyClosed = uniqueSortedFields([{ field: "audits" }, { field: "pipelineResult" }]);
     expect(contractsSilentlyClosed).not.toEqual(committedPin);
+  });
+
+  // ── sc-5-4: the `contracts` divergence is down to `version` ALONE — a pure-function
+  // control over the SAME `canonical`-after-stripping-`version` transform the real-run
+  // assertion below applies, in the `coverage.test.ts:311-354` idiom: proven against
+  // hand-built input rather than being hostage to whichever fields the real dataset happens
+  // to differ on today. Two directions: `version` itself must NOT count as a divergence once
+  // stripped (direction 1), and a REAL field differing must still be caught even after
+  // `version` is stripped (direction 2) — an assertion that stripped too much would pass on
+  // both cases the field-level pin above exists to catch. ──
+  it("the version-alone canonical comparison strips only `version`, in both directions", () => {
+    const base = {
+      contractId: "sprint-fixture-1",
+      status: "completed",
+      evaluatorFeedback: "all criteria met",
+      generatorNotes: "generated sprint-fixture-1",
+    };
+    const stripVersion = (value: Record<string, unknown>): unknown => {
+      const { version: _version, ...rest } = value;
+      return rest;
+    };
+
+    // Direction 1: two contracts differing ONLY in `version` (the one delta sprint 6 has yet
+    // to close) must compare EQUAL once `version` is stripped from both sides — the shape
+    // the real-run assertion below relies on to isolate sc-5-4's claim from sprint 6's.
+    const tsLike = { ...base };
+    const pgeLike = { ...base, version: 1 };
+    expect(canonical(stripVersion(tsLike))).toBe(canonical(stripVersion(pgeLike)));
+    // And WITHOUT stripping, the same pair is NOT canonically equal — proof the stripping
+    // step is doing real work, not comparing two objects that already matched.
+    expect(canonical(tsLike)).not.toBe(canonical(pgeLike));
+
+    // Direction 2: a REAL field differing (here, `generatorNotes` — sprint 5's own claim)
+    // must still fail the comparison even after `version` is stripped from both sides, so
+    // this assertion cannot silently start ignoring a divergence sprint 5 did not close.
+    const pgeWithRealDrift = { ...base, version: 1, generatorNotes: "a different generator note" };
+    expect(canonical(stripVersion(tsLike))).not.toBe(canonical(stripVersion(pgeWithRealDrift)));
   });
 
   it("records WHAT each divergence IS, from the artifacts of the same two runs", async () => {
@@ -550,7 +599,8 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsResult?.success).toBe(true);
     expect(pgeResult?.success).toBe(true);
 
-    // ── 3. contracts: three field deltas, and iterationHistory is NOT one of them ──
+    // ── 3. contracts: ONE field delta now — `version` alone (sc-5-4) — and
+    // iterationHistory is NOT one of them ──
     const tsContract = (await listContracts(tsRoot))[0];
     const pgeContract = (await listContracts(pgeRoot))[0];
     expect(tsContract.contractId).toBe(pgeContract.contractId);
@@ -562,10 +612,17 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsContract.status).toBe("completed");
     expect(pgeContract.status).toBe("completed");
     expect(tsContract.status).toBe(pgeContract.status);
+
+    // evaluatorFeedback/generatorNotes are CLOSED (sc-5-1, sc-5-2 — sprint 5 of
+    // spec-20260814-pge-full-convergence): asserted against the OTHER engine's OWN answer
+    // (Pattern D), not a literal, plus a `toBeDefined()` on each side first so two
+    // `undefined`s cannot pass the equality check that follows.
     expect(tsContract.evaluatorFeedback).toBeDefined();
-    expect(pgeContract.evaluatorFeedback).toBeUndefined();
+    expect(pgeContract.evaluatorFeedback).toBeDefined();
+    expect(pgeContract.evaluatorFeedback).toBe(tsContract.evaluatorFeedback);
     expect(tsContract.generatorNotes).toBeDefined();
-    expect(pgeContract.generatorNotes).toBeUndefined();
+    expect(pgeContract.generatorNotes).toBeDefined();
+    expect(pgeContract.generatorNotes).toBe(tsContract.generatorNotes);
     // The remaining delta: `sprint_exit` writes a monotone `version`; `runSprintCycle` writes none.
     expect(tsContract.version).toBeUndefined();
     expect(pgeContract.version).toBeDefined();
@@ -573,6 +630,14 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // graph lacks: on a first-attempt pass neither engine writes any.
     expect(tsContract.iterationHistory).toEqual([]);
     expect(pgeContract.iterationHistory).toEqual([]);
+
+    // sc-5-4: the contracts divergence is now down to `version` ALONE — asserted directly,
+    // not inferred from the two field-by-field checks above. A whole-object `canonical`
+    // comparison (Pattern D) with `version` stripped from both sides catches a delta nobody
+    // named above too, not merely the two fields sprint 5 set out to close.
+    const { version: _tsContractVersion, ...tsContractWithoutVersion } = tsContract;
+    const { version: _pgeContractVersion, ...pgeContractWithoutVersion } = pgeContract;
+    expect(canonical(pgeContractWithoutVersion)).toBe(canonical(tsContractWithoutVersion));
 
     // ── 4. pipelineResult: the sprint-12 seeded-copy defect is CLOSED (sprint 4 of
     // spec-20260812-terminal-vocabulary) — but the DIVERGENCE is not, because it reduces
@@ -590,9 +655,9 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // CLOSED") rests on a false premise: `completedSprints[0]` is not merely "not proposed"
     // any more, it is the IDENTICAL object `listContracts` reads back off disk —
     // `PipelineResult.completedSprints` is a CONTAINER for `SprintContract` objects, so
-    // whatever still differs between the two engines' contracts (the four `contracts`
-    // deltas asserted above) is exactly what still differs here. A container cannot
-    // converge before its contents do.
+    // whatever still differs between the two engines' contracts (as of sprint 5, `version`
+    // alone) is exactly what still differs here. A container cannot converge before its
+    // contents do.
     expect(pgeResult?.completedSprints[0]).toEqual(pgeContract);
   }, 60_000);
 
