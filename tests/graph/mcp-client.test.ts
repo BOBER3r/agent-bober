@@ -1,15 +1,29 @@
 /**
  * Integration + chaos tests for TokensaveMcpClient.
  *
- * REQUIRES: a real `tokensave` binary on PATH (>=6.0.0-beta.1 <7.0.0).
- * In CI without tokensave, every integration/chaos test in this file is
- * skipped via `it.skipIf`. Pure-logic tests (breaker math, PendingMap
- * correlation, health state transitions) run unconditionally with mocks.
+ * REQUIRES BOTH:
+ *   1. a real `tokensave` binary on PATH (>=6.0.0-beta.1 <7.0.0), and
+ *   2. an indexed tokensave project rooted at `process.cwd()` — i.e. a
+ *      `.tokensave/` directory — because these tests hand the client
+ *      `process.cwd()` and `tokensave serve` resolves its database from there.
+ *
+ * When either is missing, every integration/chaos test in this file is skipped
+ * via `it.skipIf`. Pure-logic tests (breaker math, PendingMap correlation,
+ * health state transitions) run unconditionally with mocks.
+ *
+ * The second requirement is not optional detail: `.tokensave/` is gitignored,
+ * so it is ABSENT from every fresh checkout. Probing only for the binary made
+ * these tests pass in a working tree that happened to be indexed, skip in CI
+ * (no binary), and FAIL on any clean checkout on a developer machine where the
+ * binary is installed globally — `tokensave serve` exits 1 before the handshake
+ * because it cannot resolve which project to serve. The probe below therefore
+ * checks the precondition the tests actually depend on, not a proxy for it.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { PassThrough } from "node:stream";
 import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -19,7 +33,7 @@ import { TokensaveBackend } from "../../src/graph/backends/tokensave-backend.js"
 // Uses node:child_process (not execa) so the vi.mock("execa") below
 // does not interfere with the probe at module-load time.
 
-function hasTokensave(): boolean {
+function hasTokensaveBinary(): boolean {
   try {
     const r = spawnSync("tokensave", ["--version"], { timeout: 2_000 });
     return r.status === 0;
@@ -28,7 +42,16 @@ function hasTokensave(): boolean {
   }
 }
 
-const tokensaveAvailable = hasTokensave();
+/**
+ * The database the integration tests serve from. Must agree with the root the
+ * tests pass to TokensaveMcpClient, which is `process.cwd()`.
+ */
+function hasIndexedProject(): boolean {
+  return existsSync(join(process.cwd(), ".tokensave"));
+}
+
+/** Both halves of the precondition — see the file header for why. */
+const tokensaveIntegrationRunnable = hasTokensaveBinary() && hasIndexedProject();
 
 // ── Mock setup for pure-logic tests ─────────────────────────────────
 
@@ -750,14 +773,14 @@ describe("tools/call envelope + content unwrap (sc-1-4 / sc-1-5)", () => {
 
 // ── Integration tests (require real tokensave binary) ─────────────────
 
-describe("TokensaveMcpClient (integration — requires real tokensave binary)", () => {
+describe("TokensaveMcpClient (integration — requires the tokensave binary AND an indexed .tokensave project in cwd)", () => {
   // Restore the real execa for integration tests so the real tokensave binary is used.
   beforeEach(async () => {
     const realExeca = await vi.importActual<typeof import("execa")>("execa");
     (execa as unknown as Mock).mockImplementation(realExeca.execa);
   });
 
-  it.skipIf(!tokensaveAvailable)(
+  it.skipIf(!tokensaveIntegrationRunnable)(
     "start() resolves health='ready' in <2s",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
@@ -779,7 +802,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
     },
   );
 
-  it.skipIf(!tokensaveAvailable)(
+  it.skipIf(!tokensaveIntegrationRunnable)(
     "call('tokensave_status', {}) returns a parsed object (sc-1-7 round-trip)",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
@@ -806,7 +829,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
     },
   );
 
-  it.skipIf(!tokensaveAvailable)(
+  it.skipIf(!tokensaveIntegrationRunnable)(
     "crash-restart: in-flight call() rejects with GRAPH_ERROR; subsequent call succeeds",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
@@ -840,7 +863,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
     },
   );
 
-  it.skipIf(!tokensaveAvailable)(
+  it.skipIf(!tokensaveIntegrationRunnable)(
     "breaker trips after 3 restarts in 60s; 4th call rejects GRAPH_UNAVAILABLE",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
