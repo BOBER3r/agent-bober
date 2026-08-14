@@ -4,7 +4,7 @@
   "sprintNumber": 2,
   "title": "Gated effects execute under a durable approval",
   "description": "`commit` and `finalize` have never executed: noop grants nothing and nothing in this repo ever runs them under another mechanism, so commit's span is always interrupted/FailClosed. Give them a durable approval path so their bodies actually run.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-2"
@@ -70,5 +70,6 @@
   "estimatedDuration": "large",
   "iterationHistory": [],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T08:34:15Z",
+  "completedAt": "2026-08-14T08:34:15Z"
 }

@@ -1025,3 +1025,15 @@
 {"event":"sprint-completed","contractId":"sprint-spec-20260731-documenter-docs-output-3","specId":"spec-20260731-documenter-docs-output","iteration":1,"timestamp":"2026-07-31T13:03:11Z"}
 {"event":"plan-completed","specId":"spec-20260731-documenter-docs-output","sprintsCompleted":3,"timestamp":"2026-07-31T13:03:11Z"}
 {"event": "plan-created", "specId": "spec-20260814-pge-full-convergence", "title": "Close every conformance divergence and run every graph node", "sprintCount": 11, "timestamp": "2026-08-14T05:05:27Z"}
+{"event": "pipeline-started", "timestamp": "2026-08-14T05:34:51Z", "specId": "spec-20260814-pge-full-convergence", "task": "Close every conformance divergence and run every graph node", "branch": "bober/pge-full-convergence"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260814-pge-full-convergence-1", "specId": "spec-20260814-pge-full-convergence", "timestamp": "2026-08-14T05:35:06Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260814-pge-full-convergence-1", "iteration": 1, "timestamp": "2026-08-14T06:22:08Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260814-pge-full-convergence-1", "specId": "spec-20260814-pge-full-convergence", "iteration": 1, "timestamp": "2026-08-14T06:43:39Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260814-pge-full-convergence-2", "specId": "spec-20260814-pge-full-convergence", "timestamp": "2026-08-14T06:44:03Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260814-pge-full-convergence-2", "iteration": 1, "timestamp": "2026-08-14T08:08:29Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260814-pge-full-convergence-2", "specId": "spec-20260814-pge-full-convergence", "iteration": 1, "timestamp": "2026-08-14T08:34:15Z"}
+{"event": "security-audit-passed", "contractId": "sprint-spec-20260814-pge-full-convergence-2", "critical": 0, "important": 1, "importantConfirmed": 1, "minor": 2, "disproved": 1, "note": "confirmed finding: finalize audit mislabels the mechanism; approverId derives from the same wrong label. Fix dispatched.", "timestamp": "2026-08-14T08:59:00Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260814-pge-full-convergence-3", "specId": "spec-20260814-pge-full-convergence", "timestamp": "2026-08-14T08:59:00Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260814-pge-full-convergence-3", "iteration": 1, "timestamp": "2026-08-14T10:00:11Z"}
+{"event": "sprint-iteration-failed", "contractId": "sprint-spec-20260814-pge-full-convergence-3", "iteration": 1, "failedCriteria": ["sc-3-3"], "timestamp": "2026-08-14T10:26:08Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260814-pge-full-convergence-3", "specId": "spec-20260814-pge-full-convergence", "iteration": 2, "timestamp": "2026-08-14T10:45:14Z"}

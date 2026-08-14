@@ -799,12 +799,12 @@ which makes the current flip bar ("sustained green conformance") unsatisfiable b
 - Spec: spec-20260814-pge-full-convergence
 - Created: 2026-08-14
 - Sprints: 11
-- Status: planned
+- Status: PAUSED after 3 of 11 (deliberate — consolidating)
 
 ### Sprint Breakdown
-1. [proposed] Checkpoints inside the sprint fan-out — the ADR decision
-2. [proposed] Gated effects execute under a durable approval
-3. [proposed] audits converges — the full checkpoint trail
+1. [completed] Checkpoints inside the sprint fan-out — the ADR decision — iteration 1
+2. [completed] Gated effects execute under a durable approval — iteration 1
+3. [completed] audits converges — the full checkpoint trail — iteration 2
 4. [proposed] history converges — the missing phase events
 5. [proposed] PGE writes evaluatorFeedback and generatorNotes
 6. [proposed] The version delta closes — contracts and pipelineResult converge
@@ -813,3 +813,18 @@ which makes the current flip bar ("sustained green conformance") unsatisfiable b
 9. [proposed] rework_route and synthesize execute — NEVER_EXECUTED empties
 10. [proposed] The graph engine runs this repository's own real workload
 11. [proposed] The bar is met, and the default deliberately stays 'ts'
+
+### Pause note (2026-08-14)
+Stopped after sprint 3 by decision, to consolidate rather than push on.
+
+What sprints 1-3 established:
+- `audits` is PROVEN unreachable — the runtime cannot express a per-branch interrupt. Permanently accepted.
+- `commit` and `finalize` execute for the first time; golden 6/6 -> 7/7, coverage 38/44 -> 40/44.
+- The one declarable checkpoint id (`post-sprint-contract`) is declared on `gate_plan_out`.
+
+What the reassessment corrected:
+- `history` was recorded as equally unreachable. That rested on a FALSE premise — the curate nodes exist and
+  `appendHistory` is callable. It is unbuilt, not unreachable. Corrected in e48962e, with a self-checking test
+  so the claim cannot rot again.
+
+So ONE of four divergences is architectural, not two. Sprints 4-11 remain as a recorded, resumable plan.

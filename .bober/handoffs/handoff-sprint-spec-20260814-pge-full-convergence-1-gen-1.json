@@ -1,0 +1,112 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-1",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T05:35:06Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Close every conformance divergence and run every graph node \u2014 The graph engine is built but not finished: four conformance fields still diverge from the imperative pipeline, and six of its nodes have never executed in any run. This spec closes all four divergences at their architectural causes and drives all six nodes to execution, so the flip bar becomes satisfiable as originally written. The default stays 'ts' \u2014 this makes the flip a decision you can take with evidence, not a risk this spec takes.",
+    "completedSprints": [],
+    "currentBranch": "bober/pge-full-convergence",
+    "relevantFiles": [
+      ".bober/architecture/",
+      "src/pge/topology/validate.ts",
+      "src/pge/topology/validate.test.ts",
+      "docs/pge-graph.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-1",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 1,
+    "title": "Checkpoints inside the sprint fan-out \u2014 the ADR decision",
+    "description": "Five of the six undeclared checkpoint ids sit inside the sprint fan-out region, where InterruptInsideFanOut is a BLOCKING validation error by ADR-6. `audits` cannot converge until that rule is revisited. This sprint decides the question and makes the validator match the decision \u2014 it does not declare any checkpoint yet.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "The hazard ADR-6's rule guards against is stated explicitly, from the ADR itself, before any change is proposed \u2014 what goes wrong when concurrent fan-out branches each raise an interrupt.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "A decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, stating either the semantics under which a fan-out checkpoint is sound, or why it cannot be.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "src/pge/topology/validate.ts matches the ADR: if fan-out checkpoints become legal, InterruptInsideFanOut is replaced by a rule that still rejects the unsound shape; if they stay illegal, the diagnostic gains the reason and the spec's audits goal is amended.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "The validator change is pinned in both directions: a topology that is now legal validates, and the shape the ADR still forbids is still reported.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "The committed topology artifact still validates and the golden gate is unaffected \u2014 no checkpoint is declared in this sprint.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Declaring any checkpoint id \u2014 that is sprint 3.",
+      "Changing interrupt mechanics \u2014 that is sprint 2."
+    ],
+    "stopConditions": [
+      "The revisit concludes the rule is sound and fan-out checkpoints cannot be made safe. That is a legitimate outcome: record it in the ADR, and say plainly that `audits` cannot fully converge and why. Do NOT weaken the validator to make a later sprint easier."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 6,
+    "generatorNotes": "Read .bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md FIRST and quote its reasoning before proposing anything. The rule is at src/pge/topology/validate.ts:1089-1099 and emits severity 'error' via diag(). The real question is what a human interrupt MEANS when N branches reach it concurrently: one approval for all branches, one per branch, or a barrier. Answer that in the ADR, not in code. Note the imperative pipeline records five sprint-lifecycle ids (pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint) \u2014 those are the ones this unblocks. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "The failure mode is a validator weakened to suit a later sprint. Check the new rule still rejects whatever the ADR says is unsound \u2014 construct that topology yourself and confirm it is reported. If the ADR concluded the rule is sound, verify the spec's audits goal was amended honestly rather than the sprint quietly passing. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      ".bober/architecture/",
+      "src/pge/topology/validate.ts",
+      "src/pge/topology/validate.test.ts",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T05:35:06Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "environmentNote": "Verify on a CLEAN checkout, not only the working tree \u2014 this repo has twice been green locally and red in CI because uncommitted state carried the result. A bare `npx vitest run` also picks up a nested worktree at .claude/worktrees/; do not touch it, use the --exclude flags.",
+  "evaluatorFeedback": null
+}

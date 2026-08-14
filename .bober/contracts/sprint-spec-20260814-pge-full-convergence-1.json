@@ -4,7 +4,7 @@
   "sprintNumber": 1,
   "title": "Checkpoints inside the sprint fan-out \u2014 the ADR decision",
   "description": "Five of the six undeclared checkpoint ids sit inside the sprint fan-out region, where InterruptInsideFanOut is a BLOCKING validation error by ADR-6. `audits` cannot converge until that rule is revisited. This sprint decides the question and makes the validator match the decision \u2014 it does not declare any checkpoint yet.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-1"
@@ -69,5 +69,6 @@
   "estimatedDuration": "large",
   "iterationHistory": [],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T06:43:39Z",
+  "completedAt": "2026-08-14T06:43:39Z"
 }

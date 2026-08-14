@@ -4,7 +4,7 @@
   "sprintNumber": 3,
   "title": "audits converges \u2014 the full checkpoint trail",
   "description": "The imperative pipeline records eight distinct checkpoint ids, all approved; a graph run records end-of-pipeline three times as [approved, rejected, approved]. Declare the remaining ids and let the trail match.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-1",
     "sprint-spec-20260814-pge-full-convergence-2"
@@ -73,5 +73,6 @@
   "estimatedDuration": "large",
   "iterationHistory": [],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T10:45:14Z",
+  "completedAt": "2026-08-14T10:45:14Z"
 }

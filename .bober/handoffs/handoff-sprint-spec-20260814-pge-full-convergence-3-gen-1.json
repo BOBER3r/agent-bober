@@ -1,0 +1,130 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-3",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T08:59:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Close every conformance divergence and run every graph node \u2014 The graph engine is built but not finished: four conformance fields still diverge from the imperative pipeline, and six of its nodes have never executed in any run. This spec closes all four divergences at their architectural causes and drives all six nodes to execution, so the flip bar becomes satisfiable as originally written. The default stays 'ts' \u2014 this makes the flip a decision you can take with evidence, not a risk this spec takes.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260814-pge-full-convergence-1",
+        "title": "The ADR decision",
+        "summary": "InterruptInsideFanOut STANDS. Five of the six undeclared checkpoint ids (pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint) sit inside the fan-out region and are PERMANENTLY UNDECLARABLE \u2014 the runtime cannot express a per-branch interrupt (single Checkpoint.interrupt slot; branch-blind grantScope/clearScope; branch-blind resumeMessageId). ADR arch-20260814-pge-full-convergence-adr-1. Spec feat-1/feat-3 amended: audits joins history as recommended for permanent acceptance. ONLY THE SIXTH, OUT-OF-REGION ID (post-sprint-contract) REMAINS OPEN TO THIS SPRINT."
+      },
+      {
+        "contractId": "sprint-spec-20260814-pge-full-convergence-2",
+        "title": "Gated effects execute under a durable approval",
+        "summary": "commit and finalize now execute. A second code-constant config goldenApprovedConfig() sets checkpointOverrides['end-of-pipeline']='disk'; a run-root-scoped DiskCheckpointMechanism is swapped in per case and restored in a finally. goldenConfig() was NOT unpinned. Golden 6/6 -> 7/7 replay cases (44 total); coverage 38/44 -> 40/44. The FAIL_CLOSED refusal that produced the middle 'rejected' audit record is GONE for the approved case. A follow-up commit fixes finalize.ts labelling its audit record with the wrong mechanism."
+      }
+    ],
+    "currentBranch": "bober/pge-full-convergence",
+    "relevantFiles": [
+      "src/pge/topology/coding.graph.ts",
+      ".bober/topology/coding.json",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/",
+      "docs/pge-graph.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-3",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 3,
+    "title": "audits converges \u2014 the full checkpoint trail",
+    "description": "The imperative pipeline records eight distinct checkpoint ids, all approved; a graph run records end-of-pipeline three times as [approved, rejected, approved]. Declare the remaining ids and let the trail match.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260814-pge-full-convergence-1",
+      "sprint-spec-20260814-pge-full-convergence-2"
+    ],
+    "features": [
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-3-1",
+        "description": "The topology declares the checkpoint ids the imperative pipeline records, subject to whatever sprint 1's ADR permits. Any id that remains undeclarable is named with the ADR reason.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-2",
+        "description": "A real conformance run records the same SET of checkpoint ids from both engines \u2014 verified by running the harness, not by reading the pin.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-3",
+        "description": "The middle 'rejected' record is gone, because sprint 2's durable approval lets commit through rather than because a refusal was reclassified as an approval.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-4",
+        "description": "'audits' no longer appears in the divergence set, and the divergence-set pin still fails in BOTH directions.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-5",
+        "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Closing history, contracts or pipelineResult \u2014 later sprints.",
+      "Reclassifying a refusal to make the trail match."
+    ],
+    "stopConditions": [
+      "Sprint 1's ADR left some ids undeclarable \u2014 declare what is legal, record the rest with the ADR reason, and amend the spec's audits goal rather than forcing it."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 4,
+    "generatorNotes": "The per-field record in src/orchestrator/workflow/conformance.engines.test.ts states the exact shape of this divergence \u2014 read it first. Only two ids are declared today (src/pge/topology/coding.graph.ts:483 post-plan, :909 end-of-pipeline). post-sprint-contract may be declarable outside the fan-out even if sprint 1 forbade the five inside it. Remember post-plan is declared but never EVALUATED on the golden fixture, because a settled plan takes e-plan-ok and never e-plan-clarify. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "Run the conformance harness yourself and compare the id sets \u2014 do not read the pin. Then check the outcomes list: a trail that matches only because a rejection became an approval is a false convergence, and the sprint fails. Verify the pin still bites both ways. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      "src/pge/topology/coding.graph.ts",
+      ".bober/topology/coding.json",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T08:59:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "node scripts/run-golden-regression.mjs",
+      "goldenCapture": "GOLDEN_CAPTURE=1 npx vitest run src/pge/golden/capture.test.ts"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "amendedGoal": "sc-3-4 ('audits no longer appears in the divergence set') is met only in the AMENDED sense recorded in spec feat-3: declare the one out-of-region id, name the other five as permanently undeclarable citing the sprint-1 ADR, and record audits as recommended for permanent acceptance. Do NOT force it.",
+  "environmentNote": "Verify on a CLEAN checkout (git worktree --detach HEAD), not only the working tree. Four tokensave tests self-skip there \u2014 pre-existing.",
+  "evaluatorFeedback": null
+}

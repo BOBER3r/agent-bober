@@ -1,0 +1,115 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-1-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-1",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T06:41:06Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0 (isolated worktree of b6ef959, not the dirty working tree)"
+    },
+    {
+      "strategy": "typecheck:tests",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings in an untouched file"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "466 files / 7048 passed, 6 skipped, 0 failed \u2014 reproduced the generator's numbers EXACTLY in an independent isolated worktree. All 6 skips confirmed via JSON reporter to be pre-existing env-gated integration tests."
+    },
+    {
+      "strategy": "golden-gate",
+      "required": true,
+      "result": "pass",
+      "output": "All 8 golden test files green (147 tests); replay-floor assertions intact. Topology diff is zero-line, so no case was invalidated."
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-1-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "The ADR's Context quotes ADR-6's restart-from-top hazard and its 'never unsound' framing BEFORE stating the new Decision; cross-checked verbatim against ADR-6. Pinned by 6 gutted negative controls."
+    },
+    {
+      "criterionId": "sc-1-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "arch-20260814-pge-full-convergence-adr-1.md created with all six ADR fields; ADR-6 amended with a cross-reference. validate.test.ts now READS the ADR from disk and pins its content across 10 tests \u2014 new capability, since no test previously read any .bober/architecture file."
+    },
+    {
+      "criterionId": "sc-1-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator reproduced the load-bearing claim itself: reverting ONLY the validate.ts message string in an isolated worktree broke EXACTLY one test ('still rejects ... and now names the reason'), with 180 others unaffected. Spec feat-3 amended in the same commit, stating plainly that audits cannot converge to equivalence."
+    },
+    {
+      "criterionId": "sc-1-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "Both directions pinned: hitl on sprint_generate (verified subgraph:'sprint', reachable only via fanout edges) still rejected with the reason; hitl on supervisor (verified reachable without any fanout edge) validates clean. JUDGED ON INTENT: the criterion's phrase 'now legal' presumes the 'yes' branch, and under the verified-correct 'no' outcome no topology can move illegal->legal. The generator disclosed this rather than constructing an artificial newly-legal shape."
+    },
+    {
+      "criterionId": "sc-1-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "git diff --name-only across .bober/topology/, coding.graph.ts, interrupt.ts, checkpointer.ts, interpreter.ts returned NOTHING \u2014 all five zero-diff. Full changed set is 8 files: two ADRs, the spec, docs/pge-graph.md, three test files, and the one-line validate.ts message."
+    },
+    {
+      "criterionId": "sc-1-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All gates re-run independently in the isolated worktree."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "medium",
+      "category": "quality",
+      "file": ".bober/architecture/arch-20260814-pge-full-convergence-adr-1.md",
+      "description": "The Rationale conflates two grounds when dismissing Option (c) (a barrier gate inside the region): it cites a validator-mechanics reason (reduce_sprints lands inside fanOutRegion) while claiming the SAME reason as Option (b). Evaluator verified reduce_sprints genuinely executes ONCE per fan-out episode (interpreter.ts:1565-1579 JOIN logic) and is classified 'inside' only by collectReachability's coarse transitive test (validate.ts:602-607) \u2014 so a HITL there would NOT suffer the three cited defects. Bottom line unaffected: all five needed ids are subgraph:'sprint' per-branch nodes that cannot be relocated to the join without collapsing per-sprint granularity. ADDRESSED: orchestrator asked the generator to distinguish the two grounds."
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "contract sc-1-4",
+      "description": "PLANNER-FACING: sc-1-4's wording ('a topology that is now legal validates') presumes the ADR concludes 'yes', while the contract's own stopConditions[0] anticipates 'no' as legitimate \u2014 making the criterion literally unsatisfiable by an honest 'no'. Future ADR-revisit contracts should phrase both-directions criteria outcome-neutrally."
+    }
+  ],
+  "verdictOnTheDecision": "GENUINELY FORCED, not convenient. All three runtime facts verified line-by-line against source, read independently rather than trusted: (1) checkpointer.ts:247 Checkpoint.interrupt is exactly InterruptRecord|null, a single slot. (2) grantScope (interrupt.ts:268) has no branch component; clearScope (:371-375) deletes every granted key sharing the scope PREFIX; maybeInterrupt (:481-485) calls it on every unanswered pass \u2014 so a sibling's arrival at the same topology node deletes a prior branch's recorded grant. interrupt.test.ts:794-800 is a real, PRE-EXISTING, unmodified test pinning that eviction as intentional for the single-branch case, so 'the identical eviction one level down' is mechanically accurate. (3) resumeMessageId (:332) has no branch component, plan.ts:142-144 finds a SINGLE match, and the reducer at :428-436 FILTERS OUT any existing message sharing that id before appending \u2014 two branches' decisions collapse onto one row, later wins. The ADR-6 correction is independently confirmed against coding.graph.ts's edges array and collectReachability. The spec amendment is an honest downgrade, consistent with sprint 3's contract, which the planner had already hedged for this outcome.",
+  "summary": "6/6 pass, verified in an isolated clean worktree reproducing the generator's numbers exactly. The 'no' conclusion is runtime-forced. One ADR imprecision filed and addressed; one planner-facing wording gap recorded.",
+  "orchestratorAddendum": {
+    "resolvedDisagreement": "The evaluator's medium finding asserted that reduce_sprints 'genuinely executes ONCE per fan-out episode' via interpreter.ts:1565-1579's JOIN logic. The generator disputed it, re-traced, and the ORCHESTRATOR verified directly: the generator is correct. leavingFanOut (interpreter.ts:1485-1488) requires !fanOutRegion.has(destination.nodeId); reduce_sprints IS inside the region, so a task routed there falls to the default enqueue at :1501-1510 preserving task.branchKey \u2014 it executes PER BRANCH. The JOIN at :1571 enqueues with no branchKey, for join targets OUTSIDE the region (supervisor via e-sprint-exit), not for reduce_sprints.",
+    "outcome": "The evaluator's premise was wrong; its underlying critique was still right. The ADR HAD conflated the validator's coarse region classification with the runtime reason. Fixed in b42af01: Option (c)'s rejection now cites the interpreter's actual per-branch dispatch as the controlling ground, with the validator's fanOutRegion test named separately as consistent-with rather than identical-to it. Decision unchanged. Two new pinned assertions plus negative controls guard the claim.",
+    "followUpCommit": "b42af01 \u2014 gates all green: 7054 passed, 2 skipped, 0 failed; golden 6/6."
+  }
+}

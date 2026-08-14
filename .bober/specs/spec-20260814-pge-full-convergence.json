@@ -2,11 +2,11 @@
   "specId": "spec-20260814-pge-full-convergence",
   "version": 1,
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T11:27:21Z",
   "title": "Close every conformance divergence and run every graph node",
   "description": "The graph engine is built but not finished: four conformance fields still diverge from the imperative pipeline, and six of its nodes have never executed in any run. This spec closes all four divergences at their architectural causes and drives all six nodes to execution, so the flip bar becomes satisfiable as originally written. The default stays 'ts' \u2014 this makes the flip a decision you can take with evidence, not a risk this spec takes.",
   "mode": "brownfield",
-  "status": "draft",
+  "status": "in-progress",
   "ambiguityScore": 5,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -82,9 +82,9 @@
       "priority": "must-have",
       "estimatedComplexity": "high",
       "dependencies": [],
-      "description": "Revisit ADR-6 so human-in-the-loop checkpoints can be declared on nodes reachable only through a fan-out edge, with defined semantics for concurrent branches. CLOSED at sprint 1 (arch-20260814-pge-full-convergence-adr-1): the revisit concluded the rule stands. A per-branch interrupt inside the region is unsound with the runtime as it stands today, for three independent reasons distinct from ADR-6's own restart-from-top hazard — Checkpoint.interrupt holds one pending interrupt, grantScope/clearScope are branch-blind so a sibling branch evicts a prior branch's grant, and resumeMessageId collapses every branch's decision onto one message row. The rule was not weakened to make feat-3 easier.",
+      "description": "Revisit ADR-6 so human-in-the-loop checkpoints can be declared on nodes reachable only through a fan-out edge, with defined semantics for concurrent branches. CLOSED at sprint 1 (arch-20260814-pge-full-convergence-adr-1): the revisit concluded the rule stands. A per-branch interrupt inside the region is unsound with the runtime as it stands today, for three independent reasons distinct from ADR-6's own restart-from-top hazard \u2014 Checkpoint.interrupt holds one pending interrupt, grantScope/clearScope are branch-blind so a sibling branch evicts a prior branch's grant, and resumeMessageId collapses every branch's decision onto one message row. The rule was not weakened to make feat-3 easier.",
       "acceptanceCriteria": [
-        "AC1: When a node inside the sprint fan-out region declares a hitl checkpoint, the topology validator either accepts it under stated semantics or reports the existing InterruptInsideFanOut diagnostic carrying the reason it cannot — sprint 1 concluded the latter; the diagnostic's code and severity are unchanged, only its message.",
+        "AC1: When a node inside the sprint fan-out region declares a hitl checkpoint, the topology validator either accepts it under stated semantics or reports the existing InterruptInsideFanOut diagnostic carrying the reason it cannot \u2014 sprint 1 concluded the latter; the diagnostic's code and severity are unchanged, only its message.",
         "AC2: The decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, and the validator's behaviour matches the ADR. MET at sprint 1: arch-20260814-pge-full-convergence-adr-1."
       ]
     },
@@ -111,7 +111,7 @@
       ],
       "description": "Declare the remaining checkpoint ids so a graph run records the same audit trail as the imperative pipeline. AMENDED at sprint 1 (arch-20260814-pge-full-convergence-adr-1): 5 of the 6 undeclared checkpoint ids (pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint) sit inside the sprint fan-out region, where InterruptInsideFanOut remains a blocking validation error after the sprint-1 ADR revisit concluded a per-branch fan-out interrupt is unsound with the runtime as it stands (one Checkpoint.interrupt slot, a branch-blind grantScope/clearScope, a branch-blind resumeMessageId). Only the sixth, out-of-region id can be declared. 'audits' therefore cannot converge to equivalence and is RECOMMENDED FOR PERMANENT ACCEPTANCE, the same disposition as 'history' (docs/pge-graph.md, 'Engine migration disposition').",
       "acceptanceCriteria": [
-        "AC1 (AMENDED sprint 1): A real conformance run records the one additional checkpoint id that sits outside the sprint fan-out region; the five in-region ids stay undeclared per arch-20260814-pge-full-convergence-adr-1 — a stated limitation, not a defect.",
+        "AC1 (AMENDED sprint 1): A real conformance run records the one additional checkpoint id that sits outside the sprint fan-out region; the five in-region ids stay undeclared per arch-20260814-pge-full-convergence-adr-1 \u2014 a stated limitation, not a defect.",
         "AC2 (AMENDED sprint 1): 'audits' is RECOMMENDED FOR PERMANENT ACCEPTANCE alongside 'history', per arch-20260814-pge-full-convergence-adr-1; the divergence pin must not drop 'audits' silently without a corresponding ADR revisit."
       ]
     },
@@ -218,6 +218,34 @@
   "metadata": {
     "estimatedTotalDuration": "20-30 hours across 11 sprints",
     "riskLevel": "high",
-    "riskNotes": "Two sprints reopen settled architecture. Sprint 1 revisits ADR-6, whose blocking rule exists for a reason \u2014 concurrent branches raising interrupts is the hazard it was written against; if the revisit concludes the rule is sound, audits cannot close and that is a legitimate recorded outcome rather than a failure. Sprint 2 makes gated effects actually run, which is the largest behavioural change in the spec and moves recorded golden artifacts substantially. Both are deliberately first."
+    "riskNotes": "Two sprints reopen settled architecture. Sprint 1 revisits ADR-6, whose blocking rule exists for a reason \u2014 concurrent branches raising interrupts is the hazard it was written against; if the revisit concludes the rule is sound, audits cannot close and that is a legitimate recorded outcome rather than a failure. Sprint 2 makes gated effects actually run, which is the largest behavioural change in the spec and moves recorded golden artifacts substantially. Both are deliberately first.",
+    "pausedAt": "2026-08-14T11:27:21Z",
+    "pauseReason": "Paused deliberately after sprint 3 of 11, on the user's decision to consolidate. Sprints 1-3 are built, evaluated and merged. The pause is not a failure: sprint 1 proved `audits` architecturally unreachable, which shrank the spec's own goal, and a reassessment then found the parallel claim about `history` was FALSE \u2014 so the remaining work is smaller and better understood than when the spec was written.",
+    "stateAtPause": {
+      "completed": [
+        "sprint-1 (the ADR decision)",
+        "sprint-2 (gated effects execute)",
+        "sprint-3 (audits disposition)"
+      ],
+      "remaining": [
+        "sprint-4 history",
+        "sprint-5 evaluatorFeedback+generatorNotes",
+        "sprint-6 version delta",
+        "sprint-7 dead 'passed' literals",
+        "sprint-8 context_compact+critique",
+        "sprint-9 rework_route+synthesize",
+        "sprint-10 real workload",
+        "sprint-11 the closing record"
+      ],
+      "divergenceStatus": {
+        "audits": "PROVEN unreachable. Five of six checkpoint ids sit inside the fan-out region; the runtime cannot express a per-branch interrupt (single Checkpoint.interrupt slot; branch-blind grantScope/clearScope; branch-blind resumeMessageId). See arch-20260814-pge-full-convergence-adr-1. Permanently accepted.",
+        "history": "OPEN WORK, not unreachable. The disposition claiming otherwise rested on a FALSE premise ('no curator node') \u2014 sprint_curate_explain and sprint_curate_mocks exist at coding.graph.ts:576,592, and appendHistory is a plain callable function. PGE simply has zero writers today. Corrected in commit e48962e.",
+        "contracts": "Unattempted. Needs PGE writers for evaluatorFeedback and generatorNotes (sprint 5) plus a monotone version source on the imperative side (sprint 6).",
+        "pipelineResult": "Closes when contracts does \u2014 it is a container for SprintContract objects (pipeline.ts:89-90)."
+      },
+      "nodeCoverage": "40/44. commit and finalize now execute (sprint 2). Four remain: context_compact, critique, rework_route, synthesize.",
+      "goldenReplayCases": "7 (was 6).",
+      "resumeGuidance": "Sprint 4 is next and now looks like plumbing rather than a wall \u2014 map the imperative engine's ten phase events to graph nodes and emit them through the existing appendHistory path. The likely realistic end state for the whole spec is 3 of 4 divergences closed, with audits permanently accepted, so sprint 11 must re-specify the bar to name that single proven exception."
+    }
   }
 }
