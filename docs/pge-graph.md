@@ -1183,10 +1183,11 @@ serves both.
   `"ts"`** (`src/config/schema.ts`), and `TsPipelineEngine` is both the default and the
   fallback in `selectPipelineEngine` (`src/orchestrator/workflow/selector.ts`).
 - The conformance harness compared the **two real engines** — not a stub — and reported
-  `equivalent: false`, with exactly **four** pinned divergent fields: `history`, `audits`,
-  `contracts`, `pipelineResult`. The comparison was non-vacuous: all conformance fields
-  were present. The pins live in
-  `src/orchestrator/workflow/conformance.engines.test.ts`.
+  `equivalent: false`, with exactly **three** pinned divergent fields: `audits`,
+  `contracts`, `pipelineResult`. `history` CLOSED at sprint 4 of
+  `spec-20260814-pge-full-convergence` (see "The decision" below) and is no longer one of
+  them. The comparison was non-vacuous: all conformance fields were present. The pins live
+  in `src/orchestrator/workflow/conformance.engines.test.ts`.
 - The most consequential divergence: **under the shipped autopilot configuration a PGE run
   does not commit.** The git-effect node `commit` is refused `FAIL_CLOSED` because the
   autopilot gate mechanism is `noop` and a noop mechanism grants nothing. The run
@@ -1342,28 +1343,46 @@ to make "two closed" come true; `conformance.engines.test.ts`'s pinned array
 **What a flip would still require beyond everything this spec did — four things, none of
 them this spec's to do (`nonGoals`):**
 
-1. **`audits` is recommended for permanent acceptance; `history` is not.** A prior version
-   of this paragraph paired the two under one "no curator node" ground. **That ground was
-   FALSE, and this is a correction, not an amendment:** the identical false claim was also
-   copied into `conformance.engines.test.ts`'s prose, `docs/sprints/README.md` and
-   `docs/sprints/sprint-spec-20260812-terminal-vocabulary-6.md` — all three are corrected in
-   the same commit as this paragraph.
-
-   `history`, corrected: the topology declares TWO `role: "curator"` nodes —
+1. **`audits` is recommended for permanent acceptance; `history` CLOSED at sprint 4.** A
+   prior version of this paragraph paired the two under one "no curator node" ground. **That
+   ground was FALSE:** the topology always declared TWO `role: "curator"` nodes —
    `sprint_curate_explain` (`src/pge/topology/coding.graph.ts:576`) and `sprint_curate_mocks`
-   (`:592`) — so a node capable of hosting a history write exists. What is actually true,
-   checked directly rather than inferred: `appendHistory` (`src/state/history.ts:81`) is an
-   ordinary exported async function, called inline by the imperative engine at ten sites in
-   `src/orchestrator/pipeline.ts` (e.g. `:260`, `:281`) — nothing about it or its call sites
-   is imperative-engine-specific — and `grep -rn "appendHistory\|history.jsonl" src/pge
-   --include="*.ts"` (non-test) returns ZERO hits: no PGE node body, curator or otherwise,
-   calls it. The divergence is a MISSING WRITER, not a missing place to put one. **`history`
-   is therefore OPEN WORK, not permanently accepted** — left undone here on scope grounds
-   alone (`spec-20260814-pge-full-convergence`'s own `outOfScope[0]`, "closing history or
-   audits"), the same boundary `audits` sits behind but without `audits`' architectural bar
-   behind it: nothing structural stops a future sprint from adding the call.
+   (`:592`) — so a node capable of hosting a history write existed from the start. The FALSE
+   claim was corrected (commit `e48962e`, 2026-08-14, before this sprint) to "`history` is
+   OPEN WORK, not permanently accepted" — a MISSING WRITER, not a missing place to put one:
+   `appendHistory` (`src/state/history.ts:81`) is an ordinary exported async function the
+   imperative engine calls inline at ten sites in `src/orchestrator/pipeline.ts`, and
+   `grep -rn "appendHistory\|history.jsonl" src/pge --include="*.ts"` (non-test) returned
+   ZERO hits.
 
-   The `audits` disposition below is UNCHANGED by this correction — it rests on ADR-6/ADR-1
+   **Sprint 4 of `spec-20260814-pge-full-convergence` closed that gap.**
+   `src/pge/runtime/history.ts` exports `emitPhaseEvent`, which delegates to the SAME
+   `appendHistory` the imperative engine calls — no parallel writer, no parallel file
+   (sc-4-4) — and nine graph nodes now call it at the node's real lifecycle boundary, not
+   replayed as a block at `finalize`: `research_body` (entry, `pipeline-start`),
+   `plan_materialize` (after persisting, `planning-complete`), `sprint_curate_explain`
+   (before/after `curator.brief`, `curator-start`/`curator-complete` — the latter only on a
+   cache MISS, since a cache HIT never fetches the `SprintBriefing` its three counts come
+   from), `sprint_generate` (entry, `generator-start`), `sprint_evaluate` (entry,
+   `evaluator-start`; on the passing return path, `sprint-passed`, carrying the RAW
+   `result.summary` rather than the `evaluations`-channel's decorated copy), `sprint_review`
+   (after `reviewer.sprint`, `code-review-complete`) and `documenter` (after
+   `documenter.summary`, `sprint-docs-complete` — never on the nothing-to-document early
+   return). `grep -rn "appendHistory\|history.jsonl" src/pge --include="*.ts"` (non-test)
+   now returns exactly ONE hit: src/pge/runtime/history.ts — the nine emitting node bodies
+   call `emitPhaseEvent`, not `appendHistory` directly.
+   `src/orchestrator/workflow/conformance.engines.test.ts` ("1. history") asserts the pge
+   run's ordered event list against the ts run's OWN answer rather than a literal, so the
+   claim pinned is the convergence itself: `history` no longer appears in the divergence set
+   (`src/orchestrator/workflow/conformance.ts`'s `report.diffs`), and the pin fails in both
+   directions (sc-4-3). The tenth imperative event, `pipeline-complete`, was already shared
+   (`finalizePipelineRun`, both engines) and is untouched. The one non-obvious correctness
+   fix: `iteration` (events 5-7) could not be read from `sprint-evaluate.ts`'s `iterationOf`
+   or from the shared `sprintIterations` loop counter — both were tried against a real golden
+   capture and both produced a WRONG number for a multi-round branch, for two independent
+   reasons documented at `src/pge/nodes/gates.ts`'s `generateAttemptsSoFar`.
+
+   The `audits` disposition below is UNCHANGED by this closure — it rests on ADR-6/ADR-1
    runtime evidence this paragraph does not touch. `audits`: the
    imperative pipeline records EIGHT checkpoints under eight distinct ids; a graph run
    records at most TWO of them, `post-sprint-contract` and `end-of-pipeline` (the latter
@@ -1442,13 +1461,13 @@ them this spec's to do (`nonGoals`):**
    *"requires sustained green conformance across real runs"*, operationally `equivalent:
    true` — is now UNSATISFIABLE BY DESIGN: `audits` alone (point 1) is recommended for
    permanent acceptance, and that is sufficient by itself — one field that can never close
-   means `diffs` can never become empty. The other three (`history`, `contracts`,
-   `pipelineResult`) are unbuilt, not architecturally barred: `history` (point 1, corrected)
-   needs a PGE-node writer for `appendHistory`; `contracts`/`pipelineResult` need one for
-   `evaluatorFeedback` and `generatorNotes` that no sprint in this spec added, plus a
-   `version` delta this harness deliberately keeps visible. `diffs` can therefore never
-   become empty under the bar's current wording regardless, so a flip is not "closer" for
-   two divergences having narrowed below the field level — the bar itself has to be
+   means `diffs` can never become empty. `history` (point 1) no longer needs anything — it
+   CLOSED at sprint 4. The other two (`contracts`, `pipelineResult`) are unbuilt, not
+   architecturally barred: they need a PGE-node writer for `evaluatorFeedback` and
+   `generatorNotes` that no sprint in this spec has added yet, plus a `version` delta this
+   harness deliberately keeps visible. `diffs` can therefore never become empty under the
+   bar's current wording regardless, so a flip is not "closer" for one divergence having
+   closed and another having narrowed below the field level — the bar itself has to be
    re-specified, on purpose, before "flip the default" is a live question again. Doing that
    re-specification is explicitly this spec's `nonGoals`/`outOfScope[2]`, not this record's
    to perform.
@@ -1502,7 +1521,10 @@ record that names it.
 `bober.config.json`), that `TsPipelineEngine` still constructs and is still what the
 default config *selects*, that it is still the fallback `PgeEngine` downgrades to, and
 that `conformance.engines.test.ts` still constructs **both** real engines, is not skipped
-or focused, and still pins `equivalent: false` with all four divergent fields named. An
+or focused, and still pins `equivalent: false` with the three currently-diverging fields
+named (`oracle-retention.test.ts` also checks that `history` is still named in that file's
+source, since its CLOSURE is recorded there too — a field leaving the divergence set must
+not make the file stop mentioning it entirely). An
 oracle that exists but is unreachable from selection is not retained; an oracle nothing
 compares against is not exercised. Both are asserted separately, so neither can be
 satisfied by the other.
