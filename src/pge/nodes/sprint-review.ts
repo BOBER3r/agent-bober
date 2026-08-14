@@ -60,6 +60,22 @@ import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-eval
  * make the channel converge on the settled copy at all, and it now does; unifying the
  * WRITTEN word across engines was sprint 5's job, not this one's.
  * `sprint-evaluate.test.ts` asserts the settled status lands in the channel.
+ *
+ * ── `evaluatorFeedback`/`generatorNotes` (sprint 5 of spec-20260814-pge-full-convergence) ──
+ *
+ * Before this sprint, `settled` never carried either field, because the seeded contract never
+ * does and `sprint_exit` had no other source for them — the `contracts` divergence's two
+ * missing-writer deltas. Both now ride the SAME edge `version` already rides: the decisive
+ * `SprintVerdict` `sprint_evaluate` emits, read here through `branchOutcome`. `sprint_exit`'s
+ * declared `reads` stays `["evaluations"]` alone (`coding.graph.ts:756`) — no new channel, no
+ * topology change, no `graphVersion` bump — because the raw values were carried ONTO that
+ * channel's existing entries rather than fetched from a second one. See
+ * `sprint-evaluate.ts`'s `sprintVerdict` doc comment for exactly which call sites populate
+ * them, and `overall.ts`'s `SprintVerdictSchema` doc comment for why widening the schema with
+ * an optional field (rather than adding a channel, the option `anchors.ts:179-196` rejected
+ * for an unrelated fact) is proportionate here. Deliberately unclosed by this sprint: the
+ * contract's third field, `version`, which this file has written since sprint 3 and the
+ * imperative engine writes none of — sprint 6's business, not this paragraph's.
  */
 
 export const SPRINT_REVIEW_NODE_IDS = {
@@ -175,11 +191,24 @@ export function sprintReviewNode(spec: TopologySpec): NodeImpl<unknown, unknown>
  * A branch SUCCEEDS when its most recent non-advisory verdict is a pass. Advisory entries
  * (`skipped` — the security note and the review) are ignored rather than counted, so a
  * disabled security gate cannot make a failing branch look settled.
+ *
+ * `evaluatorFeedback`/`generatorNotes` (sc-5-1, sc-5-2) pass through from the decisive
+ * verdict UNCHANGED — `sprint_exit` does not decide their content, only whether one was
+ * recorded. Absent on the decisive verdict (a refusal never reaches here at all; a decisive
+ * verdict from a call site that does not populate them — see `sprint-evaluate.ts`'s
+ * `sprintVerdict` doc comment) means absent here too: sc-5-3 forbids inventing a value this
+ * function did not receive, and the contract's stop condition forbids a plausible-looking
+ * placeholder standing in for "the graph genuinely has no answer here".
  */
 export function branchOutcome(
   state: Readonly<OverallState>,
   contractId: string,
-): { settled: BranchStatus["state"]; summary: string } {
+): {
+  settled: BranchStatus["state"];
+  summary: string;
+  evaluatorFeedback?: string;
+  generatorNotes?: string;
+} {
   const decisive = state.evaluations.filter(
     (entry) => entry.contractId === contractId && entry.verdict !== "skipped",
   );
@@ -187,7 +216,12 @@ export function branchOutcome(
   if (last === undefined) {
     return { settled: "failed", summary: "the branch recorded no decisive verdict" };
   }
-  return { settled: last.verdict === "pass" ? "succeeded" : "failed", summary: last.summary };
+  return {
+    settled: last.verdict === "pass" ? "succeeded" : "failed",
+    summary: last.summary,
+    ...(last.evaluatorFeedback === undefined ? {} : { evaluatorFeedback: last.evaluatorFeedback }),
+    ...(last.generatorNotes === undefined ? {} : { generatorNotes: last.generatorNotes }),
+  };
 }
 
 /**
@@ -229,8 +263,20 @@ export function sprintExitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
           (entry) => entry.contractId === contract.contractId && entry.verdict !== "skipped",
         ).length,
       );
+
+      // sc-5-1/sc-5-2/sc-5-3: `evaluatorFeedback`/`generatorNotes` on the settled contract are
+      // written from `outcome` — the decisive verdict `sprint_evaluate` produced (or, for a
+      // refusal, nobody) — NEVER from the SEEDED contract's own copy of either key. The seed's
+      // copy is stripped here BEFORE the spread below, so a stale value on `contract` (however
+      // it got there) can never survive by omission: when `outcome` carries no raw value (a
+      // refusal, or a decisive verdict from a call site that never populated one — see
+      // `sprint-evaluate.ts`'s `sprintVerdict` doc comment), the field is genuinely ABSENT on
+      // `settled`, which is the honest answer the contract's stop condition asks for, not a
+      // seed left standing in for it.
+      const { evaluatorFeedback: _seededFeedback, generatorNotes: _seededNotes, ...contractWithoutFeedback } =
+        contract;
       const settled: SprintContract = {
-        ...contract,
+        ...contractWithoutFeedback,
         status: outcome.settled === "succeeded" ? "completed" : "failed",
         updatedAt: ctx.clock.nowIso(),
         // `attempts` is a replay-stable count (filter().length over a channel a replay
@@ -239,6 +285,10 @@ export function sprintExitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
         // that), and branch-local (filtered by `contractId`, immune to another branch's
         // writes). See `versionRank`, `src/pge/registry/reducers.ts:366-393`.
         version: attempts,
+        ...(outcome.evaluatorFeedback === undefined
+          ? {}
+          : { evaluatorFeedback: outcome.evaluatorFeedback }),
+        ...(outcome.generatorNotes === undefined ? {} : { generatorNotes: outcome.generatorNotes }),
       };
 
       await ctx.effects.invoke(
