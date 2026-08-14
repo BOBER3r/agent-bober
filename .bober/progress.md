@@ -817,8 +817,8 @@ which makes the current flip bar ("sustained green conformance") unsatisfiable b
 ### Outcome (spec-20260814-pge-full-convergence, 11/11)
 The spec set out to close four conformance divergences and run six never-executed nodes. What it actually established:
 - CLOSED, genuinely: `history` (s4), `contracts` — evaluatorFeedback + generatorNotes (s5) and version (s6). Verified by canonical whole-object equality with nothing stripped.
-- NOT CLOSED, proven architectural: `audits` (s3) and `pipelineResult.errors` (s6). They share ONE root cause — the graph has a checkpoint-gated commit the imperative engine lacks.
-- FOUR structural limits recorded, each with a claim test and a cost-to-close: audits, pipelineResult.errors, context_compact (s8), synthesize (s9).
+- NOT CLOSED, proven architectural: `audits` (ADR-1, authored s1 and upheld s3) and `pipelineResult.errors` (s6). They share ONE root cause — the graph has a checkpoint-gated commit the imperative engine lacks.
+- FOUR structural limits recorded, each with a claim test and a cost-to-close: audits (ADR-1, s1/s3), pipelineResult.errors (s6), context_compact (s8), synthesize (s9).
 - Node coverage 38/44 -> 42/44 on the golden corpus; 36/44 on the real workload with every miss named.
 - Real workload measured: 29,214-byte PlanSpec + 14 real contracts, 234/512 supersteps, NO channel breach.
 - Two evidence caveats that must travel with any flip decision: collaborators were STUBS, and `wouldReject` measures per-update, not accumulated state.
