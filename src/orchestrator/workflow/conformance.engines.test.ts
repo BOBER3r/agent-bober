@@ -75,6 +75,8 @@ import {
   sharedAgents,
   wholeGraphBindings,
 } from "../../pge/engine/__fixtures__/whole-graph.js";
+import type { BoberConfig } from "../../config/schema.js";
+import { withGoldenApproval } from "../../pge/golden/executor.js";
 import { EngineConformanceHarness, emptyOnAllEnginesFields, fullyPopulatedFields } from "./conformance.js";
 import type { EngineRunner } from "./conformance.js";
 import type { PipelineEngineName } from "./engine.js";
@@ -578,5 +580,92 @@ describe("both engines finalize through the sprint-4 single owner (sc-13-3)", ()
     // EXACTLY as for a ts run — asserted against the other engine's own answer rather than
     // against a literal, so the claim is the equivalence and not the string.
     expect(seen.pge).toEqual(seen.ts);
+  }, 60_000);
+});
+
+// ── sc-3-3 ─────────────────────────────────────────────────────────
+
+describe("the commit refusal is gone under a REAL durable approval, not a reclassified one (sc-3-3)", () => {
+  it("gives the pge run its OWN config with end-of-pipeline routed to disk, and every record approves through a real grant", async () => {
+    // ── Why this is a SEPARATE run, not a change to the run above ──
+    //
+    // "records WHAT each divergence IS" pins that a run under the SHARED `conformanceConfig()`
+    // still records the middle `end-of-pipeline` as `rejected` (mechanism `noop`), and that
+    // sprint 2's durable approval never reaches THAT config — mutating the one instance both
+    // engines share would route the ts run through `disk` too and block it. That premise is
+    // correct, and it stays correct here: `conformanceConfig()` is asserted unmutated below,
+    // and the assertion above it — and the compare()-based tests that use it — are untouched.
+    //
+    // What the premise does not establish is that pge is stuck with that config. `runnerFor`
+    // (above) builds `config = conformanceConfig()` freshly INSIDE each `runnerFor(engine)`
+    // call — the pge branch and the ts branch never share the returned object — so nothing
+    // stops a caller from giving the pge engine a DIFFERENT config than `runnerFor("ts")`
+    // ever sees. This test does exactly that: start from `conformanceConfig()` and override
+    // only `end-of-pipeline` to `disk` — the SAME override sprint 2 shipped as
+    // `goldenApprovedConfig` (`golden/executor.ts:152-161`) — then run it through
+    // `withGoldenApproval` (`golden/executor.ts:390-412`), the pairing this repository's own
+    // committed `.bober/golden/replay-full-run-commit-approved.json` already proves yields an
+    // all-approved trail via a real `disk` grant, not a reclassified refusal.
+    const pgeRoot = await projectRootFactory();
+    const sharedConfig = conformanceConfig();
+    const approvedConfig: BoberConfig = {
+      ...sharedConfig,
+      pipeline: {
+        ...sharedConfig.pipeline,
+        checkpointOverrides: { ...sharedConfig.pipeline.checkpointOverrides, "end-of-pipeline": "disk" },
+      },
+    };
+
+    // `needed: true` unconditionally — unlike the executor's data-driven
+    // `goldenCase.input.config !== undefined`, this run always wants the swapped-in,
+    // run-root-scoped `disk` mechanism, never the checkout's own registered instance.
+    const result = await withGoldenApproval(pgeRoot, true, () =>
+      new PgeEngine({
+        graphId: CODING_GRAPH_ID,
+        bindings: (input) => wholeGraphBindings(input),
+      }).run(PROMPT, pgeRoot, approvedConfig, { runId: RUN_ID }),
+    );
+
+    const audits = await readAuditRecords(pgeRoot);
+
+    // The checkpoint id SEQUENCE is exactly as under the shared config asserted above — this
+    // override changes which mechanism ANSWERS `end-of-pipeline`, not which checkpoints fire
+    // or in what order.
+    expect(audits.map((record) => record.checkpointId)).toEqual([
+      "post-sprint-contract",
+      "end-of-pipeline",
+      "end-of-pipeline",
+      "end-of-pipeline",
+    ]);
+
+    // ── THE ASSERTION sc-3-3 asks for ──
+    //
+    // Not "no rejected outcome" alone — that would also be true of a run that never asked
+    // the question, or one whose mechanism resolution silently fell through to `noop`.
+    // `mechanism` is what tells a real grant from a reclassified refusal apart: `noop` means
+    // nothing was asked and the FAIL_CLOSED default answered instead; `disk` means a pending
+    // marker was written, polled for, and answered by a real approval file on disk. All
+    // three `end-of-pipeline` records resolve through `disk` — the override reaches every
+    // ask, `hitl_commit`'s own gate and `finalizePipelineRun`'s both.
+    expect(audits.map((record) => record.mechanism)).toEqual(["noop", "disk", "disk", "disk"]);
+    expect(audits.map((record) => record.outcome)).toEqual(["approved", "approved", "approved", "approved"]);
+    expect(audits.some((record) => record.outcome === "rejected")).toBe(false);
+
+    // The refusal text "records WHAT each divergence IS" pins for the SHARED-config run
+    // ("FAIL_CLOSED", `node "commit"`, "was not executed") appears nowhere in THIS trail —
+    // not because it was reclassified, but because the run that would have produced it never
+    // happens: `commit` is granted a real approval and executes.
+    for (const record of audits) {
+      expect(record.feedbackText ?? "").not.toContain("FAIL_CLOSED");
+    }
+
+    // `conformanceConfig()` itself is unaffected by this run having existed — read fresh
+    // rather than off `sharedConfig` above, so a mutation reaching the shared object (a
+    // shallow spread does not protect a NESTED value) would be caught here too. The same pin
+    // "records WHAT each divergence IS" asserts, re-checked after the run that would expose
+    // a leak if the override above were anything but a fresh copy.
+    expect(conformanceConfig().pipeline.checkpointOverrides).toEqual({});
+
+    expect(result.success).toBe(true);
   }, 60_000);
 });
