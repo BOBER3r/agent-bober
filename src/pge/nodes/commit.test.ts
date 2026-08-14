@@ -1,12 +1,16 @@
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { registerCheckpointMechanism } from "../../orchestrator/checkpoints/registry.js";
-import type { CheckpointOutcome } from "../../orchestrator/checkpoints/types.js";
-import { FAIL_CLOSED_ERROR_CLASS } from "../runtime/interpreter.js";
+import { DiskCheckpointMechanism } from "../../orchestrator/checkpoints/mechanisms/disk.js";
+import {
+  getCheckpointMechanism,
+  registerCheckpointMechanism,
+} from "../../orchestrator/checkpoints/registry.js";
+import type { CheckpointMechanism, CheckpointOutcome } from "../../orchestrator/checkpoints/types.js";
+import { FAIL_CLOSED_ERROR_CLASS, HITL_REJECTED_ERROR_CLASS } from "../runtime/interpreter.js";
 import {
   commitCount,
   commitFiles,
@@ -74,12 +78,19 @@ import {
  */
 
 let root = "";
+let originalDisk: CheckpointMechanism;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "bober-pge-commit-"));
+  originalDisk = getCheckpointMechanism("disk");
 });
 
 afterEach(async () => {
+  // The registry is module state. Restore the shipped instance so no other suite in this
+  // worker inherits a mechanism a test here pointed at a stub or at a temp directory that no
+  // longer exists — `interrupt.test.ts:95-107`'s hygiene pattern, applied here because a new
+  // test below depends on the REAL disk mechanism and the tests above never restored it.
+  registerCheckpointMechanism("disk", originalDisk);
   await rm(root, { recursive: true, force: true });
 });
 
@@ -93,6 +104,49 @@ function scriptApproval(answers: readonly CheckpointOutcome[]): { asked: string[
     },
   });
   return { asked };
+}
+
+/**
+ * Answer whatever the disk mechanism asks with a REAL approval file, the way `bober approve`
+ * does — not `scriptApproval` above, which answers the mechanism call directly and never
+ * touches a filesystem. sc-2-4 means the second: a record that survives process exit rather
+ * than one synthesised in memory for the duration of this call.
+ *
+ * Mirrors `src/pge/runtime/interrupt.test.ts`'s `startApprover`: the shipped mechanism
+ * deletes a marker written up front and then polls (`disk.ts:80-83`), so the round trip has
+ * to happen WHILE the run is blocked, and the marker is written temp-plus-rename because a
+ * half-written file makes the mechanism throw.
+ */
+function startApprover(approvalsDir: string): { stop: () => Promise<string[]> } {
+  const answered: string[] = [];
+  let running = true;
+  const loop = (async (): Promise<void> => {
+    while (running) {
+      const names = await readdir(approvalsDir).catch(() => [] as string[]);
+      for (const name of names) {
+        if (!name.endsWith(".pending.json")) continue;
+        const id = name.slice(0, -".pending.json".length);
+        const marker = join(approvalsDir, `${id}.approved.json`);
+        const temp = join(approvalsDir, `.${id}.${String(answered.length)}.answer.tmp`);
+        try {
+          await writeFile(temp, JSON.stringify({ approvedBy: "test" }), "utf-8");
+          await rename(temp, marker);
+          answered.push(id);
+        } catch {
+          // The run finished and its root went away mid-poll. Nothing left to answer.
+          running = false;
+        }
+      }
+      if (running) await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  })();
+  return {
+    stop: async (): Promise<string[]> => {
+      running = false;
+      await loop;
+      return answered;
+    },
+  };
 }
 
 const COMPLETED = { ...sprintContractFixture(), status: "completed" as const };
@@ -367,5 +421,118 @@ describe("the commit node behind a recorded approval (sc-12-9)", () => {
     await expect(
       access(join(root, "docs", "sprints", `${sprintContractFixture().contractId}.md`)),
     ).rejects.toThrow();
+  }, 30_000);
+});
+
+// ── A DURABLE approval, not a scripted one (sc-2-1, sc-2-2, sc-2-4) ──
+
+/**
+ * Everything above answers the gate through `scriptApproval` — an in-memory
+ * `CheckpointMechanism` registered directly as `"disk"`, whose `request()` returns a
+ * scripted outcome without ever touching a filesystem. That is exactly what sc-2-4 forbids
+ * calling durable: the record has to survive process exit and be something a run reads back
+ * off disk, not an answer the test harness fabricates for the duration of one call.
+ *
+ * These two tests use the REAL, unmodified `DiskCheckpointMechanism` against a real
+ * `.bober/approvals/` directory under this test's own temp root — never `process.cwd()` —
+ * and answer it the way `bober approve` does: a file, written temp-plus-rename, while the
+ * run is blocked polling for it (`startApprover` above; the shipped mechanism deletes a
+ * marker written up front, so it cannot be seeded before the run starts — `disk.ts:80-83`).
+ */
+describe("the commit node behind a DURABLE disk approval, not a scripted one (sc-2-1, sc-2-2, sc-2-4)", () => {
+  it("executes — span status ok, not interrupted/FailClosed — when a real approval file answers the gate", async () => {
+    await initTempRepo(root);
+    await writeFile(join(root, "generated.txt"), "work the run produced\n", "utf-8");
+    const countBefore = await commitCount(root);
+
+    const approvalsDir = join(root, ".bober", "approvals");
+    await mkdir(approvalsDir, { recursive: true });
+    registerCheckpointMechanism(
+      "disk",
+      new DiskCheckpointMechanism(approvalsDir, { pollMs: 5, timeoutMs: 10_000 }),
+    );
+    const approver = startApprover(approvalsDir);
+
+    const run = await runSprint({
+      projectRoot: root,
+      region: TERMINAL_REGION,
+      // The SHIPPED `commitAll`, in the temp repo — nothing about git is stubbed.
+      bindings: stubTerminalBindings(),
+      config: sprintConfig({}, { checkpointMechanism: "disk" }),
+      contracts: [COMPLETED],
+    });
+    const answered = await approver.stop();
+
+    // The approval really was a file the mechanism read off disk, not a value handed back
+    // in-process: `answered` is populated only by the temp-plus-rename write above. De-duped
+    // for the same reason `interrupt.test.ts`'s `startApprover` callers de-dupe it: the
+    // approver's own poll and the mechanism's poll both run every 5ms, so the same pending
+    // marker can occasionally be seen — and answered again, harmlessly — twice before the
+    // mechanism has consumed the first answer.
+    expect([...new Set(answered)]).toEqual(["end-of-pipeline"]);
+
+    const span = run.spans.find((entry) => entry.nodeId === COMMIT_NODE_IDS.commit);
+    expect(span?.status).toBe("ok");
+    expect(span?.failClosed).toBeUndefined();
+    expect(span?.errorClass).toBeUndefined();
+
+    expect(run.handlerLog.calls[COMMIT_NODE_IDS.commit]).toBe(1);
+    expect(await commitCount(root)).toBe(countBefore + 1);
+    expect(run.result.failures).toEqual([]);
+  }, 30_000);
+
+  it("is STILL refused when disk is configured but no approval ever arrives (sc-2-2)", async () => {
+    // Routing the gate to a durable mechanism must not itself grant anything — approval
+    // requires an actual record, not merely a non-noop mechanism being configured. No
+    // approver runs here, so the mechanism polls, finds nothing, and times out (a short
+    // timeout is what keeps that fast rather than 24 hours) — the SAME real
+    // `DiskCheckpointMechanism` the test above uses, minus the approval.
+    //
+    // A timed-out `hitl_commit` is a REJECTION of hitl_commit's own gate
+    // (`errorClass: "HitlRejected"`, `interpreter.ts:1167-1201` — `hitl !== undefined` for
+    // `hitl_commit`, so `failClosed` is false there and the block is not pushed to
+    // `run.result.failures`), and the run routes straight to `hitl_commit.hitl.onReject` —
+    // `commit` is never even ADMITTED, so it opens no span at all. That is a DIFFERENT node
+    // and a different errorClass than the FAIL_CLOSED guard `interrupt.ts:523` protects
+    // (which the unmodified, default-noop test above already pins: `mechanismName !==
+    // "noop"` is what stops autopilot recording a grant, and that guard is untouched — this
+    // file's diff of `interrupt.ts` is empty). What this test adds is the other half of
+    // sc-2-2: a durable mechanism being CONFIGURED is not itself an approval, so the same
+    // observable guarantee — no commit handler entered, no git object created — holds even
+    // when the run is routed at the real disk mechanism and nobody answers it.
+    await initTempRepo(root);
+    await writeFile(join(root, "generated.txt"), "work the run produced\n", "utf-8");
+    const before = await headSha(root);
+    const countBefore = await commitCount(root);
+
+    const approvalsDir = join(root, ".bober", "approvals");
+    await mkdir(approvalsDir, { recursive: true });
+    registerCheckpointMechanism(
+      "disk",
+      new DiskCheckpointMechanism(approvalsDir, { pollMs: 5, timeoutMs: 50 }),
+    );
+
+    const run = await runSprint({
+      projectRoot: root,
+      region: TERMINAL_REGION,
+      bindings: stubTerminalBindings(),
+      config: sprintConfig({}, { checkpointMechanism: "disk" }),
+      contracts: [COMPLETED],
+    });
+
+    expect(run.handlerLog.calls[COMMIT_NODE_IDS.commit]).toBeUndefined();
+    expect(run.handlerLog.calls[COMMIT_NODE_IDS.approval]).toBeUndefined();
+    expect(await headSha(root)).toBe(before);
+    expect(await commitCount(root)).toBe(countBefore);
+
+    const gateSpan = run.spans.find((entry) => entry.nodeId === COMMIT_NODE_IDS.approval);
+    expect(gateSpan?.status).toBe("interrupted");
+    expect(gateSpan?.errorClass).toBe(HITL_REJECTED_ERROR_CLASS);
+    expect(gateSpan?.failClosed).toBe(false);
+    expect(run.handlerLog.calls["graceful_failure"]).toBe(1);
+
+    // No span for `commit` at all — it was never admitted, which is a STRONGER absence than
+    // "opened a span and was refused".
+    expect(run.spans.find((entry) => entry.nodeId === COMMIT_NODE_IDS.commit)).toBeUndefined();
   }, 30_000);
 });
