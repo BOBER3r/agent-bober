@@ -1,12 +1,18 @@
 // ── The golden executor — the runtime half of the blocking CI gate ──
 
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { BoberConfig } from "../../config/schema.js";
 import { createDefaultConfig } from "../../config/schema.js";
 import type { TopologySpec } from "../../contracts/topology.js";
+import { DiskCheckpointMechanism } from "../../orchestrator/checkpoints/mechanisms/disk.js";
+import {
+  getCheckpointMechanism,
+  registerCheckpointMechanism,
+} from "../../orchestrator/checkpoints/registry.js";
+import type { CheckpointMechanism } from "../../orchestrator/checkpoints/types.js";
 import { collectRunArtifacts } from "../../orchestrator/workflow/conformance.js";
 import { CONFORMANCE_FIELDS } from "../../orchestrator/workflow/types.js";
 import type { ConformanceField } from "../../orchestrator/workflow/types.js";
@@ -128,6 +134,61 @@ export function goldenConfig(): BoberConfig {
   };
 }
 
+/**
+ * {@link goldenConfig}, with `end-of-pipeline` routed through the real `disk` mechanism
+ * instead of falling through to `noop`.
+ *
+ * A SECOND pinned config, not a parameter on the first: {@link goldenConfig} stays
+ * byte-identical, so the five cases that never opt in keep reproducing under the exact
+ * config they always have. Confined to ONE checkpoint via `checkpointOverrides` rather than
+ * the global `pipeline.checkpointMechanism` — the committed artifact's OTHER hitl gate,
+ * `plan_clarify` at `post-plan` (`coding.graph.ts:483`), is untouched and stays on the
+ * autopilot default, because this sprint's territory is the commit gate, not every gate in
+ * the graph.
+ *
+ * Still a code constant, same as {@link goldenConfig}: nothing here reads the checkout's own
+ * `bober.config.json`, which is the property the executor's config pin exists to protect.
+ */
+export function goldenApprovedConfig(): BoberConfig {
+  const base = goldenConfig();
+  return {
+    ...base,
+    pipeline: {
+      ...base.pipeline,
+      checkpointOverrides: { ...base.pipeline.checkpointOverrides, "end-of-pipeline": "disk" },
+    },
+  };
+}
+
+/**
+ * The ONE shape {@link assertExecutable} accepts into `input.config`: opts a case into
+ * {@link goldenApprovedConfig} instead of refusing it outright.
+ *
+ * Not `{ autopilot: true }` (the shape the 37 `integrity` cases already use, and
+ * `executor.test.ts` pins as refused) — a different key on purpose, so a case that means
+ * "give commit a durable approval" cannot be confused with a case that means "flip
+ * autopilot", which this executor still refuses for the reason the stopCondition names: a
+ * config read from anywhere but a code constant would make a case irreproducible.
+ */
+export const GOLDEN_APPROVED_CONFIG_INPUT: Readonly<Record<string, unknown>> = { approved: true };
+
+/** True when `config` is exactly {@link GOLDEN_APPROVED_CONFIG_INPUT} and nothing else. */
+function isApprovedConfigInput(config: Readonly<Record<string, unknown>>): boolean {
+  const keys = Object.keys(config);
+  return keys.length === 1 && keys[0] === "approved" && config["approved"] === true;
+}
+
+/**
+ * {@link goldenConfig}, or {@link goldenApprovedConfig} when the case opted in.
+ *
+ * Shared by the executor (replay) and `capture.ts` (the recorded run), so a case's capture
+ * and its replay can never resolve to two different configs by accident — both call this
+ * with the same `input.config`.
+ */
+export function resolveGoldenConfig(configInput: Readonly<Record<string, unknown>> | undefined): BoberConfig {
+  return configInput === undefined ? goldenConfig() : goldenApprovedConfig();
+}
+
 // ── The sandbox ─────────────────────────────────────────────────────
 
 /**
@@ -245,6 +306,98 @@ export async function seedGoldenRoot(
   return spec;
 }
 
+// ── Running under a durable approval ────────────────────────────────
+
+/** How often the swapped-in disk mechanism polls, and how long it answers within. */
+const GOLDEN_APPROVAL_POLL_MS = 5;
+const GOLDEN_APPROVAL_TIMEOUT_MS = 20_000;
+
+/**
+ * Answer whatever `end-of-pipeline` asks, the way `bober approve` does: a REAL file, written
+ * temp-plus-rename, next to the mechanism's own pending marker.
+ *
+ * Mirrors `src/pge/runtime/interrupt.test.ts`'s `startApprover` — the shipped mechanism
+ * deletes a marker written up front and then polls (`disk.ts:80-83`), so the round trip has
+ * to happen WHILE the run is blocked, and a half-written file makes the mechanism throw,
+ * which temp-plus-rename avoids. Runs for the run's whole duration and keeps answering: a
+ * whole-graph run asks `end-of-pipeline` twice through this mechanism — once for
+ * `hitl_commit`'s own gate, once more from `finalizePipelineRun` after the interpreter loop
+ * (`orchestrator/finalize.ts:249-260`) — and each ask writes its own fresh pending marker.
+ */
+function startGoldenApprover(approvalsDir: string): { stop: () => Promise<void> } {
+  let running = true;
+  let answered = 0;
+  const loop = (async (): Promise<void> => {
+    while (running) {
+      const names = await readdir(approvalsDir).catch(() => [] as string[]);
+      for (const name of names) {
+        if (!name.endsWith(".pending.json")) continue;
+        const id = name.slice(0, -".pending.json".length);
+        const marker = join(approvalsDir, `${id}.approved.json`);
+        const temp = join(approvalsDir, `.${id}.${String(answered)}.answer.tmp`);
+        try {
+          await writeFile(temp, JSON.stringify({ approvedBy: "golden-executor" }), "utf-8");
+          await rename(temp, marker);
+          answered += 1;
+        } catch {
+          // The run finished and its root went away mid-poll. Nothing left to answer.
+          running = false;
+        }
+      }
+      if (running) await new Promise((resolve) => setTimeout(resolve, GOLDEN_APPROVAL_POLL_MS));
+    }
+  })();
+  return {
+    stop: async (): Promise<void> => {
+      running = false;
+      await loop;
+    },
+  };
+}
+
+/**
+ * Run `fn` with the registered `disk` mechanism swapped for one rooted at `runRoot` and
+ * answered automatically, then restore the ORIGINAL instance — whatever it was — no matter
+ * how `fn` settles.
+ *
+ * ── Why this exists ──
+ *
+ * The shipped `disk` singleton is rooted at `process.cwd()` at module-load time
+ * (`orchestrator/checkpoints/registry.ts:126-132`) — the real checkout when this process is
+ * `vitest` or `scripts/run-golden-regression.mjs`. A golden run that resolved `end-of-pipeline`
+ * to that instance unmodified would `mkdir` and write `.bober/approvals/` INTO this
+ * repository. Swapping in a run-root-scoped instance for exactly the duration of one case's
+ * `.run()` call, then putting the original back in a `finally`, is what keeps a durable-
+ * approval golden case from ever touching the checkout — the same hygiene
+ * `interrupt.test.ts:95-107` uses around every test that needs the real mechanism.
+ *
+ * A no-op when `needed` is false: the autopilot path this executor has always run never
+ * touches the registry, and nothing about it changes here.
+ */
+export async function withGoldenApproval<T>(
+  runRoot: string,
+  needed: boolean,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!needed) return fn();
+  const approvalsDir = join(runRoot, ".bober", "approvals");
+  const original: CheckpointMechanism = getCheckpointMechanism("disk");
+  registerCheckpointMechanism(
+    "disk",
+    new DiskCheckpointMechanism(approvalsDir, {
+      pollMs: GOLDEN_APPROVAL_POLL_MS,
+      timeoutMs: GOLDEN_APPROVAL_TIMEOUT_MS,
+    }),
+  );
+  const approver = startGoldenApprover(approvalsDir);
+  try {
+    return await fn();
+  } finally {
+    await approver.stop();
+    registerCheckpointMechanism("disk", original);
+  }
+}
+
 // ── The executor ────────────────────────────────────────────────────
 
 export interface GoldenExecutorOptions {
@@ -283,7 +436,7 @@ export function assertExecutable(goldenCase: GoldenCase, spec: TopologySpec): vo
       "it seeds channel values, and this executor starts every run from the empty initial state",
     );
   }
-  if (goldenCase.input.config !== undefined) {
+  if (goldenCase.input.config !== undefined && !isApprovedConfigInput(goldenCase.input.config)) {
     throw new UnsupportedGoldenInputError(
       goldenCase.caseId,
       `it overrides config keys (${Object.keys(goldenCase.input.config).sort().join(", ")}), and this executor pins one config for every golden run`,
@@ -326,27 +479,30 @@ export async function createGoldenExecutor(
     try {
       await seedGoldenRoot(options.projectRoot, runRoot, graphId);
       const recording = createRecording(GOLDEN_RUN_ID, goldenCase.pinnedResponses);
+      const config = resolveGoldenConfig(goldenCase.input.config);
 
       const result = await withNetworkDisabled(() =>
-        new PgeEngine({
-          graphId,
-          registries: async (input) => {
-            // Imported here for the reason `PgeEngine` gives: this barrel is the
-            // composition root of the whole node library, and nothing that merely loads
-            // the golden module should pull it.
-            const { codingRegistries } = await import("../registry/index.js");
-            const registries = codingRegistries(input.spec, goldenBindings(input));
-            return {
-              ...registries,
-              effects: createReplayEffectRegistry(
-                registries.effects ?? createEffectRegistry(),
-                recording,
-              ),
-            };
-          },
-        }).run(goldenCase.input.featureRequest, runRoot, goldenConfig(), {
-          runId: GOLDEN_RUN_ID,
-        }),
+        withGoldenApproval(runRoot, goldenCase.input.config !== undefined, () =>
+          new PgeEngine({
+            graphId,
+            registries: async (input) => {
+              // Imported here for the reason `PgeEngine` gives: this barrel is the
+              // composition root of the whole node library, and nothing that merely loads
+              // the golden module should pull it.
+              const { codingRegistries } = await import("../registry/index.js");
+              const registries = codingRegistries(input.spec, goldenBindings(input));
+              return {
+                ...registries,
+                effects: createReplayEffectRegistry(
+                  registries.effects ?? createEffectRegistry(),
+                  recording,
+                ),
+              };
+            },
+          }).run(goldenCase.input.featureRequest, runRoot, config, {
+            runId: GOLDEN_RUN_ID,
+          }),
+        ),
       );
 
       return asRunArtifacts(await collectRunArtifacts(runRoot, result));

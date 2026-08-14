@@ -12,6 +12,7 @@ import { goldenPlanSpec, wholeGraphBindings } from "../engine/__fixtures__/whole
 import { GOLDEN_MIN_REPLAY_CASES, parseGoldenCase } from "./case-schema.js";
 import type { GoldenCase } from "./case-schema.js";
 import { captureGoldenCase, goldenCaseJson } from "./capture.js";
+import { GOLDEN_APPROVED_CONFIG_INPUT } from "./executor.js";
 
 /**
  * The COMMITTED `replay` cases, and the capture that produced them.
@@ -72,6 +73,12 @@ interface Scenario {
   readonly featureRequest: string;
   /** A FRESH factory per capture: the counting scenarios below are stateful. */
   readonly makeBindings: () => BindingsFactory;
+  /**
+   * Forwarded to `captureGoldenCase`'s `configInput`. Absent means the autopilot default,
+   * which is every scenario above this one — see `replay-full-run-commit-approved` below
+   * for the one that opts in.
+   */
+  readonly configInput?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -215,6 +222,18 @@ const SCENARIOS: readonly Scenario[] = [
     featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
     makeBindings: () => clarifyingBindings(99),
   },
+  {
+    caseId: "replay-full-run-commit-approved",
+    title: "a whole run whose commit gate carries a durable approval",
+    intent:
+      "Pin the other side of the sprint-13 divergence `replay-full-run-evaluation-passes` carries: the SAME run, the same settled contract, the same documented sprint — but end-of-pipeline resolves to the real disk mechanism and an approval actually answers it, so the git-effect commit node's body runs and finalize is reached, instead of the fail-closed refusal every other case in this dataset pins.",
+    tags: ["replay", "full-run", "region:terminal", "hitl", "commit"],
+    notes:
+      "Captured from a real PgeEngine run under goldenApprovedConfig(): end-of-pipeline routes to the real, unmodified DiskCheckpointMechanism, rooted at a throwaway run root and answered automatically while the run is blocked (executor.ts's withGoldenApproval) — never the checkout's own .bober/approvals/. The only difference from replay-full-run-evaluation-passes is this config; every pinned response through the sprint region is identical, and the two committed files diverge only from the commit node onward: the terminal node, the audits (all three now approved, not one rejected), pipelineResult.errors (absent — nothing was refused) and one new pinnedResponses entry for git.commit.",
+    featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
+    makeBindings: () => (input) => wholeGraphBindings(input),
+    configInput: GOLDEN_APPROVED_CONFIG_INPUT,
+  },
 ];
 
 /** Every committed replay case, keyed by file name. */
@@ -256,6 +275,7 @@ describe("the committed replay cases", () => {
           notes: scenario.notes,
           featureRequest: scenario.featureRequest,
           bindings: scenario.makeBindings(),
+          ...(scenario.configInput === undefined ? {} : { configInput: scenario.configInput }),
         });
 
         // Parsed BEFORE it is written or compared: a capture that produced something the

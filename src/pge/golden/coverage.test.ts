@@ -50,31 +50,34 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  * a node that opens a span and is then refused, interrupted or fails is REACHED, not
  * executed, and does not belong on the opposite side of this list. Sprint 9 of
  * spec-20260812-pge-real-workload-errors corrected the rule to say that (it previously read
- * `nodeId` off a span with no status check at all) and `commit` is the entry that rule
- * change added: it opens a span on every run that reaches it, and that span's status is
- * always `"interrupted"`, never `"ok"` — see its own bullet below. The other five entries
- * are unchanged in MEMBERSHIP by the corrected rule; three of their REASONS were re-verified
- * against the code for this sprint and one of those three was rewritten, because the
- * previous prose attributed `synthesize`'s block to the same cause as `critique`'s and
- * `rework_route`'s, and that attribution does not survive tracing the interpreter's own loop
- * enforcement (see its bullet).
+ * `nodeId` off a span with no status check at all).
+ *
+ * ── `commit` and `finalize` left this list at sprint 2 of spec-20260814-pge-full-convergence ──
+ *
+ * Both sat here on the same claim: `commit` is refused FAIL_CLOSED under the autopilot
+ * `noop` mechanism before its body is ever entered — `noop` grants no durable approval
+ * (`src/pge/runtime/interrupt.ts:38-46,523`) — and `finalize`'s only inbound edge is
+ * `commit -> finalize`, so a `commit` that never completes `"ok"` means that edge is never
+ * crossed either. Neither was a structural impossibility — nothing about the graph's shape
+ * forbade covering them, the way it forbids reaching `synthesize` below — it was that
+ * nothing in this repository ever ran `end-of-pipeline` under a mechanism other than `noop`.
+ * `replay-full-run-commit-approved` closes that gap: the SAME scenario
+ * `replay-full-run-evaluation-passes` pins, executed under `goldenApprovedConfig()` instead
+ * of `goldenConfig()` — the one config change this dataset now allows a case to opt into,
+ * via `input.config: { approved: true }` (`executor.ts`'s `resolveGoldenConfig`) — so
+ * `end-of-pipeline` resolves to the real, unmodified `DiskCheckpointMechanism` and a
+ * real approval marker, written to disk by a test-scoped approver while the run is blocked
+ * (`executor.ts`'s `withGoldenApproval`), answers it. `commit`'s body runs, performs its one
+ * pinned `git.commit` call, and control reaches `finalize`. Both nodes therefore leave this
+ * list on the strength of an actual `status: "ok"` span from a real replay — the rule this
+ * file enforces did not relax; a case that satisfies it now exists.
  *
  * `critique` and `rework_route` are genuinely a **missing scenario**, not a structural
- * block — nothing here claims otherwise for them specifically. `commit`, `context_compact`,
- * `finalize` and `synthesize` ARE structural: no set of bindings, however imaginative, can
- * make case authoring close them, which is exactly why they are recorded here rather than
- * left as a to-do:
+ * block — nothing here claims otherwise for them specifically. `context_compact` and
+ * `synthesize` ARE structural: no set of bindings, however imaginative, can make case
+ * authoring close them, which is exactly why they are recorded here rather than left as a
+ * to-do:
  *
- *  - `commit` is refused FAIL_CLOSED under the autopilot `noop` mechanism (the sprint-13
- *    divergence): `InterruptController` raises `GraphInterrupted` for the git effect
- *    BEFORE the node body is ever entered, because `noop` grants no durable approval, and
- *    the interpreter converts that into `{ status: "interrupted", errorClass: "FailClosed"
- *    }` (`src/pge/runtime/interpreter.ts:1183-1188`) — not `"failed"`, and never `"ok"`.
- *    The golden executor pins ONE config on purpose so a case produces the same artifacts
- *    everywhere, and covering this needs a durable mechanism instead.
- *  - `finalize`'s only edge in is `commit -> finalize`, and `commit` never completes with
- *    status `"ok"` (previous bullet), so this edge is never crossed. Same root cause as
- *    `commit`'s own entry, not a second, independent block.
  *  - `context_compact`'s only edge in is `supervisor -> context_compact` under the `compact`
  *    label, and the shipped supervisor never selects that label: the committed artifact
  *    declares `supervisor.reads` as exactly `["branchStatus", "counters", "evaluations",
@@ -94,7 +97,7 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    branch succeeding — which happens for real whenever a branch needed even one
  *    correction round: `gradeContracts` reduces EVERY recorded verdict for a contract, and
  *    a single `"fail"` row anywhere in that history outweighs a later `"pass"` permanently
- *    (`nodes/root.ts`, `gradeContracts`). None of the six committed `replay` cases drives
+ *    (`nodes/root.ts`, `gradeContracts`). None of the committed `replay` cases drives
  *    this — the one case whose branch fails outright is caught by `reduce_sprints` before
  *    reaching `evaluate_global` at all (see `rework_route`'s bullet), and the one case that
  *    exercises `sprint_correct` does so through `gate_syntax`/`gate_anchor_regression`,
@@ -110,13 +113,13 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    `synthesize`'s bullet, only ever) invocation would choose the `"exhausted"` label, not
  *    `"rework"`, and still produce a `status: "ok"` span — it is a missing-scenario node
  *    like `critique`, and the case that would exercise `critique` exercises this node too.
- *  - `synthesize` is the one entry whose recorded reason changed this sprint, and it is a
- *    genuine STRUCTURAL block, unlike its two neighbours above. It sits behind
- *    `route_after_eval`'s `partial` label, selected only when `reworkRoundsTaken(spec,
- *    state) >= maxIterations` (2) at a SECOND invocation of `route_after_eval` — which
- *    never happens. `route_after_eval` and `rework_route` read the identical counter and
- *    the identical `maxIterations` off the SAME artifact loop bound
- *    (`loopBoundOf(spec, "rework_route")`), and the interpreter enforces that bound
+ *  - `synthesize` is a genuine STRUCTURAL block, unlike its two neighbours above — its
+ *    recorded reason was rewritten at sprint 9 of spec-20260812-pge-real-workload-errors. It
+ *    sits behind `route_after_eval`'s `partial` label, selected only when
+ *    `reworkRoundsTaken(spec, state) >= maxIterations` (2) at a SECOND invocation of
+ *    `route_after_eval` — which never happens. `route_after_eval` and `rework_route` read
+ *    the identical counter and the identical `maxIterations` off the SAME artifact loop
+ *    bound (`loopBoundOf(spec, "rework_route")`), and the interpreter enforces that bound
  *    independently, at `rework_route` itself, using the counter value already including
  *    this execution's own increment (`boundedDestination`, `src/pge/runtime/
  *    interpreter.ts:1004-1044`). Because `rework_route`'s dispatch set is always empty when
@@ -128,22 +131,16 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    `reworkRoundsTaken >= maxIterations` branch — `"partial"` and, for that matter, its
  *    `"exhausted"` sibling — can never fire. No golden case, however constructed, can close
  *    this: it is dead code by construction, not a missing recording. An EARLIER analysis
- *    (recorded against sprint 7) attributed this to `rework_route`'s dispatch set being
- *    always empty "because nothing ever writes `abandoned`" — the CONCLUSION (dispatch set
- *    always empty) is right, but that mechanism is not: no branch is ever `"abandoned"` in
- *    this shipped graph, but that is beside the point, because `dispatchableContracts`
- *    already excludes `"succeeded"` branches, and `reduce_sprints`'s gate guarantees every
- *    branch IS `"succeeded"` by the time `rework_route` can run at all (`critique`'s
- *    bullet). `"succeeded"`, not `"abandoned"`, is the exclusion that actually bites.
+ *    (recorded against sprint 7 of spec-20260812-pge-real-workload-errors) attributed this
+ *    to `rework_route`'s dispatch set being always empty "because nothing ever writes
+ *    `abandoned`" — the CONCLUSION (dispatch set always empty) is right, but that mechanism
+ *    is not: no branch is ever `"abandoned"` in this shipped graph, but that is beside the
+ *    point, because `dispatchableContracts` already excludes `"succeeded"` branches, and
+ *    `reduce_sprints`'s gate guarantees every branch IS `"succeeded"` by the time
+ *    `rework_route` can run at all (`critique`'s bullet). `"succeeded"`, not `"abandoned"`,
+ *    is the exclusion that actually bites.
  */
-const NEVER_EXECUTED = [
-  "commit",
-  "context_compact",
-  "critique",
-  "finalize",
-  "rework_route",
-  "synthesize",
-] as const;
+const NEVER_EXECUTED = ["context_compact", "critique", "rework_route", "synthesize"] as const;
 
 async function loadReplayCases(): Promise<GoldenCase[]> {
   const cases: GoldenCase[] = [];

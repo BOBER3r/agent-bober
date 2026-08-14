@@ -18,7 +18,13 @@ import { CODING_GRAPH_ID } from "../topology/coding.graph.js";
 import { GOLDEN_CASE_FORMAT_VERSION } from "./case-schema.js";
 import type { GoldenArtifacts, GoldenCase } from "./case-schema.js";
 import type { GoldenRunArtifacts } from "./runner.js";
-import { GOLDEN_RUN_ID, goldenConfig, goldenSandbox, seedGoldenRoot } from "./executor.js";
+import {
+  GOLDEN_RUN_ID,
+  goldenSandbox,
+  resolveGoldenConfig,
+  seedGoldenRoot,
+  withGoldenApproval,
+} from "./executor.js";
 
 /**
  * Turns a real `PgeEngine` run into a committed `replay` golden case.
@@ -77,6 +83,14 @@ export interface GoldenCaptureInput {
    */
   readonly bindings: (input: PgeRegistriesInput) => CodingBindings;
   readonly graphId?: string;
+  /**
+   * Opts the recorded run (and the replay that derives its expectation) into
+   * {@link resolveGoldenConfig}'s approved config, and is written verbatim into the
+   * committed case's `input.config` so a later replay resolves the identical config.
+   * Absent means the case runs under the autopilot default, exactly as every case did
+   * before this field existed.
+   */
+  readonly configInput?: Readonly<Record<string, unknown>>;
 }
 
 export interface GoldenCaptureResult {
@@ -125,24 +139,31 @@ export async function captureGoldenCase(
       scratch: createScratchStore(recordRoot),
     });
 
-    await new PgeEngine({
-      graphId,
-      registries: async (registryInput) => {
-        const { codingRegistries } = await import("../registry/index.js");
-        const bound = input.bindings(registryInput);
-        const registries = codingRegistries(registryInput.spec, {
-          ...bound,
-          runtime: {
-            ...bound.runtime,
-            sandbox: goldenSandbox(registryInput.scratch, registryInput.runId),
-          },
-        });
-        return {
-          ...registries,
-          effects: recorder.effects(registries.effects ?? createEffectRegistry()),
-        };
-      },
-    }).run(input.featureRequest, recordRoot, goldenConfig(), { runId: GOLDEN_RUN_ID });
+    // The SAME resolution the replay half uses (`executor.ts`'s `createGoldenExecutor`), so
+    // a case's recorded run and the replay that derives its expectation can never disagree
+    // about which config produced them.
+    const config = resolveGoldenConfig(input.configInput);
+
+    await withGoldenApproval(recordRoot, input.configInput !== undefined, () =>
+      new PgeEngine({
+        graphId,
+        registries: async (registryInput) => {
+          const { codingRegistries } = await import("../registry/index.js");
+          const bound = input.bindings(registryInput);
+          const registries = codingRegistries(registryInput.spec, {
+            ...bound,
+            runtime: {
+              ...bound.runtime,
+              sandbox: goldenSandbox(registryInput.scratch, registryInput.runId),
+            },
+          });
+          return {
+            ...registries,
+            effects: recorder.effects(registries.effects ?? createEffectRegistry()),
+          };
+        },
+      }).run(input.featureRequest, recordRoot, config, { runId: GOLDEN_RUN_ID }),
+    );
 
     // The recorded root is a throwaway `mkdtemp` directory and it appears inside recorded
     // requests (`projectRoot`) and occasionally inside responses (a written path). Left in,
@@ -203,7 +224,11 @@ export async function captureGoldenCase(
     tags: [...input.tags],
     enforcement: "replay",
     graph: { graphId, graphVersion },
-    input: { featureRequest: input.featureRequest, entryNodeId },
+    input: {
+      featureRequest: input.featureRequest,
+      entryNodeId,
+      ...(input.configInput === undefined ? {} : { config: input.configInput }),
+    },
     pinnedResponses: calls,
     expected: { terminalNodeId, artifacts: {}, notes: input.notes },
   };

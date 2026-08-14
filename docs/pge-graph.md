@@ -546,47 +546,53 @@ measured rather than asserted — `src/pge/golden/coverage.test.ts` executes eve
 `replay` case, reads the node ids and the STATUS of the resulting span files, and pins the
 executed set against the committed artifact.
 
-**38 of the 44 declared nodes execute, as of sprint 9 of
-`spec-20260812-pge-real-workload-errors`.** The committed figure before that sprint read
-**"39 of the 44"**, and the drop is a correction, not a regression: the earlier rule counted
-a node as executed the moment its `nodeId` appeared in a span, with no check of that span's
-`status`. `commit` is refused FAIL_CLOSED under the autopilot `noop` mechanism yet still
-opens a span every time a case reaches it — the interpreter converts the refusal into
-`{ status: "interrupted", errorClass: "FailClosed" }` before the node's own body is ever
-entered — so the old rule counted `commit` as covered on the strength of a span that recorded
-a REFUSAL. **The previous rule counted reached-but-refused nodes as covered; the corrected
-rule requires at least one span with `status: "ok"`, which `commit`'s never is.** `commit`
-is REACHED by four of the six committed `replay` cases — the `hitl_commit` gate that
-precedes it admits every one of them — but never EXECUTED, and the two are different claims.
-Nothing else in the executed set moved: the same five nodes the previous rule already
-excluded are still excluded, for the same underlying facts (though one of their five
-recorded reasons was itself corrected — see below).
+**40 of the 44 declared nodes execute, as of sprint 2 of `spec-20260814-pge-full-convergence`.**
+The figure moved twice, and both moves are worth separating. Sprint 9 of
+`spec-20260812-pge-real-workload-errors` corrected the RULE — the committed figure before
+that sprint read **"39 of the 44"**, and the drop to **"38 of the 44"** was a correction, not
+a regression: the earlier rule counted a node as executed the moment its `nodeId` appeared in
+a span, with no check of that span's `status`, so `commit`'s FAIL_CLOSED refusal (which still
+opens a span, ending `{ status: "interrupted", errorClass: "FailClosed" }` before the node's
+own body is ever entered) counted as coverage on the strength of a REFUSAL. **The corrected
+rule requires at least one span with `status: "ok"`.**
 
-The six nodes no case executes are pinned in `NEVER_EXECUTED`. Four are genuine
+Sprint 2 of `spec-20260814-pge-full-convergence` then moved the COUNT, from 38 to 40, by
+giving `commit` an actual `"ok"` span rather than by touching the rule again: a seventh
+`replay` case, `replay-full-run-commit-approved`, pins the same scenario
+`replay-full-run-evaluation-passes` does but executed under `goldenApprovedConfig()`
+(`src/pge/golden/executor.ts`) instead of `goldenConfig()` — `end-of-pipeline` resolves to
+the real, unmodified `DiskCheckpointMechanism` and a real approval answers it while the run
+is blocked, so `commit`'s body runs its one `git.commit` call for real (against a throwaway
+run root, never this checkout — see `withGoldenApproval` in that file) and `finalize` is
+reached immediately after. `commit` was REACHED by four of the (then six) committed `replay`
+cases before this — the `hitl_commit` gate that precedes it admits every one of them — but
+never EXECUTED, and the two remained different claims until this case existed.
+
+The four nodes no case executes are pinned in `NEVER_EXECUTED`. Two are genuine
 **structural blocks** — no set of bindings can reach them — and two, `critique` and
 `rework_route`, are a **missing scenario** rather than a structural block, which the source
-comment says explicitly rather than folding them into the same claim as their four
-neighbours:
+comment says explicitly rather than folding them into the same claim as their neighbours:
 
 | node | why no case executes it |
 | --- | --- |
-| `commit` | reached by every case that reaches `hitl_commit`, but refused FAIL_CLOSED under the autopilot `noop` mechanism before its body runs — the sprint-13 divergence. Its span's status is always `"interrupted"`, never `"ok"`. Covering it needs a durable checkpoint mechanism, and the golden executor pins one config on purpose so a case reproduces everywhere. |
-| `finalize` | its only edge in is `commit -> finalize`, and `commit` never completes with status `"ok"` (previous row). Same root cause as `commit`'s own row, not a second, independent block. |
 | `context_compact` | its only edge in is `supervisor -> context_compact` under the `compact` label, which the shipped supervisor never selects: `supervisor.reads` is exactly `["branchStatus", "counters", "evaluations", "spec"]` — no `messages` — so the decision would read a channel the artifact does not authorise. Recorded as artifact drift in `nodes/supervisor.ts`. Re-verified against the committed artifact at `1.4.0`; unmoved by the `specDraft` channel sprint 7 added. |
 | `critique` | **missing scenario, not a structural block.** Sits behind `route_after_eval`'s `rework` label, chosen whenever `evaluate_global` returns a non-pass verdict. `reduce_sprints`'s own gate refuses to admit the run into evaluation while any branch is `failed`/`abandoned`, re-dispatching it instead — so `evaluate_global` is only ever reached once every branch has already settled `"succeeded"`, and the only way it can still grade the run non-passing is a contract graded `"fail"` (`gradeContracts`, which treats one `fail` verdict anywhere in a contract's history as a PERMANENT fail even after a later `pass`) despite its branch succeeding. No committed case constructs that; it is a gap a new case could close. |
 | `rework_route` | inherits `critique`'s gap, and is likewise a missing scenario rather than a structural block — but even the missing case would not make it dispatch anything: its own re-dispatch rule excludes `"succeeded"` branches, and by the time it can run at all every branch already IS `"succeeded"` (`critique`'s row). It would still produce a `status: "ok"` span, choosing `"exhausted"` instead of `"rework"`. |
-| `synthesize` | **structural block, and the one recorded reason this sprint rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous row), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. |
+| `synthesize` | **structural block, and the one recorded reason sprint 9 of spec-20260812-pge-real-workload-errors rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous row), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7 of spec-20260812-pge-real-workload-errors) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. |
 
 The pin is **two-directional**, like the conformance divergence set: a node that stops being
 executed fails, and a node that *starts* being executed fails too — because each entry above
 is a claim about why something is unreachable, and a node leaving the list means one of
 those claims stopped being true and the explanation should be deleted deliberately. Sprint 9
-proved both directions by mutation against synthetic spans rather than only against the real
-six-case dataset — `src/pge/golden/coverage.test.ts`'s "the status-ok rule, mutated in both
-directions" block — because the real dataset can only ever demonstrate the direction its own
-six cases happen to exercise.
+of spec-20260812-pge-real-workload-errors proved both directions by mutation against
+synthetic spans rather than only against the real dataset — `src/pge/golden/coverage.test.ts`'s
+"the status-ok rule, mutated in both directions" block — because the real dataset can only
+ever demonstrate the direction its own cases happen to exercise; sprint 2 of
+`spec-20260814-pge-full-convergence` is the concrete instance the mutation-proof anticipated,
+where `commit` and `finalize` left the list because the claim behind their membership
+stopped being true, and the guard caught nothing because the deletion was deliberate.
 
-With the corrected rule, `38 / 44 ≈ 86.4%` still clears the dataset's own floor of "strictly
+With the corrected rule, `40 / 44 ≈ 90.9%` still clears the dataset's own floor of "strictly
 greater than 85%" (`covers a substantial majority of the graph, so the pin is not vacuous`,
 same file) without that floor moving — NFR0 forbids lowering a gate to protect a number, and
 this sprint did not need to.
@@ -1374,18 +1380,27 @@ them this spec's to do (`nonGoals`):**
    (`conformance.engines.test.ts`, "is EQUIVALENT on every field outside the recorded
    divergence set") and the one the chat layer tails. Taking it trades one open divergence for
    another; it does not close anything by itself.
-3. **A durable checkpoint mechanism for `commit` and `finalize`.** Four mechanisms are
-   registered — `cli`, `disk`, `pr`, `noop` (`src/pge/runtime/interrupt.ts:318`) — but nothing
-   in this repository ever runs `commit`/`finalize` under a non-`noop` one: the shipped
-   `conformanceConfig()` is autopilot by construction, and the golden executor pins that one
-   config on purpose so a case reproduces everywhere. `noop` is documented as the mechanism
-   that grants nothing (`interrupt.ts:38-46`, enforced at `:523`,
+3. **A durable checkpoint mechanism for `commit` and `finalize` — RESOLVED at sprint 2 of
+   `spec-20260814-pge-full-convergence`.** Four mechanisms are registered — `cli`, `disk`,
+   `pr`, `noop` (`src/pge/runtime/interrupt.ts:318`) — and the gap this item named was never
+   that a durable mechanism was missing; it was that nothing in this repository ever ran
+   `commit`/`finalize` under one, because the shipped `conformanceConfig()` (and the golden
+   executor's own `goldenConfig()`) are autopilot by construction. `noop` is documented as
+   the mechanism that grants nothing (`interrupt.ts:38-46`, enforced at `:523`,
    `if (mechanismName !== "noop") granted.set(key, outcome);`), so a gated-effect node
    proceeds only under a DURABLE record of approval — a disk marker, a PR review, an
-   interactive CLI answer — and `commit`/`finalize` never receive one today. Consequence,
-   already recorded: both are two of the six `NEVER_EXECUTED` entries
-   (`src/pge/golden/coverage.test.ts:139-146`), and `commit`'s span status is always
-   `"interrupted"`/`errorClass: "FailClosed"`, never `"ok"`.
+   interactive CLI answer. Sprint 2 added a SECOND pinned config,
+   `goldenApprovedConfig()` (`src/pge/golden/executor.ts`), that routes `end-of-pipeline` to
+   the real, unmodified `disk` mechanism, and one golden case,
+   `replay-full-run-commit-approved`, that supplies a real, file-backed approval while the
+   run is blocked (`withGoldenApproval`, same file) — never against this checkout, which is
+   rooted instead at a throwaway run root for exactly this reason. `commit` and `finalize`
+   are no longer in `NEVER_EXECUTED` (`src/pge/golden/coverage.test.ts`) — see "How much of
+   the graph the committed cases execute" above. What this does NOT do: it does not touch
+   the autopilot path `conformanceConfig()` still runs, and it does not move any of the four
+   conformance fields below — a real run under a durable mechanism was always reachable
+   through config; this sprint is what finally exercised it, in the dataset that measures
+   node coverage rather than in the harness that measures engine equivalence.
 4. **An explicit re-specification of the bar itself.** The bar as written above —
    *"requires sustained green conformance across real runs"*, operationally `equivalent:
    true` — is now UNSATISFIABLE BY DESIGN: two of the four fields (`history`, `audits`) are

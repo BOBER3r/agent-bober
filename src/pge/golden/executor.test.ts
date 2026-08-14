@@ -3,11 +3,21 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { execa } from "execa";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
+import { getCheckpointMechanism } from "../../orchestrator/checkpoints/registry.js";
 import { parseGoldenCase } from "./case-schema.js";
 import type { GoldenCase } from "./case-schema.js";
-import { GOLDEN_RUN_ID, UnsupportedGoldenInputError, createGoldenExecutor } from "./executor.js";
+import {
+  GOLDEN_APPROVED_CONFIG_INPUT,
+  GOLDEN_RUN_ID,
+  UnsupportedGoldenInputError,
+  createGoldenExecutor,
+  goldenApprovedConfig,
+  goldenConfig,
+  resolveGoldenConfig,
+} from "./executor.js";
 import { runGoldenGate } from "./gate.js";
 import {
   GOLDEN_EXIT,
@@ -205,6 +215,38 @@ describe("the executor refuses an input it cannot honour", () => {
   });
 });
 
+// ── The one config input this executor DOES accept (sc-2-3, sc-2-5) ────
+
+describe("resolveGoldenConfig — the ONE enumerated exception to the config pin", () => {
+  it("resolves to the byte-identical autopilot config when input.config is absent", () => {
+    expect(resolveGoldenConfig(undefined)).toEqual(goldenConfig());
+  });
+
+  it("resolves to goldenApprovedConfig() for the approved marker, and nothing else moved", () => {
+    const resolved = resolveGoldenConfig(GOLDEN_APPROVED_CONFIG_INPUT);
+    expect(resolved).toEqual(goldenApprovedConfig());
+    // Confined to end-of-pipeline: the OTHER hitl gate in the graph (`plan_clarify` at
+    // `post-plan`) is not in this override, so it stays on the autopilot default — this
+    // sprint's territory is the commit gate, not every gate in the graph (sc-2-5).
+    expect(resolved.pipeline.checkpointOverrides).toEqual({ "end-of-pipeline": "disk" });
+    expect(resolved.pipeline.checkpointOverrides?.["post-plan"]).toBeUndefined();
+    // Still a code constant: nothing about it reads bober.config.json, which is exactly
+    // what makes it reproducible on a contributor's machine and on a CI runner.
+    expect(resolved.pipeline.researchPhase).toBe(false);
+    expect(resolved.pipeline.maxIterations).toBe(2);
+  });
+
+  it("accepts { approved: true } into a case's input.config, unlike every other key", async () => {
+    const approved: GoldenCase = {
+      ...replayCases[0],
+      input: { ...replayCases[0].input, config: { ...GOLDEN_APPROVED_CONFIG_INPUT } },
+    };
+    // Refuses neither with UnsupportedGoldenInputError nor any other throw — the whole
+    // point of the allowlist is that this ONE shape is honoured rather than rejected.
+    await expect(execute(approved)).resolves.toBeDefined();
+  }, 120_000);
+});
+
 // ── The run is offline, and it lands in its own root ────────────────
 
 describe("a golden run", () => {
@@ -233,6 +275,50 @@ describe("a golden run", () => {
       // through to an agent.
       await expect(stat(join(root, ".bober", "briefings"))).rejects.toThrow();
       await expect(stat(join(root, ".bober", "reviews"))).rejects.toThrow();
+    },
+    120_000,
+  );
+
+  /**
+   * THE safety property this sprint's briefing named as the one thing not to get wrong: the
+   * `disk` mechanism the shipped registry serves is rooted at `process.cwd()`
+   * (`registry.ts:126-132`) — the real checkout when this suite runs. A durable-approval
+   * golden case resolves `end-of-pipeline` to `disk`, so without `withGoldenApproval`
+   * re-rooting it for the run's duration, this exact test would `mkdir` and write
+   * `.bober/approvals/` into THIS repository.
+   *
+   * Run through `createGoldenExecutor`'s DEFAULT `runRootParent` (the OS temp directory,
+   * the same call shape `scripts/run-golden-regression.mjs` uses) rather than a scoped one,
+   * so this is the representative case, not a best-case one.
+   */
+  it(
+    "never touches this checkout's .bober/approvals/, and restores the disk mechanism afterward",
+    async () => {
+      const approvalsInRepo = join(REPO_ROOT, ".bober", "approvals");
+      await expect(stat(approvalsInRepo)).rejects.toThrow();
+
+      const before = getCheckpointMechanism("disk");
+      const { stdout: headBefore } = await execa("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT });
+
+      const approved: GoldenCase = {
+        ...replayCases[0],
+        input: { ...replayCases[0].input, config: { ...GOLDEN_APPROVED_CONFIG_INPUT } },
+      };
+      await execute(approved);
+
+      // The checkout is exactly as it was: no approvals directory, and no new commit.
+      await expect(stat(approvalsInRepo)).rejects.toThrow();
+      const { stdout: headAfter } = await execa("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT });
+      expect(headAfter).toBe(headBefore);
+      const status = await execa("git", ["status", "--porcelain", "--", ".bober/approvals"], {
+        cwd: REPO_ROOT,
+      });
+      expect(status.stdout.trim()).toBe("");
+
+      // The registry is module state, restored to the EXACT reference it held before —
+      // not merely "a" disk mechanism, but the one the rest of this suite (and any other
+      // file sharing this worker) already had.
+      expect(getCheckpointMechanism("disk")).toBe(before);
     },
     120_000,
   );
