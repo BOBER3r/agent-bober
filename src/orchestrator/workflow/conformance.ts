@@ -657,3 +657,65 @@ export function emptyOnAllEnginesFields(report: ConformanceReport): ConformanceF
     .filter((entry) => Object.values(entry.populated).every((value) => !value))
     .map((entry) => entry.field);
 }
+
+// ── The amended bar (sc-11-1/sc-11-2, spec-20260814-pge-full-convergence sprint 11) ─────
+
+/**
+ * The two fields `equivalent: true` cannot reach, each with the recorded, source-grounded
+ * reason it is ARCHITECTURAL rather than merely unbuilt — the same standard sprint 3 applied
+ * to `audits` alone, now applied to both remaining entries.
+ *
+ * `audits` — a per-branch interrupt inside a fan-out is unsound at runtime, not merely
+ * unrevisited: `Checkpoint.interrupt` holds exactly one pending interrupt
+ * (`src/pge/runtime/checkpointer.ts`), `grantScope`/`clearScope` carry no branch key so a
+ * sibling branch's arrival evicts a prior branch's grant, and `resumeMessageId` collapses
+ * every branch's decision onto one message row (`src/pge/runtime/interrupt.ts`) — see
+ * `.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`.
+ *
+ * `pipelineResult` — `PipelineResult.errors` has exactly one write site repo-wide,
+ * `PgeEngine.run`, populated from the interpreter's own `TaskFailure` records after a
+ * checkpoint-gated `commit` refusal (`src/pge/engine/pge-engine.ts`); the imperative
+ * engine's `commitAll` (`src/orchestrator/pipeline.ts`) is unconditional and ungated behind
+ * no HITL checkpoint, so there is no honest write site for an equivalent entry — found at
+ * sprint 6 of `spec-20260814-pge-full-convergence`.
+ *
+ * Both share ONE root cause: the graph has a checkpoint-gated commit the imperative engine
+ * lacks. Extending or shrinking this set is a decision recorded in
+ * `docs/pge-graph.md`'s "Engine migration disposition", not a comparison to adjust quietly —
+ * see {@link equivalentModuloAcceptedDivergences}.
+ */
+export const ARCHITECTURALLY_ACCEPTED_DIVERGENCES: Readonly<
+  Partial<Record<ConformanceField, string>>
+> = Object.freeze({
+  audits:
+    "a per-branch interrupt inside a fan-out is unsound at runtime (ADR-1): Checkpoint.interrupt holds one slot, grantScope/clearScope are branch-blind, resumeMessageId collapses every branch onto one message row",
+  pipelineResult:
+    "PipelineResult.errors has exactly one write site (PgeEngine.run, sourced from a checkpoint-gated commit refusal); the imperative commitAll is unconditional and ungated, so there is no honest equivalent write site (sprint 6)",
+});
+
+/**
+ * The bar `equivalent: true` amends to, once every non-architectural divergence has closed
+ * (sc-11-1, spec-20260814-pge-full-convergence sprint 11): true only when the report's
+ * divergence set is EXACTLY {@link ARCHITECTURALLY_ACCEPTED_DIVERGENCES}'s keys — no more,
+ * and no less.
+ *
+ * "No more" catches a NEW divergence the same way `report.equivalent` always did. "No less"
+ * is the half a naive re-specification would drop: a report that is missing one of the two
+ * accepted fields is NOT this bar's idea of equivalence either, because that would mean the
+ * comparison stopped detecting a divergence that, in fact, still exists — a silently-relaxed
+ * comparison, not a real convergence. Reaching a TRUE `equivalent: true` (zero accepted
+ * fields, zero everything else) is not this function's job to celebrate quietly; it is the
+ * literal bar this function stands in for until it is re-decided, and `report.equivalent`
+ * remains the assertion for that unamended claim.
+ */
+export function equivalentModuloAcceptedDivergences(report: ConformanceReport): boolean {
+  if (report.vacuous) return false;
+  const accepted = Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES) as ConformanceField[];
+  const observed = new Set(
+    report.diffs
+      .map((diff) => diff.field)
+      .filter((field): field is ConformanceField => field !== undefined),
+  );
+  if (observed.size !== accepted.length) return false;
+  return accepted.every((field) => observed.has(field));
+}

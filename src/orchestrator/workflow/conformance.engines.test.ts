@@ -78,9 +78,11 @@ import {
 import type { BoberConfig } from "../../config/schema.js";
 import { withGoldenApproval } from "../../pge/golden/executor.js";
 import {
+  ARCHITECTURALLY_ACCEPTED_DIVERGENCES,
   EngineConformanceHarness,
   canonical,
   emptyOnAllEnginesFields,
+  equivalentModuloAcceptedDivergences,
   fullyPopulatedFields,
 } from "./conformance.js";
 import type { EngineRunner } from "./conformance.js";
@@ -412,6 +414,105 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     ]);
     expect(report.equivalent).toBe(false);
   }, 60_000);
+
+  // ── sc-11-1 (amended): what `equivalent: true` becomes once every non-architectural
+  // divergence has closed ─────────────────────────────────────────────
+  //
+  // The contract's literal sc-11-1 text — "the harness reports equivalent: true on a real
+  // run" — is UNSATISFIABLE BY BUILDING: `audits` and `pipelineResult` are both
+  // architectural (see `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`'s doc comment for the
+  // source-grounded reason each one is), so `report.equivalent` stays `false` forever under
+  // the bar's current wording — asserted explicitly below, so this test would fail loudly
+  // the day it stopped being true rather than silently going stale. The amendment (this
+  // sprint's contract, `amendment.sc-11-1.amendedTo`) replaces that unreachable claim with
+  // one that IS reachable and IS met: the divergence set the harness reports on a REAL run
+  // is EXACTLY the accepted, individually-justified set — no unaccepted divergence, and
+  // neither accepted divergence missing. `equivalentModuloAcceptedDivergences` is that
+  // amended claim, made a function rather than left as a sentence in a doc; this is a real
+  // run of both engines, the same `compare()` every other test here uses, not a synthetic
+  // report standing in for one.
+  it("sc-11-1: the amended bar is MET on a real run — every remaining divergence is exactly the architectural set, named with a reason", async () => {
+    const report = await compare();
+
+    // The literal, unamended claim: still unreached, and recorded as such rather than
+    // quietly stopped asserting.
+    expect(report.equivalent).toBe(false);
+
+    // The amended claim: met. Not vacuous, and the two fields the report actually diverges
+    // on are exactly the two this sprint's amendment names as architectural.
+    expect(equivalentModuloAcceptedDivergences(report)).toBe(true);
+    expect(Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES).sort()).toEqual([
+      "audits",
+      "pipelineResult",
+    ]);
+    // Every accepted field carries a non-empty, source-grounded reason — "recorded" per
+    // sc-11-1's amended text means more than an empty string in a set.
+    for (const field of Object.keys(ARCHITECTURALLY_ACCEPTED_DIVERGENCES)) {
+      const reason = ARCHITECTURALLY_ACCEPTED_DIVERGENCES[field as ConformanceField];
+      expect(reason?.length, `${field}'s recorded reason`).toBeGreaterThan(20);
+    }
+  }, 60_000);
+
+  // ── sc-11-2 (amended): the amended assertion fails in BOTH directions ──
+  //
+  // Synthetic, hand-built `ConformanceReport` values against the EXPORTED function itself —
+  // the `coverage.test.ts:311-354` idiom this file's own "sc-4-3/sc-6-3" block below already
+  // follows for the unamended pin. Two directions, both distinct from what that older test
+  // already covers (which is the raw field-name array, not this function):
+  //
+  //  1. A NEW, unaccepted divergence appearing (e.g. a regression, or a genuinely new gap)
+  //     must flip the amended claim to `false` — the same as it always would for
+  //     `report.equivalent`.
+  //  2. A SILENTLY-RELAXED comparison — one of the two accepted, real divergences dropping
+  //     out of `report.diffs` without the underlying architectural gap actually closing —
+  //     must ALSO flip it to `false`. This is the direction a naive re-specification would
+  //     miss: "fewer diffs than expected" reads as progress unless the bar specifically
+  //     checks that the diffs it DOES expect are still there.
+  it("sc-11-2: fails when a new divergence appears, and fails when one of the two architectural divergences silently stops being reported", () => {
+    const diffFor = (field: ConformanceField): ConformanceReport["diffs"][number] => ({
+      artifact: "audit",
+      path: `.bober/${field}/`,
+      engines: ["ts", "pge"],
+      field,
+    });
+    const baseline: ConformanceReport = {
+      equivalent: false,
+      vacuous: false,
+      fields: [],
+      diffs: [diffFor("audits"), diffFor("pipelineResult")],
+    };
+
+    // Sanity: the exact accepted set, as a baseline, reads TRUE — the assertion above this
+    // one already proves this against a real run, so this proves the synthetic baseline
+    // agrees with reality's own shape before mutating it.
+    expect(equivalentModuloAcceptedDivergences(baseline)).toBe(true);
+
+    // Direction 1: a genuinely NEW divergence (a closed field regressing, or a fresh gap)
+    // joins the two accepted ones.
+    const withNewDivergence: ConformanceReport = {
+      ...baseline,
+      diffs: [...baseline.diffs, diffFor("history")],
+    };
+    expect(equivalentModuloAcceptedDivergences(withNewDivergence)).toBe(false);
+
+    // Direction 2a: ONE of the two accepted divergences silently stops being reported — a
+    // comparison bug that under-reports, not a real convergence.
+    const missingOne: ConformanceReport = { ...baseline, diffs: [diffFor("audits")] };
+    expect(equivalentModuloAcceptedDivergences(missingOne)).toBe(false);
+
+    // Direction 2b: BOTH accepted divergences vanish. This is the genuine, literal
+    // `equivalent: true` this amended bar deliberately does NOT claim to have reached —
+    // `report.equivalent` is the assertion for that claim, and it stays pinned `false`
+    // above. A function that returned `true` here would be the exact "adjust the
+    // comparison to reach it" the contract's stop condition forbids.
+    expect(equivalentModuloAcceptedDivergences({ ...baseline, diffs: [] })).toBe(false);
+
+    // A vacuous report can never pass either, for the same reason `report.equivalent` never
+    // allows it: an empty comparison proves nothing about either engine.
+    expect(equivalentModuloAcceptedDivergences({ ...baseline, diffs: [], vacuous: true })).toBe(
+      false,
+    );
+  });
 
   // ── sc-4-3/sc-6-3: the divergence-set pin fails in BOTH directions ────
   //
