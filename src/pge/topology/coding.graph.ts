@@ -121,7 +121,20 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
   // every round of the plan region regardless of whether clarification ever converges.
   // `commit.finalize` now falls back to it when `spec` is null. See the channel
   // declaration below and docs/pge-graph.md's changelog entry.
-  graphVersion: "1.4.0",
+  //
+  // 1.5.0 — the imperative pipeline records `post-sprint-contract` immediately after
+  // `materializeContracts` (`pipeline.ts:1017-1025`), before the sprint loop begins;
+  // the graph never declared it, so a conformance run diverged from the imperative
+  // trail on this id. `gate_plan_out` now carries the checkpoint: it is the effect-free
+  // gate that fires at that exact moment, on the same `contracts` payload.
+  // `plan_materialize` is NOT the host — it declares `effects: ["fs-write"]`, which
+  // trips `EffectfulNodeContainsHitl`. Five of the eight checkpoint ids the imperative
+  // pipeline records (`pre-curator`, `pre-generator`, `pre-evaluator`,
+  // `pre-code-reviewer`, `post-sprint`) sit inside the sprint fan-out region and remain
+  // PERMANENTLY UNDECLARABLE per arch-20260814-pge-full-convergence-adr-1
+  // (InterruptInsideFanOut) — the runtime cannot express a per-branch interrupt. See
+  // docs/pge-graph.md's `audits` disposition and changelog entry.
+  graphVersion: "1.5.0",
   description:
     "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
   provenance: "authored",
@@ -500,7 +513,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "gate_plan_out",
       kind: "gate",
       title: "Plan exit gate",
-      doc: "Returns control to the supervisor once the spec and its contracts are on disk; fails closed when persistence did not happen.",
+      doc: "Returns control to the supervisor once the spec and its contracts are on disk; fails closed when persistence did not happen. Effect-free by construction, so it is also the legal host for the shipped post-sprint-contract checkpoint: the imperative pipeline records that id immediately after materializeContracts persists the same contracts this gate reads, before the sprint loop begins. plan_materialize cannot host it instead — it is the writer, tagged effects: [\"fs-write\"], which a HITL declaration is not permitted to sit on.",
       subgraph: null,
       role: "utility",
       inputPorts: [{ key: "contracts", schemaRef: "SprintContract", required: true }],
@@ -509,6 +522,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       writes: [],
       effects: [],
       gate: { check: "spec-and-contracts-persisted", onFail: "graceful_failure" },
+      hitl: { checkpointId: "post-sprint-contract", onReject: "graceful_failure" },
     },
 
     // ── Sprint region ───────────────────────────────────────────────

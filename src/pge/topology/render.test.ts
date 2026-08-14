@@ -193,9 +193,12 @@ describe("renderTopology mermaid", () => {
     const dotted = renderTopology(CODING_GRAPH, "mermaid")
       .split("\n")
       .filter((line) => line.includes("-.->"));
-    // 23 = the 20 original policy endpoints plus the three loop bounds added to the
-    // retry cycles that bypass their region's router.
-    expect(routes.length).toBe(23);
+    // 24 = 13 gate.onFail routes + 3 hitl.onReject routes (hitl_commit, plan_clarify and,
+    // since spec-20260814-pge-full-convergence sprint 3, gate_plan_out) + 8 loop.onExhausted
+    // routes, one per loop-bearing node (including the three retry cycles that bypass
+    // their region's router: reduce_sprints, gate_mock_coverage and sprint_correct).
+    // 23 before this sprint declared gate_plan_out's post-sprint-contract checkpoint.
+    expect(routes.length).toBe(24);
     expect(dotted).toHaveLength(routes.length);
   });
 

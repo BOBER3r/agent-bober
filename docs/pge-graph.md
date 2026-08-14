@@ -210,7 +210,7 @@ appears exactly once across them.
 
 Thirteen nodes have kind `gate`. Each carries a `gate` block with a `check` (the named
 predicate the runtime evaluates) and an `onFail` endpoint (where control goes when the
-predicate is false — gates fail **closed**, never through). Two of them additionally
+predicate is false — gates fail **closed**, never through). Three of them additionally
 carry a human-in-the-loop checkpoint.
 
 **What a gate validates** is the schema on its input ports: a gate with
@@ -227,7 +227,7 @@ boundaries, so there is no port payload for them to type.
 | `gate_eval_in` | root | `all-sprints-settled` | `graceful_failure` | (none) | (none) |
 | `gate_mock_coverage` | sprint | `mock-coverage-threshold` | `sprint_curate_mocks` | (none) | (none) |
 | `gate_plan_in` | root | `research-digest-present` | `graceful_failure` | brief:ResearchDigest | (none) |
-| `gate_plan_out` | root | `spec-and-contracts-persisted` | `graceful_failure` | contracts:SprintContract | (none) |
+| `gate_plan_out` | root | `spec-and-contracts-persisted` | `graceful_failure` | contracts:SprintContract | post-sprint-contract |
 | `gate_research_in` | research | `feature-request-present` | `graceful_failure` | request:FeatureRequest | (none) |
 | `gate_research_out` | research | `research-document-written` | `graceful_failure` | digest:ResearchDigest | (none) |
 | `gate_sprint_in` | sprint | `contract-admissible` | `sprint_exit` | contract:SprintContract | (none) |
@@ -249,13 +249,16 @@ Notes a reader will want:
   fan-out to retry a failed branch.
 - **`reduce_sprints` failing to `fanout_sprints` is a cycle**, and it is the only gate
   whose `onFail` creates one. That is why the barrier carries its own loop bound.
-- **Both human checkpoints name a checkpoint id that the shipped pipeline actually
-  fires** — `post-plan` and `end-of-pipeline`. Earlier revisions of the artifact invented
-  ids (`plan-clarify`, `hitl-commit`) that no mechanism answered, which made the gates
-  unrunnable; see the [Changelog](#changelog) entry for 1.2.0.
-- `plan_clarify` and `hitl_commit` both declare `onReject: graceful_failure` and declare
-  **no effects**. An approval node that also wrote something could half-apply a rejected
-  decision; separating the approval from the effect is what makes rejection total.
+- **All three human checkpoints name a checkpoint id that the shipped pipeline actually
+  fires** — `post-plan`, `post-sprint-contract` and `end-of-pipeline`. Earlier revisions
+  of the artifact invented ids (`plan-clarify`, `hitl-commit`) that no mechanism
+  answered, which made the gates unrunnable; see the [Changelog](#changelog) entry for
+  1.2.0. `post-sprint-contract` was declared in 1.5.0 — see that entry for why
+  `gate_plan_out`, not `plan_materialize`, is the legal host.
+- `plan_clarify`, `hitl_commit` and `gate_plan_out` all declare `onReject:
+  graceful_failure` and declare **no effects**. An approval node that also wrote
+  something could half-apply a rejected decision; separating the approval from the
+  effect is what makes rejection total.
 
 ## The loop bounds
 
@@ -1339,15 +1342,21 @@ to make "two closed" come true; `conformance.engines.test.ts`'s pinned array
 **What a flip would still require beyond everything this spec did — four things, none of
 them this spec's to do (`nonGoals`):**
 
-1. **`history` and `audits` are recommended for permanent acceptance, not open work.** Both
-   rest on architectural grounds this spec's own `outOfScope[0]` states and this document did
-   not previously spell out. `history`: there is no curator node to emit a `curator-start`/
-   `curator-complete` pair from — a graph run's history has exactly one writer,
-   `finalizePipelineRun`, and `grep -rn "appendHistory\|history.jsonl" src/pge
-   --include="*.ts"` (non-test) returns zero hits. `audits`: five of the eight checkpoint ids
-   the imperative pipeline records sit inside the sprint fan-out region, where
-   `InterruptInsideFanOut` (`src/pge/topology/validate.ts:1089-1099`) is a BLOCKING
-   validation error (`severity: "error"`) by ADR-6
+1. **`history` and `audits` are recommended for permanent acceptance, not open work — a
+   disposition sprint 3 of `spec-20260814-pge-full-convergence` deliberately left standing,
+   not merely inherited.** Both rest on architectural grounds this spec's own
+   `outOfScope[0]` states and this document did not previously spell out. `history`: there
+   is no curator node to emit a `curator-start`/`curator-complete` pair from — a graph run's
+   history has exactly one writer, `finalizePipelineRun`, and `grep -rn "appendHistory\|
+   history.jsonl" src/pge --include="*.ts"` (non-test) returns zero hits. `audits`: the
+   imperative pipeline records EIGHT checkpoints under eight distinct ids; a graph run
+   records at most TWO of them, `post-sprint-contract` and `end-of-pipeline` (the latter
+   three times) — the SET still diverges 8-vs-2, so declaring one more id narrows the
+   divergence's shape without closing the field. Five of the eight
+   (`pre-curator`, `pre-generator`, `pre-evaluator`, `pre-code-reviewer`, `post-sprint`) sit
+   inside the sprint fan-out region, where `InterruptInsideFanOut`
+   (`src/pge/topology/validate.ts:1089-1099`) is a BLOCKING validation error
+   (`severity: "error"`) by ADR-6
    (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`) — they cannot be
    declared there. **`spec-20260814-pge-full-convergence` sprint 1 revisited that ADR**
    (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) and concluded the
@@ -1357,20 +1366,29 @@ them this spec's to do (`nonGoals`):**
    (`interrupt.ts:268,371-375,485`), and `resumeMessageId` collapses every branch's decision
    onto one message row (`interrupt.ts:332`, consumed at `nodes/plan.ts:142-144`) — a defect
    that is concurrency-dependent (`frontier.ts:13,29-32`), colliding with this graph's
-   byte-identical-at-cap-1-and-8 determinism criterion. Only the sixth undeclared checkpoint
-   id, which sits outside the region, remains open to a later sprint; the other five are
-   RECOMMENDED FOR PERMANENT ACCEPTANCE for that runtime-grounded reason, not merely an
-   unrevisited rule. The revisit also corrected ADR-6's own record: its Consequences claimed
-   `hitl_commit` "sits at the fan-in barrier" — false for the shipped artifact, whose only
-   in-region barrier gate, `reduce_sprints`, could not host a HITL node under ADR-6's own
-   rule either. A further correction folded in with this record: the committed artifact
-   declares **two** HITL checkpoint ids, not
-   one — `hitl_commit -> end-of-pipeline` and `plan_clarify -> post-plan`
-   (`src/pge/topology/coding.graph.ts:483`) — but only `end-of-pipeline` is ever *evaluated*
-   on the golden fixture, because a settled plan takes `e-plan-ok`, never the
-   `e-plan-clarify` edge that reaches `post-plan`. Closing either field is nonGoal 3's
-   territory anyway ("closing history or audits"); permanent acceptance is the disposition
-   this record now states.
+   byte-identical-at-cap-1-and-8 determinism criterion. Those five are RECOMMENDED FOR
+   PERMANENT ACCEPTANCE for that runtime-grounded reason, not merely an unrevisited rule.
+   **Sprint 3 declared the sixth, `post-sprint-contract`** — the only one of the seven
+   undeclared checkpoint ids that sat outside the fan-out region — on `gate_plan_out`
+   (`src/pge/topology/coding.graph.ts:513-526`), the effect-free exit gate that fires
+   immediately after `plan_materialize` persists the same `contracts` payload the
+   imperative pipeline's own checkpoint of that name answers
+   (`src/orchestrator/pipeline.ts:1017-1025`); `plan_materialize` itself could not host it,
+   since it declares `effects: ["fs-write"]`, which trips `EffectfulNodeContainsHitl`. The
+   revisit also corrected ADR-6's own record: its Consequences claimed `hitl_commit` "sits
+   at the fan-in barrier" — false for the shipped artifact, whose only in-region barrier
+   gate, `reduce_sprints`, could not host a HITL node under ADR-6's own rule either. A
+   further correction folded in with this record: the committed artifact now declares
+   **three** HITL checkpoint ids, not one — `hitl_commit -> end-of-pipeline`
+   (`coding.graph.ts:911-924`, line numbers as of 1.5.0), `plan_clarify -> post-plan`
+   (`coding.graph.ts:484-497`) and, since 1.5.0, `gate_plan_out -> post-sprint-contract`
+   (`coding.graph.ts:513-526`) — but on any single conformance run at most two are ever
+   *evaluated*: `post-plan` is reachable only through the conditional edge
+   `e-plan-clarify` that a settled plan never takes, so a run whose plan needs no
+   clarification records `post-sprint-contract` and `end-of-pipeline` but never `post-plan`.
+   Closing `audits` fully is nonGoal 3's territory anyway ("closing history or audits");
+   permanent acceptance, now for a smaller and more precisely named remainder, is the
+   disposition this record states.
 2. **Option B success semantics.** The term of art, defined at
    `spec-20260812-pge-real-workload-errors.json`'s `resolvedClarifications` D3: making
    `PipelineResult.success` false when a gated-effect node is refused FAIL_CLOSED, instead of
@@ -1533,6 +1551,52 @@ ran them.
 Keyed by `graphVersion`. A structural change to the topology requires a version bump and
 an entry here; CI enforces the pairing, so this section is the changelog the version-bump
 gate reads.
+
+### 1.5.0 — declaring the sixth checkpoint id, and naming the five that cannot be
+
+Sprint 3 of `spec-20260814-pge-full-convergence` closed the ONE checkpoint id sprint 1's
+ADR left open: `gate_plan_out` now carries
+`hitl: { checkpointId: "post-sprint-contract", onReject: "graceful_failure" }`
+(`src/pge/topology/coding.graph.ts:513-526`).
+
+- **Why `gate_plan_out` and not `plan_materialize`.** The imperative pipeline records
+  `post-sprint-contract` immediately after `materializeContracts` persists the spec and its
+  contracts, before the sprint loop begins (`src/orchestrator/pipeline.ts:1017-1025`).
+  `plan_materialize` is the graph node at that same moment, but it is the WRITER — it
+  declares `effects: ["fs-write"]` — and a `hitl` block on an effectful node trips
+  `EffectfulNodeContainsHitl` (`src/pge/topology/validate.ts:1101-1111`). `gate_plan_out`,
+  one hop downstream, is effect-free by construction and reads the same `contracts` payload
+  the imperative checkpoint answers, so it is the legal host.
+- **`onReject: "graceful_failure"`**, matching the other two HITL nodes: a human who
+  refuses the materialised contracts has refused the plan, and every downstream node is
+  about to consume them. A rejection now routes to `graceful_failure` exactly as the
+  imperative pipeline's own `post-sprint-contract` refusal aborts before the sprint loop.
+- **The other five checkpoint ids the imperative pipeline records —
+  `pre-curator`, `pre-generator`, `pre-evaluator`, `pre-code-reviewer`, `post-sprint` —
+  remain PERMANENTLY UNDECLARABLE.** Every one sits inside the sprint fan-out region
+  (`computeFanOutRegion`, `src/pge/runtime/interpreter.ts:490`), where declaring a `hitl`
+  is `InterruptInsideFanOut` at `severity: "error"` — confirmed empirically for this
+  release by running the shipped validator against a clone of the committed artifact with
+  each of the five ids attached, one at a time, to its natural in-region node
+  (`src/pge/topology/coding.graph.test.ts`, "the five checkpoint ids
+  arch-20260814-pge-full-convergence-adr-1 leaves undeclarable"). See
+  `.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md` for the runtime
+  argument: `Checkpoint.interrupt` holds one pending interrupt, `grantScope`/`clearScope`
+  are branch-blind, and `resumeMessageId` collapses every branch's decision onto one
+  message row.
+- **`audits` STAYS in the conformance divergence set** pinned in
+  `src/orchestrator/workflow/conformance.engines.test.ts` (unchanged, still four fields).
+  Declaring one more id narrows what the divergence records — the graph now records at
+  most two distinct checkpoint ids per run (`post-sprint-contract`, `end-of-pipeline`)
+  instead of one, against the imperative engine's eight — but the SET still diverges, so
+  the field does not close. See [Engine migration disposition](#engine-migration-disposition)
+  point 1 for the full, currently-measured record.
+- **What did NOT move:** the golden dataset's node-coverage floor (`gate_plan_out` was
+  already executed; see [How much of the graph the committed cases
+  execute](#how-much-of-the-graph-the-committed-cases-execute)), and the imperative
+  pipeline's own behaviour — `outOfScope[5]` of this spec forbids changing it, so the
+  shared conformance config (`conformanceConfig()`,
+  `src/pge/engine/__fixtures__/whole-graph.ts`) was left exactly as autopilot as before.
 
 ### 1.4.0 — a new scalar channel so a plan that never settles can report failure
 

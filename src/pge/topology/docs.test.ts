@@ -1026,9 +1026,16 @@ function versionTheChangelogDoesNotMention(from: string): string {
 
 describe("the document's changelog, disposition and stated limitations", () => {
   it("carries a changelog entry for the committed graphVersion", () => {
-    expect(committed.graphVersion).toBe("1.4.0");
+    expect(committed.graphVersion).toBe("1.5.0");
     assertChangelogCoversVersion(committed, shippedDoc);
-    expect(changelogVersions(shippedDoc)).toEqual(["1.4.0", "1.3.0", "1.2.0", "1.1.0", "1.0.0"]);
+    expect(changelogVersions(shippedDoc)).toEqual([
+      "1.5.0",
+      "1.4.0",
+      "1.3.0",
+      "1.2.0",
+      "1.1.0",
+      "1.0.0",
+    ]);
   });
 
   it("FAILS when the artifact is bumped to a version the changelog does not mention", () => {

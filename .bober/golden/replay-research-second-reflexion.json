@@ -11,7 +11,7 @@
   "enforcement": "replay",
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.4.0"
+    "graphVersion": "1.5.0"
   },
   "input": {
     "featureRequest": "Document the reflexion loop and its bound.",
@@ -1005,6 +1005,13 @@
     "terminalNodeId": "graceful_failure",
     "artifacts": {
       "audits": [
+        {
+          "checkpointId": "post-sprint-contract",
+          "editDeltaSummary": null,
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "approved"
+        },
         {
           "checkpointId": "end-of-pipeline",
           "editDeltaSummary": null,

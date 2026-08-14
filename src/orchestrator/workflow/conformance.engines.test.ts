@@ -278,33 +278,50 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`, not this sprint's
     //    invention — so closing it is a topology decision, not something a later
     //    vocabulary sprint can reach.
-    //  - `audits`: NOT a duplicated checkpoint id. The imperative pipeline records EIGHT
-    //    checkpoints under eight distinct ids; the graph records three, all `end-of-pipeline`
-    //    — the only checkpoint id THIS FIXTURE EVER EVALUATES, not the only one the artifact
-    //    declares: `.bober/topology/coding.json` also declares `plan_clarify -> post-plan`
-    //    (`coding.graph.ts:483`), reachable only through the conditional edge
-    //    `e-plan-clarify` (label `clarify`) that a settled plan never takes — the router goes
-    //    `e-plan-ok -> plan_materialize` instead. Two of the three `end-of-pipeline` records
-    //    come from the artifact's `hitl_commit` gate and one from `finalizePipelineRun`. The
-    //    middle one is an `outcome: "rejected"` FAIL_CLOSED record: under autopilot the gate
-    //    mechanism is `noop`, a `noop` mechanism deliberately GRANTS nothing
-    //    (`runtime/interrupt.ts`), so the `git`-effect `commit` node is refused and never
-    //    executed — sc-12-9's shipped behaviour, pinned by `nodes/commit.test.ts` and
-    //    `topology-invariants.test.ts`. Closing it would mean declaring the other seven
-    //    checkpoint ids in `.bober/topology/coding.json` — and FIVE of those seven sit
-    //    inside the sprint fan-out region, where `InterruptInsideFanOut`
-    //    (`topology/validate.ts:1089-1099`) is a BLOCKING validation error
-    //    (`severity: "error"`) by ADR-6
-    //    (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`): they cannot
-    //    be declared there AT ALL, not merely "this sprint may not edit them".
-    //    RECOMMENDED FOR PERMANENT ACCEPTANCE for that reason —
-    //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`.
-    //    `spec-20260814-pge-full-convergence` sprint 1 revisited ADR-6
-    //    (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) and concluded
-    //    the fan-out clause STANDS: `Checkpoint.interrupt` holds one pending interrupt,
-    //    `grantScope`/`clearScope` are branch-blind so a sibling branch evicts a prior
-    //    branch's grant, and `resumeMessageId` collapses every branch's decision onto one
-    //    message row — a per-branch interrupt is unsound, not merely unrevisited.
+    //  - `audits`: NOT a duplicated checkpoint id, and — since
+    //    `spec-20260814-pge-full-convergence` sprint 3 — no longer a single declared id
+    //    either. The imperative pipeline records EIGHT checkpoints under eight distinct
+    //    ids; the graph now records FOUR, under TWO distinct ids: `post-sprint-contract`
+    //    once, FIRST, and `end-of-pipeline` three times. Sprint 3 declared
+    //    `post-sprint-contract` on `gate_plan_out` (`coding.graph.ts:513-526`) — the
+    //    effect-free gate that fires immediately after `plan_materialize` persists the
+    //    same `contracts` payload the imperative pipeline's own `post-sprint-contract`
+    //    checkpoint answers (`pipeline.ts:1017-1025`), which is why the new record
+    //    precedes every other one. `plan_materialize` could not host it instead: it
+    //    declares `effects: ["fs-write"]`, which trips `EffectfulNodeContainsHitl`.
+    //    `post-plan` remains declared too (`coding.graph.ts:484`, since 1.2.0), reachable
+    //    only through the conditional edge `e-plan-clarify` (label `clarify`) that a
+    //    settled plan never takes — the only DECLARED checkpoint id THIS FIXTURE never
+    //    evaluates, not the only one the artifact declares. The three `end-of-pipeline`
+    //    records are exactly as before sprint 3: two come from the artifact's
+    //    `hitl_commit` gate and one from `finalizePipelineRun`. The middle one is still an
+    //    `outcome: "rejected"` FAIL_CLOSED record: under autopilot the gate mechanism is
+    //    `noop`, a `noop` mechanism deliberately GRANTS nothing (`runtime/interrupt.ts`),
+    //    so the `git`-effect `commit` node is refused and never executed — sc-12-9's
+    //    shipped behaviour, pinned by `nodes/commit.test.ts` and
+    //    `topology-invariants.test.ts`, and left standing by sprint 3's nonGoal 2 (no
+    //    reclassifying a refusal to make the trail match). Sprint 2's durable approval
+    //    (`goldenApprovedConfig`) does not reach it either: that config lives only in the
+    //    golden dataset, never in `conformanceConfig()` below, which is the shipped
+    //    autopilot path this harness deliberately measures — see the assertion below this
+    //    comment for the fact, run rather than assumed. Of the six checkpoint ids still
+    //    absent from this trail, FIVE (`pre-curator`, `pre-generator`, `pre-evaluator`,
+    //    `pre-code-reviewer`, `post-sprint`) sit inside the sprint fan-out region, where
+    //    `InterruptInsideFanOut` (`topology/validate.ts:1089-1099`) is a BLOCKING
+    //    validation error (`severity: "error"`) — originally by ADR-6
+    //    (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`), and
+    //    REVISITED AND UPHELD by `spec-20260814-pge-full-convergence` sprint 1
+    //    (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`):
+    //    `Checkpoint.interrupt` holds one pending interrupt, `grantScope`/`clearScope` are
+    //    branch-blind so a sibling branch evicts a prior branch's grant, and
+    //    `resumeMessageId` collapses every branch's decision onto one message row — a
+    //    per-branch interrupt is unsound, not merely unrevisited. They cannot be declared
+    //    in the topology AT ALL, not merely "this sprint may not edit them" — pinned by
+    //    the assertion below. The sixth, `post-plan`, is already declared and simply does
+    //    not fire on this fixture. `audits` therefore STAYS in the divergence set,
+    //    recorded — per the spec's amended feat-3 AC2 — as RECOMMENDED FOR PERMANENT
+    //    ACCEPTANCE alongside `history`, not as open work a later sprint can close
+    //    further.
     //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
     //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
     //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
@@ -382,7 +399,8 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
       PIPELINE_COMPLETE_EVENT,
     ]);
 
-    // ── 2. audits: eight distinct checkpoint ids versus one id recorded three times ──
+    // ── 2. audits: eight distinct checkpoint ids versus two, one of them recorded
+    // three times (sc-3-1, sc-3-2, sc-3-3) ──
     const tsAudits = await readAuditRecords(tsRoot);
     const pgeAudits = await readAuditRecords(pgeRoot);
 
@@ -398,14 +416,56 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     ]);
     expect(tsAudits.every((record) => record.outcome === "approved")).toBe(true);
 
-    // Every graph-side record is `end-of-pipeline` — the only checkpoint id this fixture
-    // ever evaluates, not because one id was recorded twice, and not because it is the only
-    // id the artifact declares (it declares a second, `post-plan`, unreached on this
-    // fixture — see "THE RECORDED DIVERGENCE SET" above).
+    // sc-3-3's premise, CHECKED against the harness rather than assumed: sprint 2's
+    // durable approval (`goldenApprovedConfig`) never reaches this config. If it did —
+    // `checkpointOverrides: { "end-of-pipeline": "disk" }` — `runnerFor` would hand that
+    // SAME config to the ts engine too, and `finalizePipelineRun` would then resolve
+    // `end-of-pipeline` through the real `DiskCheckpointMechanism` and block the
+    // imperative run. `conformanceConfig()` deliberately measures the shipped autopilot
+    // path instead, so the middle `end-of-pipeline` record below is still a FAIL_CLOSED
+    // refusal, not an approval reached honestly.
+    expect(conformanceConfig().pipeline.checkpointOverrides).toEqual({});
+
+    // `gate_plan_out` now records `post-sprint-contract` FIRST — the effect-free gate
+    // that fires immediately after `plan_materialize`, matching the imperative pipeline's
+    // own ordering (`pipeline.ts:1017-1025`, `coding.graph.ts:513-526`). The three
+    // `end-of-pipeline` records that follow are exactly as before sprint 3 of
+    // spec-20260814-pge-full-convergence.
+    expect(pgeAudits.map((record) => record.checkpointId)).toEqual([
+      "post-sprint-contract",
+      "end-of-pipeline",
+      "end-of-pipeline",
+      "end-of-pipeline",
+    ]);
+    // The id SET is now TWO, not one — not because one id was recorded twice, and not
+    // because it is the only id the artifact declares (it also declares `post-plan`,
+    // unreached on this fixture — see "THE RECORDED DIVERGENCE SET" above).
     expect(new Set(pgeAudits.map((record) => record.checkpointId))).toEqual(
-      new Set(["end-of-pipeline"]),
+      new Set(["post-sprint-contract", "end-of-pipeline"]),
     );
-    expect(pgeAudits.map((record) => record.outcome)).toEqual(["approved", "rejected", "approved"]);
+    expect(pgeAudits.map((record) => record.outcome)).toEqual([
+      "approved",
+      "approved",
+      "rejected",
+      "approved",
+    ]);
+
+    // sc-3-1's negative half, pinned against the RUNNING trail rather than merely
+    // narrated: none of the five checkpoint ids sprint 1's ADR forbids inside the sprint
+    // fan-out region ever appears, because none of them is declared anywhere in the
+    // topology for a mechanism to answer.
+    for (const undeclarable of [
+      "pre-curator",
+      "pre-generator",
+      "pre-evaluator",
+      "pre-code-reviewer",
+      "post-sprint",
+    ] as const) {
+      expect(
+        pgeAudits.some((record) => record.checkpointId === undeclarable),
+        `${undeclarable} is permanently undeclarable inside the sprint fan-out region — arch-20260814-pge-full-convergence-adr-1`,
+      ).toBe(false);
+    }
 
     // ── 2b. THE MATERIAL FACT the field list alone hides ──
     //

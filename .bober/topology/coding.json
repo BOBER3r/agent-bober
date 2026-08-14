@@ -78,7 +78,7 @@
       "scope": "public"
     }
   ],
-  "checksum": "sha256:a1df4bf023618df2fe0b19817924986ec290841b113381f5652aa98da2dd9aea",
+  "checksum": "sha256:0b0ff95482d5ff88acec245f52b80ff1fe0d0c0a7906b2acfca7b40f3ca460db",
   "defaults": {
     "concurrency": 1,
     "durability": "superstep",
@@ -507,7 +507,7 @@
   "entry": "research_body",
   "formatVersion": 1,
   "graphId": "coding",
-  "graphVersion": "1.4.0",
+  "graphVersion": "1.5.0",
   "nodes": [
     {
       "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
@@ -806,11 +806,15 @@
       "writes": []
     },
     {
-      "doc": "Returns control to the supervisor once the spec and its contracts are on disk; fails closed when persistence did not happen.",
+      "doc": "Returns control to the supervisor once the spec and its contracts are on disk; fails closed when persistence did not happen. Effect-free by construction, so it is also the legal host for the shipped post-sprint-contract checkpoint: the imperative pipeline records that id immediately after materializeContracts persists the same contracts this gate reads, before the sprint loop begins. plan_materialize cannot host it instead — it is the writer, tagged effects: [\"fs-write\"], which a HITL declaration is not permitted to sit on.",
       "effects": [],
       "gate": {
         "check": "spec-and-contracts-persisted",
         "onFail": "graceful_failure"
+      },
+      "hitl": {
+        "checkpointId": "post-sprint-contract",
+        "onReject": "graceful_failure"
       },
       "id": "gate_plan_out",
       "inputPorts": [

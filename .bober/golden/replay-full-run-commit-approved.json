@@ -13,7 +13,7 @@
   "enforcement": "replay",
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.4.0"
+    "graphVersion": "1.5.0"
   },
   "input": {
     "featureRequest": "Accept an optional retry block in the pipeline config and validate it.",
@@ -935,6 +935,13 @@
     "terminalNodeId": "finalize",
     "artifacts": {
       "audits": [
+        {
+          "checkpointId": "post-sprint-contract",
+          "editDeltaSummary": null,
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "approved"
+        },
         {
           "checkpointId": "end-of-pipeline",
           "editDeltaSummary": null,

@@ -13,7 +13,7 @@
   "enforcement": "replay",
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.4.0"
+    "graphVersion": "1.5.0"
   },
   "input": {
     "featureRequest": "Accept an optional retry block in the pipeline config and validate it.",

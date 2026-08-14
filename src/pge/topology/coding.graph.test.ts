@@ -112,11 +112,11 @@ describe("CODING_GRAPH parses and validates", () => {
     expect(parsed.data.formatVersion).toBe(1);
     expect(parsed.data.provenance).toBe("authored");
     expect(parsed.data.graphVersion).toMatch(GRAPH_VERSION_PATTERN);
-    // Bumped from 1.3.0 when the new scalar `specDraft` channel was added, sole writer
-    // `plan_draft` — commit.finalize now falls back to it instead of throwing
-    // FinalizeWithoutSpecError when a plan's clarification never converges — see
-    // docs/pge-graph.md's changelog.
-    expect(parsed.data.graphVersion).toBe("1.4.0");
+    // Bumped from 1.4.0 when `gate_plan_out` was given a `hitl` block declaring
+    // `post-sprint-contract` — the checkpoint id the imperative pipeline records
+    // immediately after `materializeContracts`, previously undeclared anywhere in the
+    // topology — see docs/pge-graph.md's changelog.
+    expect(parsed.data.graphVersion).toBe("1.5.0");
   });
 
   it("returns ok:true with zero diagnostics in structural mode", () => {
@@ -405,11 +405,67 @@ describe("structural invariants", () => {
 
   it("gives every human-in-the-loop node an onReject endpoint and no effects", () => {
     const hitl = CODING_GRAPH.nodes.filter((n) => n.hitl !== undefined);
-    expect(hitl.map((n) => n.id).sort()).toEqual(["hitl_commit", "plan_clarify"]);
+    expect(hitl.map((n) => n.id).sort()).toEqual(["gate_plan_out", "hitl_commit", "plan_clarify"]);
     for (const node of hitl) {
       expect(node.hitl?.onReject).toBe("graceful_failure");
       expect(node.effects).toEqual([]);
     }
+  });
+
+  // ── sc-3-1 ────────────────────────────────────────────────────────
+
+  it("declares post-sprint-contract on gate_plan_out, the effect-free gate reachable outside the fan-out", () => {
+    // The imperative pipeline records this id immediately after `materializeContracts`
+    // (`pipeline.ts:1017-1025`), before the sprint loop begins. `gate_plan_out` is the
+    // graph node at that same moment: the effect-free exit gate that fires once the spec
+    // and its contracts are on disk, on the same `contracts` payload.
+    expect(nodeOrThrow("gate_plan_out").hitl?.checkpointId).toBe("post-sprint-contract");
+    expect(nodeOrThrow("gate_plan_out").effects).toEqual([]);
+    // `plan_materialize`, the writer one hop upstream, is NOT a legal host: it declares
+    // `effects: ["fs-write"]`, which trips `EffectfulNodeContainsHitl`. It must stay
+    // undeclared so this positive control keeps meaning something.
+    expect(nodeOrThrow("plan_materialize").effects).toEqual(["fs-write"]);
+    expect(nodeOrThrow("plan_materialize").hitl).toBeUndefined();
+  });
+
+  describe("the five checkpoint ids arch-20260814-pge-full-convergence-adr-1 leaves undeclarable", () => {
+    // Every node the sprint fan-out region reaches (see `computeFanOutRegion`,
+    // `runtime/interpreter.ts:490`) is downstream of the `fanout_sprints -> sprint_body`
+    // or `rework_route -> sprint_body` fan-out edge. Declaring a `hitl` on any of them is
+    // `InterruptInsideFanOut` at `severity: "error"` (`validate.ts:1089-1099`) — a
+    // BLOCKING structural error, not a style objection — because the runtime cannot
+    // express a per-branch interrupt: `Checkpoint.interrupt` holds one pending interrupt,
+    // `grantScope`/`clearScope` are branch-blind, and `resumeMessageId` collapses every
+    // branch's decision onto one message row (sprint 1's ADR, upholding ADR-6's original
+    // clause). One in-region node per undeclared imperative checkpoint id, so a claim
+    // that stops being true fails a test instead of ageing into a lie.
+    it.each([
+      { checkpointId: "pre-curator", nodeId: "sprint_curate_explain" },
+      { checkpointId: "pre-generator", nodeId: "sprint_generate" },
+      { checkpointId: "pre-evaluator", nodeId: "sprint_evaluate" },
+      { checkpointId: "pre-code-reviewer", nodeId: "sprint_review" },
+      { checkpointId: "post-sprint", nodeId: "gate_sprint_out" },
+    ])("$checkpointId on $nodeId reports InterruptInsideFanOut", ({ checkpointId, nodeId }) => {
+      const mutated = clone(CODING_GRAPH);
+      const node = mutated.nodes.find((n) => n.id === nodeId);
+      if (!node) throw new Error(`fixture node "${nodeId}" not found`);
+      if (node.kind !== "gate" && node.kind !== "llm" && node.kind !== "tool") {
+        throw new Error(`fixture node "${nodeId}" cannot carry a hitl block`);
+      }
+      node.hitl = { checkpointId, onReject: "graceful_failure" };
+      const report = validateTopology(mutated);
+      const codes = report.diagnostics.filter((d) => d.severity === "error").map((d) => d.code);
+      expect(codes, `${nodeId} with hitl ${checkpointId}`).toContain("InterruptInsideFanOut");
+    });
+
+    // Positive control: the actual host this sprint declares is OUTSIDE the fan-out
+    // region and reports no InterruptInsideFanOut, so the five failures above are
+    // evidence of the region boundary and not of the diagnostic firing unconditionally.
+    it("does not report InterruptInsideFanOut for the declared gate_plan_out host", () => {
+      const report = validateTopology(CODING_GRAPH);
+      const codes = report.diagnostics.map((d) => d.code);
+      expect(codes).not.toContain("InterruptInsideFanOut");
+    });
   });
 
   it("gives every llm node a promptRef and no tool node one", () => {

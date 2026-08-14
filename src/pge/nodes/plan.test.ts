@@ -243,9 +243,10 @@ describe("PLAN CLARIFICATION: suspends, resumes with the answers in the planner'
       },
     });
 
-    expect(resumed.result.status).toBe("completed");
-
-    // THE criterion: `plan_draft` was re-entered, and the answers were in ITS INPUT.
+    // THE criterion: `plan_draft` was re-entered, and the answers were in ITS INPUT. Read
+    // off THIS run's own logs, before any further resume replaces them with a fresh
+    // `compileRegion` — `gate_plan_out`'s own checkpoint (below) is answered by a SEPARATE
+    // `runRegion` call that starts logging from zero.
     const redrafted = (resumed.inputLog.inputs[PLAN_NODE_IDS.draft] ?? [])[0] as PlanSpec;
     expect(redrafted.resolvedClarifications.map((entry) => entry.answer)).toEqual([ANSWER]);
     expect(redrafted.resolvedClarifications[0].questionId).toBe(stubQuestion().questionId);
@@ -256,6 +257,30 @@ describe("PLAN CLARIFICATION: suspends, resumes with the answers in the planner'
     // Exactly one entry each: the pause did not double-execute anything.
     expect(resumed.handlerLog.calls[PLAN_NODE_IDS.clarify]).toBe(1);
     expect(resumed.handlerLog.calls[PLAN_NODE_IDS.draft]).toBe(1);
+
+    // `gate_plan_out`, also inside this region, carries its OWN human checkpoint
+    // (`post-sprint-contract`, since spec-20260814-pge-full-convergence sprint 3), and the
+    // same `mode: "suspend"` controller pauses at ANY hitl node it has no grant for — so
+    // the clarification answer above let the loop exit, but the region suspended a SECOND
+    // time at the plan exit gate rather than reaching `completed` in one hop. This mirrors
+    // the real checkpoint subsystem: a caller resuming the clarification round trip still
+    // owes a separate answer to the plan's exit approval before the region is DONE.
+    if (resumed.result.status !== "interrupted") {
+      throw new Error(
+        `expected the run to suspend a second time at ${PLAN_NODE_IDS.exitGate}, got status "${resumed.result.status}"`,
+      );
+    }
+    expect(resumed.result.pending.nodeId).toBe(PLAN_NODE_IDS.exitGate);
+    const completed = await runRegion({
+      projectRoot: root,
+      region: PLAN_REGION,
+      runId: RUN_ID,
+      bindings: planBindings(log),
+      checkpointer: createFsCheckpointer(root),
+      interrupts: clarificationInterrupts(),
+      resumeFrom: { ref: resumed.result.checkpointRef, value: { approved: true } },
+    });
+    expect(completed.result.status).toBe("completed");
   });
 
   it("materialises contracts only after the loop exits, and they are the shipped SprintContract", async () => {
@@ -290,5 +315,16 @@ describe("PLAN CLARIFICATION: suspends, resumes with the answers in the planner'
     const spec = resumed.finalState.spec;
     expect(spec?.resolvedClarifications.map((entry) => entry.answer)).toEqual([ANSWER]);
     expect(spec === null ? false : isPipelineReady(spec)).toBe(true);
+
+    // `plan_materialize` sits UPSTREAM of `gate_plan_out` in this region, so its writes
+    // land in committed state before the exit gate's own checkpoint
+    // (`post-sprint-contract`, since spec-20260814-pge-full-convergence sprint 3) is ever
+    // evaluated — asserted here, not merely assumed, because this test's claim is
+    // specifically that materialisation does not wait on that checkpoint. This run is
+    // deliberately left suspended there; completing it is exercised by the previous test.
+    expect(resumed.result.status).toBe("interrupted");
+    if (resumed.result.status === "interrupted") {
+      expect(resumed.result.pending.nodeId).toBe(PLAN_NODE_IDS.exitGate);
+    }
   });
 });
