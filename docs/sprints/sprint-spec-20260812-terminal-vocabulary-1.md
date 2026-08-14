@@ -127,7 +127,10 @@ scratch file is ever written under `src/`.
   [`docs/pge-graph.md` § Engine migration disposition → The evidence](../pge-graph.md#the-evidence)
   for what that
   costs and why fixing the literal alone would not be enough. Flagged to the planner by the
-  generator.
+  generator. **(Historical — CLOSED at sprint 7 of `spec-20260814-pge-full-convergence`:**
+  `verdictFrom`'s counter and `commit.ts`'s completed/failed split both migrated to
+  `isSettledContractStatus`, both allowlist entries removed, reachability proven by execution.
+  See [that sprint's record](./sprint-spec-20260814-pge-full-convergence-7.md).**)**
 - **Three further sites are outside the scan's pattern *by design*, and the test says so with a
   worked example each.** `src/orchestrator/workflow/flusher.ts:76` compares a local variable the
   same function just computed from a **write**; `src/pge/nodes/sprint-review.ts:203` is a writer

@@ -1210,12 +1210,15 @@ serves both.
   did *not* move — the status word, closed at sprint 5.** The two engines used to pick
   different words out of the same nine-member `ContractStatusSchema` for the same outcome:
   `runSprintCycle` wrote `"passed"`, the graph's `sprint_review` wrote `"completed"`
-  (`src/pge/nodes/sprint-review.ts:215`; the persisted value is pinned at
-  `src/pge/nodes/sprint-evaluate.test.ts:776`). Sprint 1 converged the **readers** on the
+  (`src/pge/nodes/sprint-review.ts:290`; the persisted value is pinned at
+  `src/pge/nodes/sprint-evaluate.test.ts:778`). Sprint 1 converged the **readers** on the
   split rather than the writers: `src/contracts/sprint-contract.ts` is the single definition
   site, exposing `isSettledContractStatus` (`passed | completed` — *finished successfully*)
   and `isTerminalContractStatus` (adds `failed` — *stopped at all*, derived from the settled
-  set so the two cannot diverge), and six production readers call one of them. **Sprint 5
+  set so the two cannot diverge), and six production readers called one of them at that point
+  — **ten production files call one today** (`pipeline.ts` joined at sprint 5 of this spec;
+  `src/pge/runtime/interpreter.ts` and `src/pge/runtime/commit.ts` at sprint 7 of
+  `spec-20260814-pge-full-convergence`). **Sprint 5
   changed the WRITER**: `runSprintCycle` now writes `"completed"` at `pipeline.ts:589` —
   exactly what `sprint_review` already wrote — and its own reader at `pipeline.ts:1052`
   (the `completedSprints`/`failedSprints` split) was migrated to `isSettledContractStatus` in
@@ -1406,6 +1409,12 @@ serves both.
   in the same sprint: all 14 dispatched branches settle `"succeeded"`, and the only recorded
   failure is the already-documented `commit` `FailClosed` refusal, so `"partial"` is the more
   accurate report of a run whose work landed but whose commit was gated, not a regression.
+  **What is left after sprint 7, so the residual set is on the record and not only the closed
+  part:** three PGE *node* bodies stay allowlisted with a per-entry reason and a `file:line` —
+  `src/pge/nodes/sprint-curate.ts`, `sprint-generate.ts`, `documenter.ts` — outside every
+  migrating sprint's `estimatedFiles` so far; plus `src/orchestrator/workflow/flusher.ts:76`,
+  which the scan cannot see by construction (below). No runtime reader compares the retired
+  literal any more.
 
 ### The decision
 

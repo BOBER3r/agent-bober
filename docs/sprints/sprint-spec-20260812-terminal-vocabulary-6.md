@@ -145,6 +145,12 @@ and that `src/pge/topology/docs.test.ts` — the file that gates this very secti
 unreadable by plain `grep` (two literal NUL bytes at its own line 308, pre-existing, same
 class as `reducers.ts`'s and `frontier.ts`'s).
 
+**(Historical, on the first of those two carry-forward facts:** `verdictFrom` is no longer
+structurally dead. Sprint 7 of `spec-20260814-pge-full-convergence` migrated its counter to
+`isSettledContractStatus`, and `docs/pge-graph.md`'s closing paragraph was rewritten in place
+to say so. The second fact — `flusher.ts:76` — is unchanged and still true. See
+[sprint 7's record](./sprint-spec-20260814-pge-full-convergence-7.md).**)**
+
 ## sc-6-5 — the new claims, each with a test that fails when it stops being true
 
 `assertFlipPrerequisitesStated(doc)` (`src/pge/topology/docs.test.ts`, beside the existing

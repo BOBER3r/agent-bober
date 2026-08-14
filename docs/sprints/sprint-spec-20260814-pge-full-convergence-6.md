@@ -273,4 +273,9 @@ consequence; and the point-in-time notes in the sprint-4, sprint-5 and
   7104 passed / 2 skipped, the evaluator's fresh `git worktree --detach` + `npm ci` at `1fd29e9`
   recorded **7100 passed / 6 skipped**. Four tests skipped in one environment and ran in the
   other; neither run reports a failure, and the difference is unexplained here rather than
-  explained away.
+  explained away. **ANSWERED at sprint 7** — the four are
+  `tests/graph/mcp-client.test.ts:783,805,832,866`, the `TokensaveMcpClient` integration tests
+  gated by `it.skipIf(!tokensaveIntegrationRunnable)`; the gate requires an indexed
+  `.tokensave/` project in `process.cwd()`, which is gitignored (`.gitignore:40`) and so absent
+  from every fresh worktree. A self-documenting gate that hides no failure — see
+  [sprint 7's record](./sprint-spec-20260814-pge-full-convergence-7.md#the-suite-count-question-sprint-6-left-open-is-answered).

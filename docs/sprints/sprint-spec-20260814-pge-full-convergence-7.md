@@ -1,6 +1,14 @@
 # The dead `"passed"` comparisons are retired — `verdictFrom`'s downgrade paths are reachable again
 
-**Contract:** sprint-spec-20260814-pge-full-convergence-7  ·  **Spec:** spec-20260814-pge-full-convergence
+**Contract:** sprint-spec-20260814-pge-full-convergence-7  ·  **Spec:** spec-20260814-pge-full-convergence  ·  **Completed:** 2026-08-14
+
+**Evaluation:** PASSED at iteration 1, **5 of 5 required criteria**
+(`.bober/eval-results/eval-sprint-spec-20260814-pge-full-convergence-7-1.json`). Every claim
+below was re-verified by the evaluator through execution rather than by reading: the
+pre-migration failure was reproduced from scratch in a disposable worktree with only
+`interpreter.ts` and `commit.ts` reverted, the allowlist's bidirectional check was proven to
+bite by injecting a synthetic stale entry, and the `real-workload.json` verdict move was
+checked against the test's own asserted branch facts. Commit `f8bc005`.
 
 ## What this sprint added
 
@@ -9,11 +17,15 @@ the count of `state.sprintContracts` entries that have settled. Before this spri
 was the literal `c.status === "passed"` — a word neither engine's settled-sprint writer
 produces (`sprint_exit` in `sprint-review.ts` and `runSprintCycle` in `pipeline.ts` both write
 `"completed"`), so the count was structurally **zero** for every run, ever, on either engine.
-Three of `verdictFrom`'s five branches were consequently unreachable: a declared `"failed"`
-never softened to `"partial"` even when branches had settled; a declared `"success"` with
-recorded failures could only downgrade to `"failed"`, never `"partial"`; and the no-declared-
-verdict fallback could never report `"success"` or `"partial"`, only `"failed"`.
-`src/pge/runtime/commit.ts:539`'s completed/failed split carried the identical literal, guarded
+Counting precisely, because the two numbers in circulation describe the same fact at different
+granularities: **three of `verdictFrom`'s five guards could never fire, and four of its six
+verdict-producing outcomes were unreachable.** A declared `"failed"` never softened to
+`"partial"` even when branches had settled (guard, dead); a declared `"success"` with recorded
+failures could only downgrade to `"failed"`, never `"partial"` (the guard fired, but the
+`"partial"` arm of its ternary did not); and the no-declared-verdict fallback could never
+report `"success"` or `"partial"`, only `"failed"` (two more dead guards).
+`src/pge/runtime/commit.ts:539` (`:535` after this sprint's own prose shrank the block above
+it)'s completed/failed split carried the identical literal, guarded
 only by an `OR` with `succeededBranches` that (as its own removed rationale block argued at
 length) made the literal appear moot — until `isSettledContractStatus` is what actually
 decides a `"completed"` contract with no `branchStatus` row at all, a case the OR alone cannot
@@ -38,9 +50,10 @@ the production word `"completed"` instead, without touching the fixture body its
 asserts the reported verdict is `"partial"`.
 
 **A real subtlety surfaced while writing this test, not in `verdictFrom` but in the fixture's
-own channel-join tie-break.** `sprintContracts` resolves a same-key conflict by
-`versionRank(candidate, incumbent)` — `(version, updatedAt, canonicalJson(value))`, in that
-order. Neither the seeded contract nor the shipped `gate_sprint_out` body sets `version`, so
+own channel-join tie-break.** `sprintContracts` resolves a same-key conflict by ranking each
+side with `versionRank` — the triple `(version, updatedAt, canonicalJson(value))` — and
+comparing them term by term (`rankIsGreater(candidate, incumbent)`,
+`src/pge/registry/reducers.ts:366-401`), in that order. Neither the seeded contract nor the shipped `gate_sprint_out` body sets `version`, so
 both rank `0`, `updatedAt` ties on the golden harness's fixed clock, and the join falls through
 to a `canonicalJson` STRING comparison. The shipped body's settled write wins that tie only
 because `"passed"` sorts lexicographically after `"in-progress"` (`p > i`); `"completed"` sorts
@@ -54,6 +67,18 @@ alphabetics. The test's override does the same (`version: 1`), with a comment ex
 a version-less override is not a bug in `verdictFrom`, but it would have been a silent,
 misleading bug in the test.
 
+**Disposition of that finding: TEST-ONLY, and confirmed so from source rather than assumed.**
+The evaluator checked every real settled writer and found the version-less path unreachable in
+production: `sprint_exit` always writes `version: attempts` with `attempts = Math.max(1, …)`
+(`src/pge/nodes/sprint-review.ts:270-297`), and `runSprintCycle` writes
+`Math.max(1, settledAttempts)` as of sprint 6 — both ≥ 1, both strictly outranking the seeded
+copy's absent `version`, which `versionRank` ranks `0`. The string tie-break is therefore
+reachable only from a hand-written channel write that omits `version`, i.e. from fixtures and
+overrides. It is recorded here anyway because it is genuinely load-bearing: the fixture's own
+`gate_sprint_out` body has always won its tie on the *alphabetics of the word* `"passed"` and
+on nothing else, so any future fixture that settles a contract without a `version` inherits a
+silent, status-word-dependent coin flip.
+
 **MUTATION VERIFIED**, per the sprint-5 (`23a1718`) precedent: run against the pre-migration
 counter (`c.status === "passed"`), the test fails —
 `AssertionError: expected 'failed' to be 'partial'`, `passed` stays `0` because the override
@@ -62,7 +87,14 @@ declared `"failed"` verbatim. Migrating the counter to `isSettledContractStatus`
 `"completed"` satisfies) makes `passed = 2`, fires guard B, and the assertion passes. A
 mirrored negative control (same scenario, exhausted before any branch settles) still returns
 `"failed"` under both counters, confirming the migration is discriminating, not universally
-true.
+true. **The evaluator reproduced this independently rather than taking the report's word for
+it:** in a disposable worktree it reverted *only* `interpreter.ts` and `commit.ts` to `cdef388`,
+ran the new test, and got the quoted message verbatim, then confirmed the negative control
+passes in that same reverted state — so the control is a discriminator, not a second copy of
+the positive test.
+
+Post-migration, the two sites this section is about are `src/pge/runtime/interpreter.ts:734`
+(the counter) and `:751` (guard B); `src/pge/runtime/commit.ts:535` is the split.
 
 ## Allowlist (sc-7-3)
 
@@ -137,6 +169,14 @@ field, so this sprint does not move it, confirmed by execution rather than assum
 - `docs/sprints/README.md` — new table row for this sprint.
 - **This record** — new.
 
+A follow-up documentation-only commit (no source, no tests) verified this record against the
+committed diff and extended it with the answered suite-count question, the test-only
+disposition of the `versionRank` finding and the carried-forward `disk.ts` known issue; it also
+propagated the closure to the docs that still described the defect as open:
+`docs/pge-graph.md` (the residual allowlist set, a corrected reader count, two stale
+`path:line` citations) and the `spec-20260812-terminal-vocabulary` sprint 1/4/5/6 records,
+each annotated as historical rather than rewritten.
+
 ## Notes for maintainers
 
 - **The migration is a strict widening, provably so, not merely argued.** `SETTLED_CONTRACT_
@@ -152,8 +192,40 @@ field, so this sprint does not move it, confirmed by execution rather than assum
 - **`src/pge/nodes/sprint-curate.ts`, `sprint-generate.ts`, `documenter.ts` remain
   allowlisted.** They are PGE NODE bodies, not runtime, outside this sprint's
   `estimatedFiles`; a future sprint's territory.
+- **Known issue, pre-existing and NOT introduced here:** one full-suite run out of four showed
+  an intermittent failure in the approval-marker JSON parsing of
+  `src/orchestrator/checkpoints/mechanisms/disk.ts` — a filesystem-timing-sensitive area this
+  sprint never touches. Three subsequent full runs, `disk.test.ts` alone (12/12), and the
+  evaluator's own clean-worktree run were all green, so it could not be reproduced on demand
+  and is recorded rather than diagnosed. It is tracked separately; do not treat a green suite
+  as evidence that it is gone, and do not attribute it to this sprint if it resurfaces.
 - Full gate, re-run on this checkout: suite (`npx vitest run --exclude
   '**/.claude/worktrees/**' --exclude '**/node_modules/**'`) **467 files / 7106 passed, 2
   skipped, 0 failed**; typecheck (both tsconfigs), lint (0 errors, 2 pre-existing warnings in
   `eval-persist.test.ts`), build green; golden gate **7/7 (100%)**, `.bober/golden/` diff empty
-  before and after a full `GOLDEN_CAPTURE=1` re-run.
+  before and after a full `GOLDEN_CAPTURE=1` re-run. The evaluator's clean detached worktree at
+  `f8bc005` recorded **467 files / 7102 passed, 6 skipped, 0 failed** — the same 7108 total and
+  the same zero failures, split differently for the reason the next section finally names.
+
+## The suite-count question sprint 6 left open is ANSWERED
+
+Sprint 6's record closed with an unexplained observation and deliberately did not explain it
+away: two runs of the same suite agreed on the total and on `0 failed`, but one reported four
+more skips than the other, and nobody had said which four. Sprint 7 saw the identical split
+(2 skipped in the working checkout, 6 in a clean worktree) and identified them:
+
+- `tests/graph/mcp-client.test.ts:783`, `:805`, `:832`, `:866` — the four integration tests in
+  the `TokensaveMcpClient (integration — requires the tokensave binary AND an indexed
+  .tokensave project in cwd)` describe block.
+- Each is gated by `it.skipIf(!tokensaveIntegrationRunnable)`, where
+  `tokensaveIntegrationRunnable = hasTokensaveBinary() && hasIndexedProject()`
+  (`tests/graph/mcp-client.test.ts:54`) and `hasIndexedProject()` is
+  `existsSync(join(process.cwd(), ".tokensave"))` (`:49-51`).
+- `.tokensave` is gitignored (`.gitignore:40`), so it is absent from every fresh `git worktree`
+  by construction. The developer checkout has an indexed project and runs them; a clean
+  worktree does not and skips them.
+
+**This is a self-documenting gate, not a hidden one** — the precondition is named in the
+describe block's own title and in the file header — and it hides no failure: both environments
+report the same 7108 tests and 0 failures. The loop sprint 6 opened is closed; a future run
+that sees a 2-vs-6 skip split should recognise it rather than re-investigate it.

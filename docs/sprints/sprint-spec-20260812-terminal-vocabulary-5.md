@@ -167,6 +167,13 @@ two new tests in `sprint-corpus.test.ts` that grep each file's source for the li
 | The two extra ts-side writers no longer write `"passed"` | `src/mcp/tools/sprint-corpus.test.ts`, two new tests |
 | `commit.ts:539` and `interpreter.ts:728` stay deliberately unmigrated | `status-vocabulary.invariant.test.ts` allowlist, reasons updated for the line shift and the writer flip |
 
+**(Historical, on the last row above and on the two "left alone, deliberately" rows near the
+top of this record: both sites were MIGRATED at sprint 7 of
+`spec-20260814-pge-full-convergence` — `interpreter.ts:728` → `:734` and `commit.ts:539` →
+`:535`, now `isSettledContractStatus` — and both allowlist entries were removed. The deferral
+this record describes ended there; see
+[sprint 7's record](./sprint-spec-20260814-pge-full-convergence-7.md).)**
+
 Suite **459 files passed / 1 pre-existing skip (460), 6960 tests passed / 2 skipped (6962), 0
 failed** — up from the pre-sprint baseline of 6952 passed by exactly the 8 new test cases this
 sprint added (6 in `history.test.ts`, 2 in `sprint-corpus.test.ts`). Typecheck (both

@@ -179,6 +179,12 @@ change, no case relabelled `integrity`).
 
 ## Cross-sprint consequence: `verdictFrom`'s live defect narrows, but does not close
 
+**(Historical — the defect this section describes was CLOSED at sprint 7 of
+`spec-20260814-pge-full-convergence`, which migrated the counter to `isSettledContractStatus`
+and proved the downgrade paths reachable by execution. Read what follows as the state at
+sprint 4; see [sprint 7's record](./sprint-spec-20260814-pge-full-convergence-7.md) for the
+closure.)**
+
 `src/pge/runtime/interpreter.ts:728` (`verdictFrom`) still counts `status === "passed"` over
 `state.sprintContracts` — a word no PGE run writes — so the count is still zero for a graph
 run, and every downstream verdict consequence still under-reports exactly as before. What
