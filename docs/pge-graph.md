@@ -617,7 +617,48 @@ by injecting a synthetic span rather than by driving the real golden executor.
 With the corrected rule, `42 / 44 ≈ 95.5%` still clears the dataset's own floor of "strictly
 greater than 85%" (`covers a substantial majority of the graph, so the pin is not vacuous`,
 same file) without that floor moving — NFR0 forbids lowering a gate to protect a number, and
-this sprint did not need to.
+neither the sprint that moved the count to 40 nor the one that moved it to 42 needed to. The
+sprint-8 evaluator checked the diff for exactly that: the `0.85` comparison
+(`src/pge/golden/coverage.test.ts:272`) is untouched, and **no production `.ts` file changed
+at all** — the figure rose because a case was written that exercises behaviour the shipped
+graph already had, not because anything about the graph, the interpreter or the coverage rule
+moved.
+
+**`context_compact` is a TOPOLOGY finding, not a coverage footnote — and it is the third of
+its kind in `spec-20260814-pge-full-convergence`.** The three are worth reading together,
+because they are the same KIND of finding and nothing else in this document places them side
+by side:
+
+| where | limit | what the shipped architecture cannot express | cost to close |
+| --- | --- | --- | --- |
+| sprint 1/3 → ADR-1 | `audits` — five checkpoint ids permanently undeclarable | a per-branch interrupt inside a fan-out: `Checkpoint.interrupt` is one slot, and `grantScope`/`clearScope`/`resumeMessageId` carry no branch key (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) | a keyed, branch-aware interrupt slot plus branch discriminators through the resume path — a runtime redesign |
+| sprint 6 | `pipelineResult.errors` | an imperative-engine write site for a FAIL_CLOSED refusal — no interpreter, and an auto-commit (`src/orchestrator/pipeline.ts:451`) that calls `commitAll` inside a `try`/`catch` which only debug-logs, with no HITL gate to refuse | giving the imperative engine a checkpoint-gated commit — an architecture change |
+| sprint 8 | `context_compact` unreachable | a supervisor decision that reads the message window: no handler path returns `COMPACT_LABEL`, and `supervisor.reads` does not authorise `messages` | a topology reads-list change + a minor `graphVersion` bump + new handler logic |
+
+What makes them one kind rather than three coincidences: each was established by RUNNING or
+reading the shipped system rather than by assuming (the `context_compact` block was confirmed
+against a fresh trace, `pipelineResult.errors` by running the harness after the fix that was
+supposed to close it); each was RECORDED rather than worked around, on the authority of the
+owning contract's own stop condition; each carries a named, non-trivial cost in **shipped
+production code** that no case, binding, seed or fixture can substitute for; and in each the
+implementation was right while the CONTRACT's premise was wrong, which is why all three were
+adjudicated `pass-AMENDED` rather than sent back for a retry. Read together they say something
+about how this spec was scoped — it assumed missing writers and missing cases everywhere, and
+in three places the answer was a missing capability.
+
+**What that implies for the two sprints that inherit it.** Sprint 9's real remaining target is
+`synthesize` alone: its `sc-9-1` (`rework_route` executes) was satisfied by sprint 8, forced by
+topology. Its `sc-9-3` ("`NEVER_EXECUTED` is empty") and `sc-9-4` ("every node in the committed
+topology executed") are **unsatisfiable as literally written**, because `context_compact`
+cannot execute without production code that does not exist; the amended intent recorded on that
+contract is the honest form — `NEVER_EXECUTED` contains ONLY nodes proven structurally
+unreachable, each with a recorded reason and a claim test, and coverage asserts every node
+executes EXCEPT those, computed against the topology artifact rather than a hardcoded count,
+with the guard still biting in BOTH directions. **Deleting the guard is not a way to satisfy
+the criterion.** Sprint 11 therefore owns three unsatisfiable-as-written criteria rather than
+one — `sc-11-1` (`equivalent: true`, "Engine migration disposition" below) plus these two — and
+the satisfiable work in each case is the same: re-specify the bar around a named, accepted,
+individually-justified exception set rather than around emptiness.
 
 ### A defect this coverage work surfaced
 
@@ -882,10 +923,14 @@ where the previous version mutated `contracts[0].title`, a field one committed c
 (`replay-plan-clarify-rounds-exhausted`) does not have at all. At the 6 replay cases the dataset
 held then, this drifted exactly 2 of them — the same failure count the fixed-count version
 produced — so the fix changed nothing about what that run caught, only whether a future count
-keeps catching it. At the current **7** (sprint 2 of `spec-20260814-pge-full-convergence` added
-`replay-full-run-commit-approved`) the fraction still drifts exactly 2, indices 2 and 5 — a
-different pair of cases, since the new caseId sorts first, but the same count. The comment at
-`executor.test.ts:363` still says "current 6".
+keeps catching it. At **7** (sprint 2 of `spec-20260814-pge-full-convergence` added
+`replay-full-run-commit-approved`) the fraction still drifted exactly 2, indices 2 and 5 — a
+different pair of cases, since the new caseId sorts first, but the same count. At the current
+**8** (sprint 8 of the same spec added `replay-corrected-sprint-still-grades-fail`, which sorts
+ahead of every other replay caseId) `(index + 1) % 3 === 0` selects indices 2 and 5 once more —
+2 of 8, a 75 % pass rate, still comfortably under the bar it must miss, and a different pair
+again for the same sorting reason. The comment inside `executor.test.ts` (now at `:378`) still
+says "current 6".
 
 **The general rule, for anyone adding a case or a control:** a control whose failure injection
 does not scale with `replayCases.length` has a case count at which it silently stops being a
@@ -1656,6 +1701,16 @@ them this spec's to do (`nonGoals`):**
    named, accepted divergence set rather than around emptiness. Doing that re-specification
    was explicitly this spec's earlier sprints' `nonGoals`/`outOfScope[2]`, and it is not this
    record's to perform.
+
+   **Since sprint 8, `sc-11-1` is not the only criterion in that condition.** Sprint 9's
+   `sc-9-3` ("`NEVER_EXECUTED` is empty") and `sc-9-4` ("every node in the committed topology
+   executed") are unsatisfiable as literally written for the SAME class of reason, one level
+   away from conformance: `context_compact` is structurally unreachable by case authoring.
+   That finding, the two sibling structural limits it belongs with, and the amended form the
+   two criteria should take are recorded in "How much of the graph the committed cases
+   execute" above. Sprint 11 consolidates three such criteria, not one, and the remedy is
+   identical in each: a named, accepted, individually-justified exception set instead of a bar
+   phrased as emptiness.
 
 **One carried-forward fact from sprint 5/6 is now CLOSED, not merely unchanged — see the
 sprint 7 bullet above.** An earlier version of this paragraph read: *"`verdictFrom`

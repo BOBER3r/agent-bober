@@ -112,6 +112,14 @@ is evidence the node's body ran.
   `critique` and `rework_route` need a **new golden case** (a corrected-but-recorded-`fail`
   sprint alongside an otherwise passing run). `context_compact` needs the `supervisor.reads`
   artifact drift resolved. `synthesize` needs a graph change; no case can reach it.
+  *(Follow-up, recorded later and left here rather than rewritten: sprint 2 of
+  `spec-20260814-pge-full-convergence` closed `commit`/`finalize` with a second pinned config
+  under a real durable approval, and its sprint 8 closed `critique` AND `rework_route` with
+  exactly the case predicted above — `replay-corrected-sprint-still-grades-fail`. The
+  `context_compact` remedy stated here is INCOMPLETE: resolving the `supervisor.reads` drift
+  is necessary but not sufficient, because the shipped supervisor handler has no code path
+  returning `COMPACT_LABEL` at all, so new handler logic is needed as well. Sprint 8 recorded
+  it as a structural block for that reason.)*
 - **Do not treat a falling coverage figure as a regression without reading the rule.** This one
   fell because the rule stopped over-counting. The two-directional pin exists precisely so the
   number and the explanations move together and deliberately.

@@ -86,6 +86,10 @@ all**. The `FAIL_CLOSED` guard itself is pinned by the untouched pre-existing te
 - **`NEVER_EXECUTED`** (`src/pge/golden/coverage.test.ts:143`) — now
   `["context_compact", "critique", "rework_route", "synthesize"]`. The two-directional
   mutation-proof block is **byte-for-byte untouched** and still passes.
+  *(Historical, as of this sprint. Sprint 8 shrank the list again, to
+  `["context_compact", "synthesize"]`, and moved the count to 42/44 — `critique` and
+  `rework_route` left it together, since `critique`'s sole successor edge IS `rework_route`.
+  See `sprint-spec-20260814-pge-full-convergence-8.md`.)*
 - **`describe("the commit node behind a DURABLE disk approval, not a scripted one")`**
   (`src/pge/nodes/commit.test.ts:442`) — two node-level tests using the real, unmodified
   `DiskCheckpointMechanism` against a real `.bober/approvals/` under the test's own temp root.
