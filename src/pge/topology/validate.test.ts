@@ -847,6 +847,18 @@ function assertAdrRecordsFanOutDecision(adr: string): void {
   expect(adr, "must correct ADR-6's fan-in-barrier claim about reduce_sprints").toContain(
     "reduce_sprints",
   );
+  // reduce_sprints is dispatched once PER BRANCH, not once per fan-out episode — the
+  // validator's coarse fanOutRegion test and the interpreter's own per-branch dispatch
+  // agree on this node; the ADR must ground Option (c)'s rejection in the runtime dispatch
+  // fact, not merely restate the validator's classification as if it were the reason.
+  expect(
+    adr,
+    "must state reduce_sprints executes once per branch, not once per episode",
+  ).toMatch(/reduce_sprints.*once PER BRANCH|once PER BRANCH.*reduce_sprints/s);
+  expect(
+    adr,
+    "must ground Option (c)'s rejection in the interpreter's own dispatch, not only the validator's classification",
+  ).toContain("leavingFanOut");
   expect(adr, "must record the audits consequence").toContain("audits");
   for (const field of [
     "**Decision:**",
@@ -909,6 +921,18 @@ describe("the ADR governing InterruptInsideFanOut (arch-20260814-pge-full-conver
 
   it("FAILS when the fan-in-barrier correction is edited out", () => {
     const gutted = adr.split("reduce_sprints").join("the barrier node");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when the once-per-branch dispatch fact for reduce_sprints is edited out", () => {
+    const gutted = adr.split("once PER BRANCH").join("once");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when Option (c)'s rejection stops citing the interpreter's own dispatch", () => {
+    const gutted = adr.split("leavingFanOut").join("the routing check");
     expect(gutted).not.toBe(adr);
     expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
   });
