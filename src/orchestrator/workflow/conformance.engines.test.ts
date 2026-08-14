@@ -258,35 +258,45 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // gets FIXED fails it too, so neither can happen silently. Not one volatile key was added
     // to make this list shorter.
     //
-    // WHICH fields diverge is pinned here. WHAT each divergence IS — the events, the
-    // checkpoint ids, the contract fields, the offending status value — is pinned in
-    // "records what each divergence IS" below, from the artifacts of the same two runs.
-    // Prose in a comment is not a record; that test is, and it is what keeps the four
-    // paragraphs under it honest.
+    // WHICH fields diverge is pinned here. WHAT each divergence IS — the checkpoint ids, the
+    // contract fields, the offending status value — is pinned in "records what each
+    // divergence IS" below, from the artifacts of the same two runs. Prose in a comment is
+    // not a record; that test is, and it is what keeps the paragraphs under it honest.
     //
-    // The four, with what each one IS and what closing it would take:
+    // `history` CLOSED at sprint 4 of `spec-20260814-pge-full-convergence` and is no longer
+    // one of the three below. What used to be true, and is recorded here so the closure has
+    // a before-and-after: the imperative engine appended TEN phase events from
+    // `runTsPipeline` itself (`pipeline-start` … `sprint-docs-complete`), then the shared
+    // `pipeline-complete`, while a graph run's history had exactly ONE writer,
+    // `finalizePipelineRun` — `grep -rn "appendHistory\|history.jsonl" src/pge
+    // --include="*.ts"` (non-test) returned ZERO hits. That was a MISSING WRITER, not a
+    // missing place for one: the topology already declared TWO `role: "curator"` nodes
+    // (`sprint_curate_explain`, `coding.graph.ts:576`; `sprint_curate_mocks`, `:592`), so the
+    // prior disposition's "no curator node to emit a history write" premise was FALSE — a
+    // correction recorded at commit `e48962e` (2026-08-14), before this sprint. Sprint 4
+    // closed the actual gap: `src/pge/runtime/history.ts` exports `emitPhaseEvent`, a thin
+    // wrapper that delegates to the SAME `appendHistory` the imperative engine calls (no
+    // parallel writer, no parallel file — sc-4-4), and nine graph nodes now call it at the
+    // node's real lifecycle boundary — `research_body` (entry, `pipeline-start`),
+    // `plan_materialize` (after persisting, `planning-complete`), `sprint_curate_explain`
+    // (before/after `curator.brief`, `curator-start`/`curator-complete` — the latter only on
+    // a cache MISS, since a cache HIT never fetches the `SprintBriefing` the three counts
+    // come from), `sprint_generate` (entry, `generator-start`), `sprint_evaluate` (entry,
+    // `evaluator-start`; on the passing return path, `sprint-passed`, carrying the RAW
+    // `result.summary` rather than the decorated `evaluations`-channel copy),
+    // `sprint_review` (after `reviewer.sprint`, `code-review-complete`) and `documenter`
+    // (after `documenter.summary`, `sprint-docs-complete` — never on the
+    // nothing-to-document early return). The tenth event, `pipeline-complete`, is untouched:
+    // it was already shared (`finalizePipelineRun`, both engines) and sc-4's nonGoals forbid
+    // moving it. `iteration` (events 5-7) is neither `sprint-evaluate.ts`'s `iterationOf` nor
+    // the shared `sprintIterations` loop counter — both were tried against a REAL golden
+    // capture and both produced a wrong number; see `src/pge/nodes/gates.ts`'s
+    // `generateAttemptsSoFar` doc comment for the full account of why, and what does work.
+    // The three-events-versus-one shape asserted below, in "1. history", is now the
+    // CONVERGENCE itself: the pge list equals the ts list, not merely has the same length.
     //
-    //  - `history`: the imperative engine appends TEN phase events from `runTsPipeline`
-    //    itself (`pipeline-start` … `sprint-docs-complete`), then the shared
-    //    `pipeline-complete`. A graph run's history has exactly ONE writer,
-    //    `finalizePipelineRun`, because phase is a CHANNEL in the graph and per-node progress
-    //    lives in the superstep trace, not in `history.jsonl`. Closing it means either
-    //    deleting the imperative engine's event stream or giving nine node bodies a history
-    //    writer through the commit boundary. CORRECTION, not an amendment: a prior version
-    //    of this comment claimed the boundary "cannot reconstruct a
-    //    `curator-start`/`curator-complete` pair... because there is NO CURATOR NODE to emit
-    //    that pair from" — that clause is FALSE. The topology declares TWO
-    //    `role: "curator"` nodes, `sprint_curate_explain` (`coding.graph.ts:576`) and
-    //    `sprint_curate_mocks` (`:592`) — a node to host the write exists. What is actually
-    //    true: `appendHistory` (`src/state/history.ts:81`) is a plain exported function the
-    //    imperative engine calls inline at ten sites in `pipeline.ts`, and
-    //    `grep -rn "appendHistory\|history.jsonl" src/pge --include="*.ts"` (non-test) is
-    //    ZERO hits — no PGE node body, curator or otherwise, calls it. That is a MISSING
-    //    WRITER, not a missing place for one: `history` is OPEN WORK, not RECOMMENDED FOR
-    //    PERMANENT ACCEPTANCE — left undone on scope grounds alone
-    //    (`spec-20260814-pge-full-convergence`'s own `outOfScope[0]`, inherited from
-    //    `spec-20260812-terminal-vocabulary`'s), not an architectural bound the way
-    //    `audits`' fan-out block below is.
+    // The three still-diverged fields, with what each one IS and what closing it would take:
+    //
     //  - `audits`: NOT a duplicated checkpoint id, and — since
     //    `spec-20260814-pge-full-convergence` sprint 3 — no longer a single declared id
     //    either. The imperative pipeline records EIGHT checkpoints under eight distinct
@@ -329,8 +339,9 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    the assertion below. The sixth, `post-plan`, is already declared and simply does
     //    not fire on this fixture. `audits` therefore STAYS in the divergence set,
     //    recorded — per the spec's amended feat-3 AC2 — as RECOMMENDED FOR PERMANENT
-    //    ACCEPTANCE — `history` (corrected above) is NOT, it is open work — not as open
-    //    work a later sprint can close further.
+    //    ACCEPTANCE, on architectural grounds this closure paragraph does not touch — unlike
+    //    `history` above, which was open work rather than architecturally barred, and is now
+    //    closed.
     //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
     //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
     //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
@@ -366,11 +377,44 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect([...new Set(report.diffs.map((diff) => diff.field))].sort()).toEqual([
       "audits",
       "contracts",
-      "history",
       "pipelineResult",
     ]);
     expect(report.equivalent).toBe(false);
   }, 60_000);
+
+  // ── sc-4-3: the divergence-set pin fails in BOTH directions ──────────
+  //
+  // A pure-function control over the SAME transform the pin above applies
+  // (`[...new Set(diffs.map((diff) => diff.field))].sort()`), in the
+  // `coverage.test.ts:311-354` idiom: proven against synthetic input rather than being
+  // hostage to whichever divergences the real dataset happens to produce today. Two
+  // directions, both checked: `history` re-appearing (a regression this sprint exists to
+  // prevent) and a real field silently vanishing (a false "it converged" this harness exists
+  // to catch) must BOTH fail the committed pin.
+  it("the committed divergence-set pin fails if `history` re-appears, and fails if a real field silently disappears", () => {
+    const uniqueSortedFields = (diffs: readonly { field: string }[]): string[] =>
+      [...new Set(diffs.map((diff) => diff.field))].sort();
+    const committedPin = ["audits", "contracts", "pipelineResult"];
+
+    // The committed pin, unchanged — sanity check that the transform agrees with itself.
+    expect(uniqueSortedFields([{ field: "audits" }, { field: "contracts" }, { field: "pipelineResult" }])).toEqual(
+      committedPin,
+    );
+
+    // Direction 1: `history` re-diverging must NOT silently match the committed pin.
+    const historyRegressed = uniqueSortedFields([
+      { field: "audits" },
+      { field: "contracts" },
+      { field: "history" },
+      { field: "pipelineResult" },
+    ]);
+    expect(historyRegressed).not.toEqual(committedPin);
+
+    // Direction 2: a real field silently closing must NOT match the committed pin either —
+    // an evaluator that only checked "history is absent" would pass on this too.
+    const contractsSilentlyClosed = uniqueSortedFields([{ field: "audits" }, { field: "pipelineResult" }]);
+    expect(contractsSilentlyClosed).not.toEqual(committedPin);
+  });
 
   it("records WHAT each divergence IS, from the artifacts of the same two runs", async () => {
     // ── Why this test exists ──
@@ -391,8 +435,17 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     const pgeRoot = await projectRootFactory();
     const pgeResult = await runnerFor("pge")(pgeRoot);
 
-    // ── 1. history: ten imperative phase events versus one shared terminal event ──
-    expect((await loadHistory(tsRoot)).map((entry) => entry.event)).toEqual([
+    // ── 1. history: CLOSED at sprint 4 — the pge list now equals the ts list ──
+    //
+    // The ts list is still pinned literally: it is the imperative engine's own emission
+    // order and does not depend on anything this sprint touched. The pge list is asserted
+    // against the ts list's OWN ANSWER, not a second literal copy — the same idiom "3.
+    // contracts" and "sc-13-3" below use for an already-converged field — so the claim
+    // pinned is the CONVERGENCE itself, and a future divergence (an event dropped, reordered
+    // or gaining a wrong `iteration`) fails this line rather than requiring two literals to
+    // be kept in sync by hand.
+    const tsHistoryEvents = (await loadHistory(tsRoot)).map((entry) => entry.event);
+    expect(tsHistoryEvents).toEqual([
       "pipeline-start",
       "planning-complete",
       "curator-start",
@@ -404,9 +457,8 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
       "sprint-docs-complete",
       PIPELINE_COMPLETE_EVENT,
     ]);
-    expect((await loadHistory(pgeRoot)).map((entry) => entry.event)).toEqual([
-      PIPELINE_COMPLETE_EVENT,
-    ]);
+    const pgeHistoryEvents = (await loadHistory(pgeRoot)).map((entry) => entry.event);
+    expect(pgeHistoryEvents).toEqual(tsHistoryEvents);
 
     // ── 2. audits: eight distinct checkpoint ids versus two, one of them recorded
     // three times (sc-3-1, sc-3-2, sc-3-3) ──
