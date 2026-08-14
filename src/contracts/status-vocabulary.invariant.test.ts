@@ -212,18 +212,19 @@ const ALLOWLIST: AllowedOffender[] = [
       "Has its own documented rationale at :502-519 for why contract status alone still cannot decide the completed/failed split. Sprint 4 of spec-20260812-terminal-vocabulary made the channel join rank-aware; sprint 5 changed the WRITER too — runSprintCycle now writes 'completed', not 'passed' — so this literal now compares against a word NEITHER engine's settled-sprint writer produces, for any run. Migrating it would change GRAPH completedSprints/failedSprints math and move golden cases, which sc-5-4's stop condition forbids — read the header before ever touching this line.",
   },
   {
-    location: "src/pge/nodes/sprint-curate.ts:254",
+    location: "src/pge/nodes/sprint-curate.ts:271",
     reason:
-      "PGE curator's own successful-history filter ('completed'); same semantics as the five named readers but a PGE node body outside estimatedFiles — deferred alongside sprint-generate.ts/documenter.ts for the same reason as pipeline.ts:1052.",
+      "PGE curator's own successful-history filter ('completed'); same semantics as the five named readers but a PGE node body outside estimatedFiles — deferred alongside sprint-generate.ts/documenter.ts for the same reason as pipeline.ts:1052. Line shifted from :254 by sprint 4 of spec-20260814-pge-full-convergence's history-event emitters, added earlier in this file.",
   },
   {
-    location: "src/pge/nodes/sprint-generate.ts:133",
-    reason: "Same PGE-node successful-history filter pattern as sprint-curate.ts:254.",
+    location: "src/pge/nodes/sprint-generate.ts:141",
+    reason:
+      "Same PGE-node successful-history filter pattern as sprint-curate.ts:271. Line shifted from :133 by sprint 4 of spec-20260814-pge-full-convergence's history-event emitters, added earlier in this file.",
   },
   {
-    location: "src/pge/nodes/documenter.ts:83",
+    location: "src/pge/nodes/documenter.ts:84",
     reason:
-      "documentedContracts()'s fallback for branch-status-less contracts; same PGE-node successful-history pattern as sprint-curate.ts:254.",
+      "documentedContracts()'s fallback for branch-status-less contracts; same PGE-node successful-history pattern as sprint-curate.ts:271. Line shifted from :83 by sprint 4 of spec-20260814-pge-full-convergence's history-event emitter doc comment, added earlier in this file.",
   },
 ];
 

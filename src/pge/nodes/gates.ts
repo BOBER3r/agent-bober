@@ -211,6 +211,55 @@ export function loopBoundOf(spec: TopologySpec, nodeId: string): { counterKey: s
 }
 
 /**
+ * How many times `sprint_generate` has ALREADY committed a `messages` entry for this branch
+ * — a plain count, not itself a 1-based round number (see call sites below).
+ *
+ * Neither existing "iteration" signal in this codebase is a reliable round counter for a
+ * history event, and both failure modes were found against a REAL golden capture
+ * (sc-4-1/sc-4-2), not reasoned about in the abstract:
+ *
+ *  - `sprint-evaluate.ts`'s `iterationOf` (`state.evaluations.filter(...).length + 1`)
+ *    over-counts inside `sprint_evaluate` itself, because `sprint_security` UNCONDITIONALLY
+ *    records its own verdict immediately before it runs (`e-sprint-security` ->
+ *    `e-sprint-evaluate`, the artifact's only edge into `sprint_evaluate`) — a capture showed
+ *    `generator-start: {iteration: 1}` immediately followed by `evaluator-start: {iteration:
+ *    2}` for the SAME round, which the imperative engine's single `for`-loop variable never
+ *    produces.
+ *  - The shared `sprintIterations` loop counter (`sprint_route`/`sprint_correct`,
+ *    `loopBoundOf`) is not a round counter either: the interpreter increments it once for
+ *    EVERY node that declares that counter key and gets entered, and `sprint_route` and
+ *    `sprint_correct` both declare it — so a retry that flows through `sprint_route`
+ *    (`sprint_evaluate -> gate_anchor_regression -> sprint_route --retry--> sprint_correct`)
+ *    spends TWO units of that budget, while a retry that reaches `sprint_correct` directly
+ *    through `gate_syntax`'s or `gate_anchor_regression`'s `onFail` spends only ONE (see
+ *    `sprint_correct`'s own doc comment in `coding.graph.ts`, and `sprint-generate.ts`'s). A
+ *    capture of `replay-full-run-evaluation-fails` showed the counter-derived number jump
+ *    from 1 straight to 3, skipping 2 entirely, for exactly this reason.
+ *
+ * This count sidesteps both: `sprint_generate` is the only node this counts, so it advances
+ * by exactly one every time a round's generation attempt actually completes, regardless of
+ * which of the three routes a PRIOR round's failure took to get back here. `message.id` is
+ * `${nodeId}:${branchKey}:${superstep}` (every node file's own `note()` helper, including
+ * `sprint-generate.ts`'s), so filtering by that prefix scopes the count to THIS branch.
+ *
+ * `sprint_generate`'s own handler reads this BEFORE its own attempt is recorded, so its
+ * round number is `generateAttemptsSoFar(...) + 1`. `sprint_evaluate` — and anything else
+ * later in the SAME round — reads it AFTER that attempt's message has committed, so its
+ * round number is `generateAttemptsSoFar(...)` with NO offset. The two must stay paired
+ * this way for `history`'s `iteration` field to converge with the imperative engine's single
+ * shared loop variable.
+ */
+export function generateAttemptsSoFar(
+  state: Readonly<OverallState>,
+  branchKey: string | null,
+): number {
+  const prefix = `sprint_generate:${branchKey ?? "root"}:`;
+  return state.messages.filter(
+    (message) => message.nodeId === "sprint_generate" && message.id.startsWith(prefix),
+  ).length;
+}
+
+/**
  * The sole successor of a straight-line node, or the reserved terminal when the projection
  * does not contain one.
  *

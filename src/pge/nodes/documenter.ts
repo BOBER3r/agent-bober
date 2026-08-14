@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { TopologySpec } from "../../contracts/topology.js";
 import type { GraphMessage, LedgerEntry, OverallState } from "../state/overall.js";
 import type { NodeContext, NodeImpl } from "../registry/nodes.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { EFFECTS } from "./effects.js";
 import type { DocumentationResultSchema } from "./effects.js";
 import { nodeSpecOf, portOf, successorOrEnd } from "./gates.js";
@@ -91,6 +92,13 @@ export function documentedContracts(state: Readonly<OverallState>): OverallState
  *
  * Writes `messages`, `refs` and `ledger` — exactly the artifact's declared `writes` — and
  * offloads the `DocumentationResult` so only its `ScratchRef` enters state.
+ *
+ * ── History event 9 of 10 (sc-4-1) ──
+ *
+ * `sprint-docs-complete` fires after `EFFECTS.documenterSummary` returns, matching
+ * `pipeline.ts:675`. NOT emitted on the "nothing to document" early return above — there is
+ * no settled contract to attribute the event to, exactly as the imperative engine never
+ * reaches its own `sprint-docs-complete` site when documentation was never attempted.
  */
 export function documenterNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const nodeId = DOCUMENTER_NODE_ID;
@@ -131,6 +139,17 @@ export function documenterNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
         },
         ctx,
       )) as z.infer<typeof DocumentationResultSchema>;
+
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.SPRINT_DOCS_COMPLETE,
+        phase: "complete",
+        sprintId: contract.contractId,
+        details: {
+          sprintDocPath: result.sprintDocPath,
+          relatedDocsUpdated: result.relatedDocsUpdated.length,
+          concerns: result.concerns.length,
+        },
+      });
 
       const ref = await ctx.scratch.put(ctx.runId, "document", JSON.stringify(result));
       return {

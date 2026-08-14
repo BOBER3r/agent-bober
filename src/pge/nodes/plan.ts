@@ -12,6 +12,7 @@ import type { PlanSpec, ResolvedClarification } from "../../contracts/spec.js";
 import { SprintContractSchema } from "../../contracts/sprint-contract.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { TopologySpec } from "../../contracts/topology.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { loopCounterKey } from "../runtime/interpreter.js";
 import { resumeMessageId } from "../runtime/interrupt.js";
 import type { Exact, GraphMessage, LedgerEntry, OverallState, ScratchRef } from "../state/overall.js";
@@ -395,6 +396,12 @@ export function planClarifyNode(spec: TopologySpec): NodeImpl<PlanSpec, PlanSpec
  * contract set. The commit boundary turns both into `.bober/` artifacts. The contracts
  * themselves come from the shipped `materializeContracts`, so the files this produces are
  * the files the imperative pipeline produces.
+ *
+ * ── History event 2 of 10 (sc-4-1) ──
+ *
+ * `planning-complete` is written AFTER the effect returns — the plan and its contracts are
+ * already persisted by then, matching `pipeline.ts:996`, which writes the same event only
+ * once `runPlanner` and `materializeContracts` have both succeeded.
  */
 export function planMaterializeNode(spec: TopologySpec): NodeImpl<PlanSpec, PlanContracts> {
   const nodeId = PLAN_NODE_IDS.materialize;
@@ -420,6 +427,12 @@ export function planMaterializeNode(spec: TopologySpec): NodeImpl<PlanSpec, Plan
         "document",
         JSON.stringify(input),
       );
+
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.PLANNING_COMPLETE,
+        phase: "planning",
+        details: { specId: input.specId, featureCount: input.features.length },
+      });
 
       return {
         update: {

@@ -4,6 +4,7 @@ import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { TopologySpec } from "../../contracts/topology.js";
 import type { BranchStatus, GraphMessage, LedgerEntry, OverallState } from "../state/overall.js";
 import type { NodeContext, NodeImpl } from "../registry/nodes.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { EFFECTS } from "./effects.js";
 import type { ReviewResultSchema } from "./effects.js";
 import { branchRecord, isNodeRefusal, nodeSpecOf, portOf, resolveContract, soleSuccessor } from "./gates.js";
@@ -98,7 +99,14 @@ function charge(ctx: NodeContext): LedgerEntry {
 
 // ── sprint_review ───────────────────────────────────────────────────
 
-/** Advisory code review of a passing sprint diff, through the shipped reviewer. */
+/**
+ * Advisory code review of a passing sprint diff, through the shipped reviewer.
+ *
+ * ── History event 8 of 10 (sc-4-1) ──
+ *
+ * `code-review-complete` fires after `EFFECTS.reviewerSprint` returns, from the same three
+ * finding-array lengths `pipeline.ts:636` reports.
+ */
 export function sprintReviewNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const nodeId = SPRINT_REVIEW_NODE_IDS.review;
   const node = nodeSpecOf(spec, nodeId);
@@ -127,6 +135,17 @@ export function sprintReviewNode(spec: TopologySpec): NodeImpl<unknown, unknown>
         },
         ctx,
       )) as z.infer<typeof ReviewResultSchema>;
+
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.CODE_REVIEW_COMPLETE,
+        phase: "complete",
+        sprintId: contract.contractId,
+        details: {
+          critical: review.critical.length,
+          important: review.important.length,
+          minor: review.minor.length,
+        },
+      });
 
       const summary = `review ${review.reviewId}: ${String(review.critical.length)} critical, ${String(review.important.length)} important, ${String(review.minor.length)} minor`;
 

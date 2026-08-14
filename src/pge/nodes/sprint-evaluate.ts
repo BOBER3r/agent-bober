@@ -12,9 +12,16 @@ import {
   detectAnchorTrade,
   encodeAnchorRegression,
 } from "./anchors.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { EFFECTS, EvaluationRunResultSchema } from "./effects.js";
 import type { GeneratorResultSchema, SecurityAuditResponse } from "./effects.js";
-import { nodeSpecOf, portOf, resolveContract, soleSuccessor } from "./gates.js";
+import {
+  generateAttemptsSoFar,
+  nodeSpecOf,
+  portOf,
+  resolveContract,
+  soleSuccessor,
+} from "./gates.js";
 import { buildCorrection } from "./sprint-correct.js";
 import type { CorrectionPayload } from "./sprint-correct.js";
 import { generatorResultRefKey, sprintHandoff } from "./sprint-generate.js";
@@ -259,6 +266,27 @@ export interface SprintEvaluateOptions {
 /**
  * Evaluate the sprint, record its anchors, and emit the verdict (sc-12-5, sc-12-6, sc-12-8,
  * sc-12-10).
+ *
+ * ── History events 6 and 7 of 10 (sc-4-1) ──
+ *
+ * `evaluator-start` fires at handler entry, before the evaluation runs — matching
+ * `pipeline.ts:461`. `sprint-passed` fires only on the branch that both PASSES and reaches
+ * the artifact's normal successor (never on the two `sprint_correct` return paths above),
+ * carrying the RAW `result.summary` — not the `summary` local a few lines below, which is
+ * DECORATED with a bracketed suite reason or an anchor-regression encoding for the
+ * `evaluations` channel. `pipeline.ts:600` writes `evaluation.summary` verbatim, so the raw
+ * form is what this event must carry too (pitfall 4 of the sprint-4 briefing).
+ *
+ * Both events' `iteration` is `generateAttemptsSoFar(state, ctx.branchKey)` — NO `+ 1`, since
+ * by the time this node runs, THIS round's `sprint_generate` message has already committed
+ * (unlike `sprint_generate`'s own `+ 1` read, before its message exists yet). This is
+ * DELIBERATELY not the `iteration` local a few lines below, which is `iterationOf` (a count
+ * of `evaluations` entries), used for every `SprintVerdict` this handler builds and left
+ * exactly as it was before this sprint. By the time this node runs, `sprint_security` has
+ * ALWAYS already recorded one such entry unconditionally, so `iterationOf` reads at least
+ * one higher than the branch's true round number — see `generateAttemptsSoFar`'s doc
+ * comment in `gates.ts` for the full account, including why the shared `sprintIterations`
+ * loop counter is not a safe substitute either.
  */
 export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unknown, unknown> {
   const { spec, runtime } = options;
@@ -280,6 +308,12 @@ export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unk
         throw new Error(`Node "${nodeId}" ran for a branch with no contract in the channel.`);
       }
       const iteration = iterationOf(state, contract.contractId);
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.EVALUATOR_START,
+        phase: "evaluating",
+        sprintId: contract.contractId,
+        details: { iteration: generateAttemptsSoFar(state, ctx.branchKey) },
+      });
       const generated = await readGeneratorResult(state, ctx, contract.contractId);
 
       // ── 1. The evaluation itself, guarded on BOTH failure modes ──
@@ -341,6 +375,21 @@ export function sprintEvaluateNode(options: SprintEvaluateOptions): NodeImpl<unk
       const summary = trade.regressed
         ? encodeAnchorRegression(trade.broken, describeAnchorTrade(trade))
         : `${result.summary} [${decision.reason}]`;
+
+      if (passed) {
+        // The RAW `result.summary` — not the `summary` local above, which is decorated for
+        // the `evaluations` channel. `pipeline.ts:600` writes `evaluation.summary` verbatim.
+        await emitPhaseEvent(ctx, {
+          event: HISTORY_EVENT.SPRINT_PASSED,
+          phase: "complete",
+          sprintId: contract.contractId,
+          details: {
+            iteration: generateAttemptsSoFar(state, ctx.branchKey),
+            feedback: result.summary,
+            ...(generated?.costUsd !== undefined ? { costUsd: generated.costUsd } : {}),
+          },
+        });
+      }
 
       return {
         update: {

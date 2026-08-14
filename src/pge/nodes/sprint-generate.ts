@@ -6,9 +6,17 @@ import type { TopologySpec } from "../../contracts/topology.js";
 import type { ContextHandoff } from "../../orchestrator/context-handoff.js";
 import type { GraphMessage, LedgerEntry, OverallState } from "../state/overall.js";
 import type { NodeContext, NodeImpl } from "../registry/nodes.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { EFFECTS } from "./effects.js";
 import type { GeneratorResultSchema } from "./effects.js";
-import { branchRecord, nodeSpecOf, portOf, resolveContract, soleSuccessor } from "./gates.js";
+import {
+  branchRecord,
+  generateAttemptsSoFar,
+  nodeSpecOf,
+  portOf,
+  resolveContract,
+  soleSuccessor,
+} from "./gates.js";
 import {
   correctionInstructions,
   correctionMessage,
@@ -186,6 +194,15 @@ function requireContract(
  * by an import. The generator's result is offloaded to the scratch store and only its
  * `ScratchRef` enters `refs`: a `filesChanged` list on a real sprint is far past the 4 KiB
  * inline budget every channel declares.
+ *
+ * ── History event 5 of 10 (sc-4-1) ──
+ *
+ * `generator-start` fires at handler entry, before the effect that reaches the agent —
+ * matching `pipeline.ts:387`, which writes it before `runGenerator`. `iteration` is
+ * {@link generateAttemptsSoFar}` + 1` — see that function's doc comment for why neither
+ * `sprint-evaluate.ts`'s `iterationOf` nor the shared `sprintIterations` loop counter is a
+ * reliable round number, and why `sprint_evaluate` must derive its OWN `iteration` from the
+ * same count with a DIFFERENT offset, not this one recomputed later.
  */
 export function sprintGenerateNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const nodeId = SPRINT_GENERATE_NODE_IDS.generate;
@@ -201,6 +218,12 @@ export function sprintGenerateNode(spec: TopologySpec): NodeImpl<unknown, unknow
     outputSchema: z.unknown(),
     handler: async (input, state, ctx) => {
       const contract = requireContract(input, state, ctx);
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.GENERATOR_START,
+        phase: "generating",
+        sprintId: contract.contractId,
+        details: { iteration: generateAttemptsSoFar(state, ctx.branchKey) + 1 },
+      });
       const correction = isCorrectionPayload(input) ? input : null;
       const handoff = sprintHandoff({ ctx, state, contract, correction });
 

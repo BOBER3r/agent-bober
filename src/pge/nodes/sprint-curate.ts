@@ -8,6 +8,7 @@ import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { TopologySpec } from "../../contracts/topology.js";
 import type { GraphMessage, LedgerEntry, OverallState } from "../state/overall.js";
 import type { NodeContext, NodeImpl } from "../registry/nodes.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { EFFECTS } from "./effects.js";
 import type { ExplainResponse, MocksResponse, SprintBriefingSchema } from "./effects.js";
 import {
@@ -207,6 +208,16 @@ function contextFilesHash(contract: SprintContract): string {
  * combination). So the body actually reads and writes `ctx.cache`, keyed on all six
  * components `CacheKeyParts` names (`registry/nodes.ts:61-68`) — including a hash of the
  * files the contract points at, so a contract whose file list changed is a cache miss.
+ *
+ * ── History events 3 and 4 of 10 (sc-4-1) ──
+ *
+ * `curator-start` fires unconditionally at handler entry — mirroring `pipeline.ts:260`,
+ * which writes it before `runCurator` regardless of anything downstream.
+ * `curator-complete`'s `details` (`filesAnalyzed`, `patternsFound`, `utilsIdentified`) come
+ * from the `SprintBriefing` `EFFECTS.curatorBrief` returns, which this node reads ONLY on a
+ * cache MISS (pitfall 8 of the sprint-4 briefing): on a hit, `briefing` is never fetched and
+ * there is nothing honest to report the three counts from, so `curator-complete` is emitted
+ * only on the miss path, deliberately — not with stale or fabricated counts.
  */
 export function sprintCurateExplainNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const nodeId = SPRINT_CURATE_NODE_IDS.explain;
@@ -225,6 +236,12 @@ export function sprintCurateExplainNode(spec: TopologySpec): NodeImpl<unknown, u
     outputSchema: z.unknown(),
     handler: async (input, state, ctx) => {
       const contract = SprintContractSchema.parse(input);
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.CURATOR_START,
+        phase: "curating",
+        sprintId: contract.contractId,
+        details: { title: contract.title },
+      });
       const testIds = sprintTestIds(contract);
       const model = modelOf(spec, nodeId, ctx);
       const system = await ctx.prompts.get(promptRef);
@@ -258,6 +275,16 @@ export function sprintCurateExplainNode(spec: TopologySpec): NodeImpl<unknown, u
           ctx,
         )) as z.infer<typeof SprintBriefingSchema>;
         ledger.push(charge(ctx, 0));
+        await emitPhaseEvent(ctx, {
+          event: HISTORY_EVENT.CURATOR_COMPLETE,
+          phase: "curating",
+          sprintId: contract.contractId,
+          details: {
+            filesAnalyzed: briefing.filesAnalyzed.length,
+            patternsFound: briefing.patternsFound,
+            utilsIdentified: briefing.utilsIdentified,
+          },
+        });
 
         const response = (await ctx.effects.invoke(
           EFFECTS.curatorExplain,

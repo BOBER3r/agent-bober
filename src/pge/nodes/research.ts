@@ -10,6 +10,7 @@ import {
 import type { FeatureRequest, ResearchDigest } from "../../contracts/problem-reflection.js";
 import { ScratchRefSchema } from "../state/overall.js";
 import type { GraphMessage, LedgerEntry, OverallState, ScratchRef } from "../state/overall.js";
+import { HISTORY_EVENT, emitPhaseEvent } from "../runtime/history.js";
 import { loopCounterKey } from "../runtime/interpreter.js";
 import type { NodeContext, NodeImpl, NodeRegistry } from "../registry/nodes.js";
 import { EFFECTS } from "./effects.js";
@@ -177,6 +178,12 @@ function bindings(spec: TopologySpec, nodeId: string): { promptRef: string; tier
  * validated the request first would make that gate unreachable — the entry would throw
  * before the gate could refuse, and the artifact's declared failure route would be dead.
  * The gate is the validator; this node is the door.
+ *
+ * ── The run's first history event (sc-4-1, event 1 of 10) ──
+ *
+ * This is the graph's entry node, so it is where `pipeline-start` belongs: the imperative
+ * engine writes it before anything else in `runTsPipeline` (`pipeline.ts:798`), and this
+ * node runs before anything else in a graph run for the identical reason.
  */
 export function researchBodyNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const node = nodeSpecOf(spec, RESEARCH_NODE_IDS.body);
@@ -188,10 +195,17 @@ export function researchBodyNode(spec: TopologySpec): NodeImpl<unknown, unknown>
     outputPort: portOf(node, "output"),
     inputSchema: z.unknown(),
     outputSchema: z.unknown(),
-    handler: async (_input, state, ctx) => ({
-      goto: { kind: "node", node: next },
-      output: { featureRequest: state.featureRequest, projectRoot: ctx.projectRoot },
-    }),
+    handler: async (_input, state, ctx) => {
+      await emitPhaseEvent(ctx, {
+        event: HISTORY_EVENT.PIPELINE_START,
+        phase: "init",
+        details: { userPrompt: state.featureRequest.slice(0, 200) },
+      });
+      return {
+        goto: { kind: "node", node: next },
+        output: { featureRequest: state.featureRequest, projectRoot: ctx.projectRoot },
+      };
+    },
   };
 }
 
