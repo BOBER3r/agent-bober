@@ -300,7 +300,7 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // The three-events-versus-one shape asserted below, in "1. history", is now the
     // CONVERGENCE itself: the pge list equals the ts list, not merely has the same length.
     //
-    // The three still-diverged fields, with what each one IS and what closing it would take:
+    // The two still-diverged fields, with what each one IS and why it does not close:
     //
     //  - `audits`: NOT a duplicated checkpoint id, and — since
     //    `spec-20260814-pge-full-convergence` sprint 3 — no longer a single declared id
@@ -347,96 +347,127 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    ACCEPTANCE, on architectural grounds this closure paragraph does not touch — unlike
     //    `history` above, which was open work rather than architecturally barred, and is now
     //    closed.
-    //  - `contracts`: ONE field delta on the one contract now — `version` alone — down from
-    //    THREE before sprint 5 of `spec-20260814-pge-full-convergence` (and from FOUR before
-    //    sprint 5 of `spec-20260812-terminal-vocabulary`). `iterationHistory` is NOT one of
-    //    them — it is `[]` on both sides for this fixture. `status` was CLOSED earlier:
-    //    `runSprintCycle` writes `"completed"`, exactly what `sprint_exit` already wrote.
-    //    **`evaluatorFeedback`/`generatorNotes` CLOSED at sprint 5 of
-    //    `spec-20260814-pge-full-convergence`:** `sprint_evaluate` now carries the RAW
-    //    `EvaluationRunResult.summary` and the RAW `GeneratorResult.notes` onto the decisive
-    //    `SprintVerdict` it emits (`nodes/sprint-evaluate.ts`'s `sprintVerdict`,
-    //    `evaluatorFeedback`/`generatorNotes` params), and `sprint_exit` writes them onto the
-    //    settled contract from that verdict — not from the seeded copy — exactly matching
-    //    `pipeline.ts:592`/`:719` (`evaluatorFeedback := evaluation.summary`, both branches)
-    //    and `pipeline.ts:428` (`generatorNotes := generatorResult.notes`). Asserted below
-    //    against the OTHER engine's own answer (Pattern D), not a literal. What remains is
-    //    that, since sprint 3, `sprint_exit` also writes `version` (the graph's monotone
-    //    ordering discriminator for `versionRank`, `registry/reducers.ts:366-393`) where the
-    //    imperative engine writes none; `version` is deliberately NOT one of `VOLATILE_KEYS`
-    //    (`conformance.ts:65-76`) because stripping it would hide a real divergence rather
-    //    than close one. `contracts` stays in the pinned set for `version` alone — asserted
-    //    down to that one field below (sc-5-4), not assumed — which is sprint 6's business,
-    //    not this sprint's (nonGoal 1).
-    //  - `pipelineResult`: NO LONGER the seeded-copy defect closed at sprint 4 of
-    //    spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
-    //    `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`/`mergeEntries`)
-    //    instead of canonical order, so `commit.finalize` reads the SETTLED copy out of
-    //    `state.sprintContracts` and `completedSprints[0].status` is `"completed"`, not
-    //    `"proposed"` — the sprint-12 limitation `nodes/sprint-review.ts` used to document is
-    //    gone (verified below in "4. pipelineResult"). What remains is NOT independently
-    //    closable: `PipelineResult.completedSprints`/`failedSprints` carry whole
-    //    `SprintContract` objects, so `pipelineResult`'s divergence REDUCES EXACTLY to the
-    //    `contracts` divergence above — as of sprint 5, that reduction is to `version` ALONE,
-    //    not `VOLATILE_KEYS` (`conformance.ts:65-76`) — it is a CONTAINER for the contract,
-    //    and the `status`/`evaluatorFeedback`/`generatorNotes` fields inside that container
-    //    are now identical on both engines. It closes exactly when `contracts` closes, not
-    //    before.
+    //  - `pipelineResult`: NOT the same delta it carried before sprint 6, and narrower than
+    //    it looks from the field name alone — the CONTAINER portion is now fully closed and
+    //    a genuinely SEPARATE, independent field is what keeps this name in the set.
+    //    `PipelineResult.completedSprints`/`failedSprints` carry whole `SprintContract`
+    //    objects — the identical object each engine's own `run()` returned, which is the
+    //    identical object `listContracts` reads back off disk (`pipeline.ts:1053`/`:594` on
+    //    the ts side; `commit.finalize` on the pge side) — so THAT portion of this field
+    //    reduces exactly to the `contracts` divergence, and CLOSED when `contracts` closed
+    //    below (verified in "4. pipelineResult", both engines' container checked against
+    //    their own contract, not merely the pge side as before sprint 6). What remains is
+    //    `PipelineFailure`, the `errors?: readonly PipelineFailure[]` key
+    //    (`pipeline.ts`'s `PipelineResult` doc comment) — populated ONLY by `PgeEngine.run`,
+    //    from the interpreter's own `TaskFailure` records
+    //    (`pge/engine/pge-engine.ts:551-572`), and on THIS fixture always non-empty: the
+    //    SAME FAIL_CLOSED `commit`-node refusal recorded in "2b. THE MATERIAL FACT" above
+    //    surfaces here too, as `{nodeId: "commit", errorClass: "FailClosed", ...}`. The
+    //    imperative engine has no equivalent SOURCE, not merely a missing write: `runTsPipeline`
+    //    has no interpreter and no `TaskFailure` concept at all, and its own auto-commit
+    //    (`commitAll`, unconditional when `config.generator.autoCommit` is true) is not gated
+    //    behind any HITL checkpoint the way the graph's `git`-effect `commit` node is — there
+    //    is no refusal for it to ever report. Synthesising an `errors` entry for the
+    //    imperative engine would misrepresent an event that never happens there, the same
+    //    class of dishonesty this sprint's own stop condition forbids for `version` — so
+    //    `pipelineResult` stays in the divergence set for `errors` alone, ARCHITECTURAL in
+    //    the same sense `audits` is (a real capability gap, not an unclosed TODO), and is
+    //    recorded rather than papered over. Closing it — either by giving the imperative
+    //    engine an equivalent checkpoint-gated commit step (a real behaviour change, not
+    //    this sprint's business) or by joining `audits` as a permanently-accepted divergence
+    //    — is a decision for a future sprint, not a silent default here.
+    //
+    // `contracts` CLOSED at sprint 6 of `spec-20260814-pge-full-convergence` and is no
+    // longer in the set above. What used to be true, recorded here so the closure has a
+    // before-and-after, same as `history`'s: the last delta was ONE field on the one
+    // contract — `version` alone — down from THREE before sprint 5 of
+    // `spec-20260814-pge-full-convergence` (and from FOUR before sprint 5 of
+    // `spec-20260812-terminal-vocabulary`). `status` and `evaluatorFeedback`/`generatorNotes`
+    // were already closed by sprint 5 (see that sprint's write-up for the account). `version`
+    // itself was a MISSING WRITER, the same shape as `history`'s gap: `sprint_exit` has
+    // written `version: attempts` — a count of non-`skipped` `evaluations` entries, floored
+    // at 1 — since sprint 3 of `spec-20260812-terminal-vocabulary`
+    // (`src/pge/nodes/sprint-review.ts:260-265,282-287`), and `runSprintCycle` wrote none at
+    // all. Sprint 6 closed the gap by giving `runSprintCycle` its OWN count of the same
+    // shape: `settledAttempts` (`pipeline.ts`), incremented once per round that reaches a
+    // decisive verdict (the evaluator ran), written as `Math.max(1, settledAttempts)` at all
+    // four of the function's settle sites, BEFORE the `updateContract` call at each — never a
+    // shared write site with the graph engine, never a clock, an ordering or a superstep
+    // (disqualified for exactly those reasons at
+    // `docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md:27-80`). A
+    // generator-failure round does NOT increment it, mirroring `gate_syntax`'s "without
+    // spending an evaluation" retry (`coding.graph.ts:642`) — pinned by `pipeline.test.ts`'s
+    // dedicated `describe` for this. `version` is deliberately NOT one of `VOLATILE_KEYS`
+    // (`conformance.ts:65-76`; unchanged by this sprint — sc-6-4): it is a real convergence,
+    // not a field excluded from comparison. Asserted below (Pattern B, `toBeDefined()` on
+    // both sides first) and by the whole-object `canonical(pgeContract) ===
+    // canonical(tsContract)` with NOTHING stripped.
     //
     // Everything else — specs, evalResults, briefings, reviews, completionMarker — is
     // IDENTICAL across the two engines, which is the positive half of the claim and is
     // asserted two tests below.
     expect([...new Set(report.diffs.map((diff) => diff.field))].sort()).toEqual([
       "audits",
-      "contracts",
       "pipelineResult",
     ]);
     expect(report.equivalent).toBe(false);
   }, 60_000);
 
-  // ── sc-4-3: the divergence-set pin fails in BOTH directions ──────────
+  // ── sc-4-3/sc-6-3: the divergence-set pin fails in BOTH directions ────
   //
   // A pure-function control over the SAME transform the pin above applies
   // (`[...new Set(diffs.map((diff) => diff.field))].sort()`), in the
   // `coverage.test.ts:311-354` idiom: proven against synthetic input rather than being
   // hostage to whichever divergences the real dataset happens to produce today. Two
-  // directions, both checked: `history` re-appearing (a regression this sprint exists to
-  // prevent) and a real field silently vanishing (a false "it converged" this harness exists
-  // to catch) must BOTH fail the committed pin.
-  it("the committed divergence-set pin fails if `history` re-appears, and fails if a real field silently disappears", () => {
+  // directions, both checked: `history` or `contracts` re-appearing (regressions sprints 4
+  // and 6 exist to prevent) and one of the two remaining fields silently vanishing (a false
+  // "it converged" this harness exists to catch) must BOTH fail the committed pin.
+  it("the committed divergence-set pin fails if a closed field re-appears, and fails if `audits` or `pipelineResult` silently disappears", () => {
     const uniqueSortedFields = (diffs: readonly { field: string }[]): string[] =>
       [...new Set(diffs.map((diff) => diff.field))].sort();
-    const committedPin = ["audits", "contracts", "pipelineResult"];
+    const committedPin = ["audits", "pipelineResult"];
 
     // The committed pin, unchanged — sanity check that the transform agrees with itself.
-    expect(uniqueSortedFields([{ field: "audits" }, { field: "contracts" }, { field: "pipelineResult" }])).toEqual(
+    expect(uniqueSortedFields([{ field: "audits" }, { field: "pipelineResult" }])).toEqual(
       committedPin,
     );
 
-    // Direction 1: `history` re-diverging must NOT silently match the committed pin.
-    const historyRegressed = uniqueSortedFields([
-      { field: "audits" },
-      { field: "contracts" },
-      { field: "history" },
-      { field: "pipelineResult" },
-    ]);
-    expect(historyRegressed).not.toEqual(committedPin);
+    // Direction 1: a CLOSED field re-diverging must NOT silently match the committed pin —
+    // `history` (sprint 4) and `contracts` (sprint 6).
+    for (const regressed of ["history", "contracts"] as const) {
+      const withRegression = uniqueSortedFields([
+        { field: "audits" },
+        { field: "pipelineResult" },
+        { field: regressed },
+      ]);
+      expect(withRegression, `${regressed} re-appearing must not match the committed pin`).not.toEqual(committedPin);
+    }
 
-    // Direction 2: a real field silently closing must NOT match the committed pin either —
-    // an evaluator that only checked "history is absent" would pass on this too.
-    const contractsSilentlyClosed = uniqueSortedFields([{ field: "audits" }, { field: "pipelineResult" }]);
-    expect(contractsSilentlyClosed).not.toEqual(committedPin);
+    // Direction 2: either remaining field silently closing must NOT match the committed pin
+    // either — an evaluator that only checked "nothing new appeared" would pass on this too.
+    // `audits` is permanently accepted (ADR-1); `pipelineResult` diverges on `errors` alone
+    // (sprint 6, an architectural gap, not a TODO) — `equivalent: true` on either would be a
+    // false convergence.
+    expect(uniqueSortedFields([{ field: "pipelineResult" }])).not.toEqual(committedPin);
+    expect(uniqueSortedFields([{ field: "audits" }])).not.toEqual(committedPin);
   });
 
-  // ── sc-5-4: the `contracts` divergence is down to `version` ALONE — a pure-function
-  // control over the SAME `canonical`-after-stripping-`version` transform the real-run
-  // assertion below applies, in the `coverage.test.ts:311-354` idiom: proven against
-  // hand-built input rather than being hostage to whichever fields the real dataset happens
-  // to differ on today. Two directions: `version` itself must NOT count as a divergence once
-  // stripped (direction 1), and a REAL field differing must still be caught even after
-  // `version` is stripped (direction 2) — an assertion that stripped too much would pass on
-  // both cases the field-level pin above exists to catch. ──
-  it("the version-alone canonical comparison strips only `version`, in both directions", () => {
+  // ── HISTORICAL control (sc-5-4, superseded by sc-6-3) — retained deliberately ──
+  //
+  // Before sprint 6, the real-run assertion below isolated `contracts`'s claim by stripping
+  // `version` from both sides before comparing (sprint 5's `sc-5-4`: "the delta is `version`
+  // ALONE"). Sprint 6 closed `version` itself, so the real-run assertion no longer strips
+  // anything — it compares the two contracts WHOLE (`canonical(pgeContract) ===
+  // canonical(tsContract)`, sc-6-3). This test is kept rather than deleted (the house rule
+  // this file follows for a closed divergence — see `history`'s treatment above) as a
+  // synthetic proof, over hand-built input in the `coverage.test.ts:311-354` idiom, that the
+  // stripping transform sprint 5 relied on behaved correctly in isolation: `version` alone
+  // does NOT count as a divergence once stripped (direction 1), and a REAL field differing
+  // is still caught even after stripping (direction 2) — an assertion that stripped too much
+  // would pass on both cases the field-level pin exists to catch. Nothing below this comment
+  // is exercised by the real-run assertion any more; it is a record of the mechanism, not a
+  // live dependency.
+  it("[historical] the version-alone canonical comparison strips only `version`, in both directions", () => {
     const base = {
       contractId: "sprint-fixture-1",
       status: "completed",
@@ -448,9 +479,8 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
       return rest;
     };
 
-    // Direction 1: two contracts differing ONLY in `version` (the one delta sprint 6 has yet
-    // to close) must compare EQUAL once `version` is stripped from both sides — the shape
-    // the real-run assertion below relies on to isolate sc-5-4's claim from sprint 6's.
+    // Direction 1: two contracts differing ONLY in `version` must compare EQUAL once
+    // `version` is stripped from both sides.
     const tsLike = { ...base };
     const pgeLike = { ...base, version: 1 };
     expect(canonical(stripVersion(tsLike))).toBe(canonical(stripVersion(pgeLike)));
@@ -458,9 +488,9 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     // step is doing real work, not comparing two objects that already matched.
     expect(canonical(tsLike)).not.toBe(canonical(pgeLike));
 
-    // Direction 2: a REAL field differing (here, `generatorNotes` — sprint 5's own claim)
-    // must still fail the comparison even after `version` is stripped from both sides, so
-    // this assertion cannot silently start ignoring a divergence sprint 5 did not close.
+    // Direction 2: a REAL field differing (here, `generatorNotes`) must still fail the
+    // comparison even after `version` is stripped from both sides, so this transform cannot
+    // silently start ignoring a real divergence.
     const pgeWithRealDrift = { ...base, version: 1, generatorNotes: "a different generator note" };
     expect(canonical(stripVersion(tsLike))).not.toBe(canonical(stripVersion(pgeWithRealDrift)));
   });
@@ -599,7 +629,7 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsResult?.success).toBe(true);
     expect(pgeResult?.success).toBe(true);
 
-    // ── 3. contracts: ONE field delta now — `version` alone (sc-5-4) — and
+    // ── 3. contracts: CLOSED at sprint 6 — `version` was the last field delta, and
     // iterationHistory is NOT one of them ──
     const tsContract = (await listContracts(tsRoot))[0];
     const pgeContract = (await listContracts(pgeRoot))[0];
@@ -623,42 +653,64 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsContract.generatorNotes).toBeDefined();
     expect(pgeContract.generatorNotes).toBeDefined();
     expect(pgeContract.generatorNotes).toBe(tsContract.generatorNotes);
-    // The remaining delta: `sprint_exit` writes a monotone `version`; `runSprintCycle` writes none.
-    expect(tsContract.version).toBeUndefined();
+
+    // `version` is CLOSED at sprint 6 (sc-6-1): `sprint_exit` writes a monotone `version`
+    // (`attempts`), and `runSprintCycle` now writes an EQUIVALENT one (`settledAttempts`,
+    // `pipeline.ts`) — `toBeDefined()` on BOTH sides FIRST, so two `undefined`s cannot pass
+    // the equality that follows (Pattern B). `conformanceConfig()` sets
+    // `evaluator.maxIterations: 1`, so this fixture settles on the one decisive round and
+    // both sides write `1` — the two-round discriminating case lives in
+    // `pipeline.test.ts`'s dedicated `describe`, not here (pitfall 7 in the sprint 6 brief).
+    expect(tsContract.version).toBeDefined();
     expect(pgeContract.version).toBeDefined();
+    expect(tsContract.version).toBe(pgeContract.version);
     // Refutes the reading that the imperative engine accumulates iteration bookkeeping the
     // graph lacks: on a first-attempt pass neither engine writes any.
     expect(tsContract.iterationHistory).toEqual([]);
     expect(pgeContract.iterationHistory).toEqual([]);
 
-    // sc-5-4: the contracts divergence is now down to `version` ALONE — asserted directly,
-    // not inferred from the two field-by-field checks above. A whole-object `canonical`
-    // comparison (Pattern D) with `version` stripped from both sides catches a delta nobody
-    // named above too, not merely the two fields sprint 5 set out to close.
-    const { version: _tsContractVersion, ...tsContractWithoutVersion } = tsContract;
-    const { version: _pgeContractVersion, ...pgeContractWithoutVersion } = pgeContract;
-    expect(canonical(pgeContractWithoutVersion)).toBe(canonical(tsContractWithoutVersion));
+    // sc-6-3: the `contracts` divergence is now CLOSED entirely — asserted directly as a
+    // WHOLE-OBJECT `canonical` comparison with NOTHING stripped (unlike sprint 5's
+    // `version`-stripped control, now historical — see the HISTORICAL test above), so a
+    // delta nobody named above would still be caught.
+    expect(canonical(pgeContract)).toBe(canonical(tsContract));
 
-    // ── 4. pipelineResult: the sprint-12 seeded-copy defect is CLOSED (sprint 4 of
-    // spec-20260812-terminal-vocabulary) — but the DIVERGENCE is not, because it reduces
-    // exactly to the `contracts` divergence above ──
+    // ── 4. pipelineResult: the CONTAINER portion is CLOSED at sprint 6, as a CONSEQUENCE of
+    // `contracts` closing — not by any write inside PipelineResult itself, and not
+    // special-cased in this harness — but the field as a WHOLE stays in the divergence set
+    // for a genuinely separate reason: `errors` ──
     //
-    // `appendById` now resolves the duplicate `contractId` by RANK
-    // (`registry/reducers.ts`, `rankIsGreater`) rather than canonical order, so
-    // `commit.finalize` reads the SETTLED copy out of `state.sprintContracts`: the contract
-    // inside `completedSprints` is no longer stuck at the seeded `"proposed"`.
+    // `appendById` resolves the duplicate `contractId` by RANK (`registry/reducers.ts`,
+    // `rankIsGreater`), not canonical order (closed at sprint 4 of
+    // spec-20260812-terminal-vocabulary), so `commit.finalize` reads the SETTLED copy out of
+    // `state.sprintContracts`: the contract inside `completedSprints` is not stuck at the
+    // seeded `"proposed"`.
     expect(tsResult?.completedSprints.map((c) => c.status)).toEqual(["completed"]);
     expect(pgeResult?.completedSprints.map((c) => c.status)).toEqual(["completed"]);
     expect(pgeResult?.failedSprints).toEqual([]);
 
-    // The positive half of the claim, and why sc-4-5's literal wording ("the divergence is
-    // CLOSED") rests on a false premise: `completedSprints[0]` is not merely "not proposed"
-    // any more, it is the IDENTICAL object `listContracts` reads back off disk —
-    // `PipelineResult.completedSprints` is a CONTAINER for `SprintContract` objects, so
-    // whatever still differs between the two engines' contracts (as of sprint 5, `version`
-    // alone) is exactly what still differs here. A container cannot converge before its
-    // contents do.
+    // `PipelineResult.completedSprints` is a CONTAINER for `SprintContract` objects: the
+    // IDENTICAL object each engine's own runner returned, which is the IDENTICAL object
+    // `listContracts` reads back off disk (`pipeline.ts:1053`/`:594`). Asserted on BOTH
+    // engines — before sprint 6 only the pge side was pinned this way — so the container
+    // claim is checked, not assumed, on the side that changed too. This portion of
+    // `pipelineResult` is therefore fully converged.
     expect(pgeResult?.completedSprints[0]).toEqual(pgeContract);
+    expect(tsResult?.completedSprints[0]).toEqual(tsContract);
+
+    // What keeps `pipelineResult` in the divergence set: `errors`, populated ONLY on the pge
+    // side, from the interpreter's own `TaskFailure` records
+    // (`pge-engine.ts:551-572`) — the SAME FAIL_CLOSED `commit`-node refusal recorded in
+    // "2b. THE MATERIAL FACT" above. `"errors" in result` (not `=== undefined`) is the
+    // documented check (`pipeline.ts`'s `PipelineResult` doc comment) because the TS engine's
+    // `PipelineResult` never carries the key AT ALL, not merely an empty one — asserted here
+    // both ways so an accidental `errors: []` on the ts side (a false "it converged") would
+    // still be caught by the field-level pin above even if this narrower check missed it.
+    expect("errors" in (tsResult ?? {})).toBe(false);
+    expect(pgeResult?.errors).toBeDefined();
+    expect(pgeResult?.errors?.length).toBeGreaterThan(0);
+    expect(pgeResult?.errors?.[0]?.nodeId).toBe("commit");
+    expect(pgeResult?.errors?.[0]?.errorClass).toBe("FailClosed");
   }, 60_000);
 
   it("is EQUIVALENT on every field outside the recorded divergence set", async () => {

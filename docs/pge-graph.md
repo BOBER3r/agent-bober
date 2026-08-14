@@ -1183,11 +1183,14 @@ serves both.
   `"ts"`** (`src/config/schema.ts`), and `TsPipelineEngine` is both the default and the
   fallback in `selectPipelineEngine` (`src/orchestrator/workflow/selector.ts`).
 - The conformance harness compared the **two real engines** — not a stub — and reported
-  `equivalent: false`, with exactly **three** pinned divergent fields: `audits`,
-  `contracts`, `pipelineResult`. `history` CLOSED at sprint 4 of
-  `spec-20260814-pge-full-convergence` (see "The decision" below) and is no longer one of
-  them. The comparison was non-vacuous: all conformance fields were present. The pins live
-  in `src/orchestrator/workflow/conformance.engines.test.ts`.
+  `equivalent: false`, with exactly **two** pinned divergent fields: `audits` and
+  `pipelineResult`. `history` CLOSED at sprint 4 of `spec-20260814-pge-full-convergence` and
+  `contracts` CLOSED at sprint 6 (see "The decision" below); neither is one of them any
+  longer. `pipelineResult` no longer diverges through `contracts` (its contract-container
+  portion closed alongside `contracts`) — it stays pinned for a separate, independent
+  reason found at sprint 6: `errors`, populated only on the graph side. The comparison was
+  non-vacuous: all conformance fields were present. The pins live in
+  `src/orchestrator/workflow/conformance.engines.test.ts`.
 - The most consequential divergence: **under the shipped autopilot configuration a PGE run
   does not commit.** The git-effect node `commit` is refused `FAIL_CLOSED` because the
   autopilot gate mechanism is `noop` and a noop mechanism grants nothing. The run
@@ -1273,23 +1276,61 @@ serves both.
   (`conformance.engines.test.ts`, sc-5-4), not merely inferred from two field-by-field
   checks. Full record:
   [`docs/sprints/sprint-spec-20260814-pge-full-convergence-5.md`](./sprints/sprint-spec-20260814-pge-full-convergence-5.md).
-- **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame,
-  and the divergence set stayed at four fields — because `pipelineResult`'s divergence
-  REDUCES to `contracts`'s, it does not close independently of it. Sprint 5 of
-  `spec-20260812-terminal-vocabulary` narrowed what it reduces to from four field deltas to
-  three; sprint 5 of `spec-20260814-pge-full-convergence` (the bullet above) narrowed it
-  again, from three to ONE — `version` alone.**
+- **`version` CLOSED at sprint 6 of `spec-20260814-pge-full-convergence` — `contracts` is
+  FULLY CLOSED and no longer appears in the divergence set.** `sprint_exit` has written
+  `version: attempts` — a count of non-`skipped` `evaluations` entries, floored at 1 — since
+  sprint 3 of `spec-20260812-terminal-vocabulary`; `runSprintCycle` wrote none. Sprint 6 gave
+  `runSprintCycle` its OWN count of the same shape: `settledAttempts`
+  (`src/orchestrator/pipeline.ts`), a variable hoisted above the retry loop and incremented
+  once per round that reaches a decisive verdict (the round the evaluator actually ran for),
+  written onto the settled contract as `Math.max(1, settledAttempts)` at all four of the
+  function's settle sites, always BEFORE the `updateContract` call at each site so the disk
+  copy and the returned object carry the same number. A generator-failure round does NOT
+  increment it — mirroring the graph side, where `gate_syntax` routes such a round to the
+  corrector "without spending an evaluation" (`src/pge/topology/coding.graph.ts:642`) — so the
+  two counts agree on every round shape the golden dataset and the conformance fixture
+  exercise, not merely on the one-round case (`pipeline.test.ts`'s two-round
+  fail-then-pass and generator-failure-then-pass tests discriminate this from the simpler,
+  rejected rule of writing the raw loop-iteration count). Neither a clock, an ordering nor a
+  superstep is touched, for the reasons at
+  [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md).
+  `version` stays deliberately excluded from `VOLATILE_KEYS` (still ten keys, unchanged) and
+  the schema field stays `.optional()`, never `.default(...)` — both would have made this
+  closure fake rather than real. `contracts` is asserted CLOSED by a whole-object `canonical`
+  comparison with NOTHING stripped (`conformance.engines.test.ts`, sc-6-3), superseding
+  sprint 5's `version`-stripped control. Full record:
+  [`docs/sprints/sprint-spec-20260814-pge-full-convergence-6.md`](./sprints/sprint-spec-20260814-pge-full-convergence-6.md).
+- **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame.
+  Its CONTRACT-CONTAINER portion then reduced exactly to `contracts`'s divergence through
+  sprints 5 and 6 of `spec-20260814-pge-full-convergence`, and CLOSED when `contracts`
+  closed at sprint 6 — but `pipelineResult` itself does NOT leave the divergence set,
+  because sprint 6 found a SECOND, INDEPENDENT delta inside it: `errors`.**
   `PipelineResult.completedSprints`/`failedSprints` carry whole `SprintContract` objects
   (`src/orchestrator/pipeline.ts`), so once the channel join converges on the settled copy
-  (sprint 4) and the two engines agree on the status word and the `evaluatorFeedback`/
-  `generatorNotes` pair inside it, what a caller sees inside `pipelineResult` is exactly what
-  `listContracts` sees on disk — no more, no less. The two engines' contracts now differ on
-  ONE field (`version`), so `pipelineResult` still diverges, for the identical reason
-  `contracts` does. `src/orchestrator/workflow/conformance.engines.test.ts` pins this
-  positively — `pgeResult?.completedSprints[0]` `toEqual`s the contract `listContracts` reads
-  back off disk, and `tsResult?.completedSprints.map((c) => c.status)` now equals
-  `pgeResult?.completedSprints.map((c) => c.status)` — rather than merely dropping the field
-  from the pinned set.
+  (sprint 4) and the two engines agree on every field inside that contract (sprint 6), what a
+  caller sees inside `completedSprints`/`failedSprints` is exactly what `listContracts` sees
+  on disk — no more, no less — on BOTH engines, asserted directly
+  (`src/orchestrator/workflow/conformance.engines.test.ts`, "4. pipelineResult":
+  `pgeResult?.completedSprints[0]` `toEqual`s `pgeContract`, and its ts-side counterpart
+  added at sprint 6). **That was the sprint's whole premise — "closing `contracts` closes
+  `pipelineResult` as a CONSEQUENCE" — and it is true for exactly that portion of the field,
+  no more.** `PipelineResult` also carries `errors?: readonly PipelineFailure[]`
+  (spec-20260812-pge-real-workload-errors, sprint 5), populated ONLY by `PgeEngine.run` from
+  the interpreter's own `TaskFailure` records
+  (`src/pge/engine/pge-engine.ts:551-572`) — and on the conformance fixture ALWAYS non-empty,
+  because the same FAIL_CLOSED `commit`-node refusal the `audits` bullet describes surfaces
+  here too. `runTsPipeline` has no interpreter and no `TaskFailure` concept at all, and its
+  own auto-commit (`commitAll`, unconditional when `config.generator.autoCommit` is true) is
+  not gated behind any checkpoint the way the graph's `git`-effect `commit` node is — there
+  is no refusal for the imperative engine to ever report, so there is no honest write site
+  for an equivalent `errors` entry, the same category of absence sprint 6's own stop
+  condition protects for `version`. `pipelineResult` therefore stays pinned in the divergence
+  set for `errors` alone — an ARCHITECTURAL gap in the same sense `audits` is one, discovered
+  mid-sprint rather than assumed, and recorded here rather than papered over by adding
+  `errors` to `VOLATILE_KEYS` (which would hide it) or by fabricating a refusal event the
+  imperative engine never produces (which would misreport its actual behaviour). Closing it
+  — an equivalent checkpoint-gated commit step for the imperative engine, or joining `audits`
+  as a permanently-accepted divergence — is a decision for a future sprint.
 - **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — now
   dead for BOTH engines, not narrower for one, as of `spec-20260812-terminal-vocabulary`
   sprint 5.** `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict
@@ -1562,10 +1603,10 @@ record that names it.
 `bober.config.json`), that `TsPipelineEngine` still constructs and is still what the
 default config *selects*, that it is still the fallback `PgeEngine` downgrades to, and
 that `conformance.engines.test.ts` still constructs **both** real engines, is not skipped
-or focused, and still pins `equivalent: false` with the three currently-diverging fields
-named (`oracle-retention.test.ts` also checks that `history` is still named in that file's
-source, since its CLOSURE is recorded there too — a field leaving the divergence set must
-not make the file stop mentioning it entirely). An
+or focused, and still pins `equivalent: false` with the two currently-diverging fields
+named (`oracle-retention.test.ts` also checks that `history` and `contracts` are still
+named in that file's source, since their CLOSURE is recorded there too — a field leaving the
+divergence set must not make the file stop mentioning it entirely). An
 oracle that exists but is unreachable from selection is not retained; an oracle nothing
 compares against is not exercised. Both are asserted separately, so neither can be
 satisfied by the other.

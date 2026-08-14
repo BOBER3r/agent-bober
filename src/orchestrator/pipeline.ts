@@ -239,6 +239,21 @@ export async function runSprintCycle(
   // round, routed into the NEXT iteration's evalFeedbackParts (ADR-5). Stays
   // empty when the gate never runs (config.security absent/disabled).
   let pendingSecurityFeedback: string[] = [];
+  // Sprint 6 (pge-full-convergence) — the imperative analogue of PGE's
+  // `attempts` (`src/pge/nodes/sprint-review.ts:260-265`): a count of rounds
+  // that produced a DECISIVE verdict, i.e. the round the evaluator actually
+  // ran for — not the raw `iteration` loop counter. A round where the
+  // generator itself fails (`generatorResult.success === false`) retries
+  // without incrementing this, mirroring the graph side: `sprint_generate`
+  // records no `evaluations` entry for that round either, because
+  // `gate_syntax` routes straight to the corrector "without spending an
+  // evaluation" (`coding.graph.ts:642`). Hoisted above the loop (unlike
+  // `iteration`, which is scoped to the `for` statement) so it is also
+  // available at the out-of-loop return (`:754`-area) — deliberately unused
+  // there; see the comment at that return for why. Written onto
+  // `SprintContract.version` at every settle site, floored at 1 to match
+  // PGE's `Math.max(1, ...)`.
+  let settledAttempts = 0;
 
   // ── Curate (once, before the first generator attempt) ─────────
   // The curator explores the codebase and saves a Sprint Briefing to
@@ -418,6 +433,8 @@ export async function runSprintCycle(
       currentContract = {
         ...currentContract,
         evaluatorFeedback: "Generator failed to complete the implementation.",
+        // Settle site B — sc-6-1. See `settledAttempts`'s doc comment.
+        version: Math.max(1, settledAttempts),
       };
       await updateContract(projectRoot, currentContract);
       return { contract: currentContract, generatorResult };
@@ -487,6 +504,9 @@ export async function runSprintCycle(
       config,
     );
     lastEvaluation = evaluation;
+    // This round reached a decisive verdict — count it (see `settledAttempts`'s
+    // doc comment above for why this is the PGE-equivalent count, not `iteration`).
+    settledAttempts += 1;
 
     // Persist per-evaluator/lens detail to .bober/eval-results/ so a failing
     // round is inspectable (which evaluator/lens returned passed:false), instead
@@ -566,6 +586,11 @@ export async function runSprintCycle(
           if (iteration >= maxIterations) {
             await boundedExit(iteration);
             currentContract = updateContractStatus(currentContract, "needs-rework");
+            currentContract = {
+              ...currentContract,
+              // Settle site C — sc-6-1. See `settledAttempts`'s doc comment.
+              version: Math.max(1, settledAttempts),
+            };
             await updateContract(projectRoot, currentContract);
             return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
           }
@@ -590,6 +615,8 @@ export async function runSprintCycle(
       currentContract = {
         ...currentContract,
         evaluatorFeedback: evaluation.summary,
+        // Settle site A — sc-6-1. See `settledAttempts`'s doc comment.
+        version: Math.max(1, settledAttempts),
       };
       await updateContract(projectRoot, currentContract);
 
@@ -743,6 +770,11 @@ export async function runSprintCycle(
       );
       await boundedExit(iteration);
       currentContract = updateContractStatus(currentContract, "needs-rework");
+      currentContract = {
+        ...currentContract,
+        // Settle site D — sc-6-1. See `settledAttempts`'s doc comment.
+        version: Math.max(1, settledAttempts),
+      };
       await updateContract(projectRoot, currentContract);
       return { contract: currentContract, evaluation };
     }
@@ -750,7 +782,14 @@ export async function runSprintCycle(
     logger.info("Feeding evaluation feedback into next iteration...");
   }
 
-  // Should not normally reach here
+  // Should not normally reach here — the `interrupted` `break` (`:302`-area) or a
+  // zero/negative `maxIterations`. `currentContract.status` is still whatever it was left at
+  // by the last completed step of the round in progress ("in-progress", "evaluating", or
+  // similar) — never a settled status — so, deliberately, NO `version` is written here even
+  // though `settledAttempts` is in scope (unlike the `for`-loop's own `iteration`). An
+  // un-settled contract has no attempt count to report; synthesising one from a round that
+  // never reached a verdict would be the same dishonesty sprint 5 refused for
+  // `evaluatorFeedback`/`generatorNotes` on a round with no decisive `SprintVerdict`.
   return { contract: currentContract, evaluation: lastEvaluation };
 }
 

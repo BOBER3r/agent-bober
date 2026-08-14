@@ -515,3 +515,199 @@ describe("security audit gate — pipeline integration", () => {
     }
   });
 });
+
+// ── sc-6-1/sc-6-2 (spec-20260814-pge-full-convergence sprint 6) ──────────
+//
+// `runSprintCycle` writes `SprintContract.version` at every settle site as
+// `Math.max(1, settledAttempts)` — `settledAttempts` a count of rounds that
+// reached a decisive verdict (the evaluator ran), NOT the raw `iteration`
+// loop counter. This mirrors PGE's `attempts`
+// (`src/pge/nodes/sprint-review.ts:260-265`): both are counts of decisive
+// rounds, floored at 1, and neither touches a clock, an ordering or a
+// superstep. See `settledAttempts`'s doc comment in `pipeline.ts` for the
+// full reasoning, including why a generator-failure round does NOT count.
+describe("runSprintCycle writes a replay-stable version onto the settled contract (sc-6-1/sc-6-2)", () => {
+  const tmpDirs: string[] = [];
+
+  afterAll(async () => {
+    for (const dir of tmpDirs) {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const versionConfig = baseConfig;
+
+  it("a one-round pass writes version: 1 on both result.contract and the last updateContract call", async () => {
+    const tmpRoot = await makeTmpRoot("version_onepass");
+    tmpDirs.push(tmpRoot);
+
+    const { runSprintCycle } = await import("./pipeline.js");
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    const { updateContract } = await import("../state/index.js");
+
+    vi.mocked(runEvaluatorAgent).mockResolvedValue({
+      passed: true,
+      score: 90,
+      results: [],
+      summary: "All passed.",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: { ...versionConfig, evaluator: { ...versionConfig.evaluator, maxIterations: 1 } },
+      projectContext: testProjectContext,
+    });
+
+    expect(result.contract.status).toBe("completed");
+    expect(result.contract.version).toBe(1);
+
+    // The disk write (mocked updateContract) must carry the same number — a
+    // write that reached the return value but not the persisted contract
+    // would pass a check against `result.contract` alone but not this one.
+    const lastCall = vi.mocked(updateContract).mock.calls.at(-1);
+    expect((lastCall?.[1] as SprintContract).version).toBe(1);
+  });
+
+  it("a two-round fail-then-pass writes version: 2 — discriminates the rule from a constant", async () => {
+    const tmpRoot = await makeTmpRoot("version_failthenpass");
+    tmpDirs.push(tmpRoot);
+
+    const { runSprintCycle } = await import("./pipeline.js");
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+
+    vi.mocked(runEvaluatorAgent)
+      .mockResolvedValueOnce({
+        passed: false,
+        score: 40,
+        results: [],
+        summary: "Round 1 failed.",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        passed: true,
+        score: 95,
+        results: [],
+        summary: "Round 2 passed.",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      });
+
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: { ...versionConfig, evaluator: { ...versionConfig.evaluator, maxIterations: 2 } },
+      projectContext: testProjectContext,
+    });
+
+    expect(result.contract.status).toBe("completed");
+    expect(result.contract.version).toBe(2);
+  });
+
+  it("a generator-failure round does NOT count toward version — the crux row distinguishing settledAttempts from raw `iteration`", async () => {
+    const tmpRoot = await makeTmpRoot("version_genfail_then_pass");
+    tmpDirs.push(tmpRoot);
+
+    const { runSprintCycle } = await import("./pipeline.js");
+    const { runGenerator } = await import("./generator-agent.js");
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+
+    // Round 1: generator fails — `iteration` advances to 2, but no decisive
+    // verdict was produced (the evaluator never runs this round), mirroring
+    // PGE's `gate_syntax` retry-without-spending-an-evaluation
+    // (`coding.graph.ts:642`). Round 2: generator succeeds and the evaluator
+    // passes — the ONE decisive round.
+    vi.mocked(runGenerator).mockResolvedValueOnce({
+      success: false,
+      notes: "Round 1: generator could not complete the change.",
+      filesChanged: [],
+      turnsUsed: 1,
+      toolsCalled: [],
+    });
+    vi.mocked(runEvaluatorAgent).mockResolvedValue({
+      passed: true,
+      score: 90,
+      results: [],
+      summary: "All passed.",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: { ...versionConfig, evaluator: { ...versionConfig.evaluator, maxIterations: 3 } },
+      projectContext: testProjectContext,
+    });
+
+    expect(result.contract.status).toBe("completed");
+    // If `version` were the raw `iteration` loop counter (option (i) rejected
+    // in the sprint briefing), this would be 2 (iteration 2, where the pass
+    // happened). `settledAttempts` — the decisive-round count PGE's `attempts`
+    // mirrors — is 1: only round 2 reached the evaluator.
+    expect(result.contract.version).toBe(1);
+  });
+
+  it("is replay-stable: two independent runs over the same input produce the same version, proven by execution (sc-6-2)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+
+    try {
+      const { runSprintCycle } = await import("./pipeline.js");
+      const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+
+      const runOnce = async () => {
+        vi.clearAllMocks();
+        vi.mocked(runEvaluatorAgent)
+          .mockResolvedValueOnce({
+            passed: false,
+            score: 40,
+            results: [],
+            summary: "Round 1 failed.",
+            timestamp: "2026-01-01T00:00:00.000Z",
+          })
+          .mockResolvedValueOnce({
+            passed: true,
+            score: 95,
+            results: [],
+            summary: "Round 2 passed.",
+            timestamp: "2026-01-01T00:00:00.000Z",
+          });
+
+        const tmpRoot = await makeTmpRoot("version_replay");
+        tmpDirs.push(tmpRoot);
+
+        return runSprintCycle({
+          contract: testContract,
+          spec: testSpec,
+          completedContracts: [],
+          projectRoot: tmpRoot,
+          config: { ...versionConfig, evaluator: { ...versionConfig.evaluator, maxIterations: 2 } },
+          projectContext: testProjectContext,
+        });
+      };
+
+      const a = await runOnce();
+      const b = await runOnce();
+
+      expect(a.contract.version).toBeDefined();
+      expect(a.contract.version).toBe(b.contract.version);
+      expect(a.contract.version).toBe(2);
+      // The whole contract, not merely `version` in isolation — a frozen
+      // clock makes `updatedAt`/timestamps identical too, so this is a real
+      // determinism proof, not one hidden behind a volatile field.
+      expect(a).toEqual(b);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -210,6 +210,12 @@ export const SprintContractSchema = z.object({
    * and settled to the same rank and destroying the exact ordering this
    * field exists to provide. All ~250 committed contracts predate this
    * field and must stay valid with it absent.
+   *
+   * Written by BOTH engines as of sprint 6 of spec-20260814-pge-full-convergence:
+   * `src/pge/nodes/sprint-review.ts` (`sprint_exit`, `attempts`) and
+   * `src/orchestrator/pipeline.ts` (`runSprintCycle`, `settledAttempts`) — two
+   * independent counts of decisive-verdict rounds over each engine's own channel,
+   * never a shared write site.
    */
   version: z.number().int().min(0).optional(),
 

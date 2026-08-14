@@ -73,9 +73,19 @@ import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-eval
  * `sprint-evaluate.ts`'s `sprintVerdict` doc comment for exactly which call sites populate
  * them, and `overall.ts`'s `SprintVerdictSchema` doc comment for why widening the schema with
  * an optional field (rather than adding a channel, the option `anchors.ts:179-196` rejected
- * for an unrelated fact) is proportionate here. Deliberately unclosed by this sprint: the
- * contract's third field, `version`, which this file has written since sprint 3 and the
- * imperative engine writes none of — sprint 6's business, not this paragraph's.
+ * for an unrelated fact) is proportionate here.
+ *
+ * ── `version` (sprint 6 of spec-20260814-pge-full-convergence) — CLOSED ──
+ *
+ * This file has written `version: attempts` since sprint 3; the imperative engine wrote none
+ * until sprint 6, when `runSprintCycle` (`pipeline.ts`) gained its own count of rounds that
+ * reached a decisive verdict — `settledAttempts`, incremented once per round the evaluator
+ * actually ran for, floored at 1 — and started writing it at all four of its own settle sites.
+ * This file is untouched by that closure: the counting rule lives once, here, and the
+ * imperative side reproduces its SHAPE (a replay-stable count of decisive rounds, never a
+ * clock or an ordering) independently, the way `generateAttemptsSoFar`
+ * (`nodes/gates.ts:245-250`) already mirrors this file's round-counting for `history`'s
+ * `iteration` field. `contracts`' last field delta is closed as of sprint 6.
  */
 
 export const SPRINT_REVIEW_NODE_IDS = {
