@@ -19,6 +19,16 @@ alongside this erratum, not in place of it. The corrected, canonical disposition
 `docs/pge-graph.md`'s "Engine migration disposition" and is enforced by
 `src/pge/topology/docs.test.ts`.
 
+**Update (2026-08-14, later the same day): `history` is no longer open work either — it
+CLOSED.** Sprint 4 of `spec-20260814-pge-full-convergence` built the missing writer:
+`src/pge/runtime/history.ts` exports `emitPhaseEvent`, delegating to the same
+`appendHistory` the imperative engine calls, and nine node bodies emit their phase events at
+their real lifecycle boundaries. A real run of both engines now produces the identical
+ordered event list, so `history` left the conformance divergence set — three fields remain
+(`audits`, `contracts`, `pipelineResult`) and `equivalent` is still `false`. Read "OPEN WORK"
+above as this record's state between the correction and that closure; `audits`' disposition
+is untouched by both.
+
 ## What this sprint added
 
 Nothing that runs. This is the spec's docs-only closing sprint: no production `.ts` file

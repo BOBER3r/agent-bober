@@ -1313,9 +1313,11 @@ fail-closed refusal happened, by the same Option-A decision, so a flip still req
 
 `spec-20260812-pge-real-workload-errors` closed at its sprint 9 **without moving this
 disposition**. It made the engine able to run a real workload at all and gave a refused run
-a channel to say so, but the divergence set is still exactly `history`, `audits`,
-`contracts`, `pipelineResult` at `equivalent: false` — none of the four was in its scope —
-so PGE remains opt-in and `TsPipelineEngine` remains the oracle.
+a channel to say so, but the divergence set at that spec's close was still exactly
+`history`, `audits`, `contracts`, `pipelineResult` at `equivalent: false` — none of the four
+was in its scope — so PGE remains opt-in and `TsPipelineEngine` remains the oracle.
+(`history` left that set later, at sprint 4 of `spec-20260814-pge-full-convergence`; the
+other three still diverge. Point 1 below is the current record.)
 
 **`spec-20260812-terminal-vocabulary` closed at its sprint 6 having NOT moved this
 disposition either — and its own description said it would.** That description read "closes
@@ -1337,8 +1339,11 @@ inside it — `evaluatorFeedback`, `generatorNotes` (PGE has no writer for eithe
 one). This is exactly this sprint's own stop condition, applied to itself: *"The divergence
 set is not what this spec predicted — record what it actually is and why, rather than
 adjusting anything to match the prediction."* No test and no production source were changed
-to make "two closed" come true; `conformance.engines.test.ts`'s pinned array
-(`:318-323`) is the same four literals it was before sprint 1.
+to make "two closed" come true; `conformance.engines.test.ts`'s pinned array was the same
+four literals it was before sprint 1. (It holds THREE literals today, at
+`conformance.engines.test.ts:377-381` — `history` left it at sprint 4 of
+`spec-20260814-pge-full-convergence`, by building the missing writer, not by adjusting the
+pin.)
 
 **What a flip would still require beyond everything this spec did — four things, none of
 them this spec's to do (`nonGoals`):**
@@ -1626,7 +1631,9 @@ ADR left open: `gate_plan_out` now carries
   are branch-blind, and `resumeMessageId` collapses every branch's decision onto one
   message row.
 - **`audits` STAYS in the conformance divergence set** pinned in
-  `src/orchestrator/workflow/conformance.engines.test.ts` (unchanged, still four fields).
+  `src/orchestrator/workflow/conformance.engines.test.ts` (unchanged by this entry — four
+  fields at 1.5.0; sprint 4 of the same spec has since dropped `history` from that pin,
+  leaving three, and `audits` is unaffected either way).
   Declaring one more id narrows what the divergence records — the graph now records at
   most two distinct checkpoint ids per run (`post-sprint-contract`, `end-of-pipeline`)
   instead of one, against the imperative engine's eight — but the SET still diverges, so

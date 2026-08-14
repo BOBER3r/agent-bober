@@ -2646,7 +2646,9 @@ by unpinning it; both nodes now execute and coverage reads 40 of 44)*; **`critiq
 `rework_route` await a golden scenario** (a corrected-but-recorded-`fail` sprint alongside an
 otherwise passing run);
 and the **conformance divergence set is unchanged at `history`, `audits`, `contracts`,
-`pipelineResult` with `equivalent: false`** — none of the four was in scope — so **PGE remains
+`pipelineResult` with `equivalent: false`** — none of the four was in scope *(`history` has
+since **closed**, at sprint 4 of `spec-20260814-pge-full-convergence`; the set is three fields
+today and `equivalent` is still `false`)* — so **PGE remains
 opt-in**, `config.pipeline.engine` still defaults to `"ts"`, and `TsPipelineEngine` is still the
 oracle.
 
@@ -2737,7 +2739,10 @@ originally paired it with `audits` under a "no curator node" ground; that ground
 and corrected by `spec-20260814-pge-full-convergence`'s targeted correction (2026-08-14)**:
 two `role: "curator"` nodes exist in the topology (`sprint_curate_explain`/
 `sprint_curate_mocks`), so the real gap is that no PGE node body calls `appendHistory` (zero
-hits under `src/pge`) — a missing writer, the same shape as the next clause; **`evaluatorFeedback` and
+hits under `src/pge`) — a missing writer, the same shape as the next clause *(**closed** at
+sprint 4 of the same spec, two days later: `src/pge/runtime/history.ts`'s `emitPhaseEvent` is
+that writer, called from nine node bodies at their real lifecycle boundaries, and `history`
+left the divergence set — three fields remain)*; **`evaluatorFeedback` and
 `generatorNotes` need a PGE-node writer** neither this spec
 nor its predecessor added; **Option B success semantics** (`success: false` on a fail-closed
 refusal) remains rejected, because taking it would add `completionMarker` to the divergence
@@ -2819,9 +2824,14 @@ Sprint 3 declares the one remaining checkpoint id outside the fan-out region
 (`post-sprint-contract`, on `gate_plan_out`) and proves, under a real durable approval, that the
 commit refusal `audits` still shows under autopilot is a FAIL_CLOSED refusal rather than a
 reclassified one — `audits` stays RECOMMENDED FOR PERMANENT ACCEPTANCE, now with its false
-"no curator node" pairing with `history` corrected in the same commit (`e48962e`). No sprint-3
-individual record exists in this table; its outcome is folded into sprint 4's record and this
-paragraph.
+"no curator node" pairing with `history` corrected in the same commit (`e48962e`). **No
+sprint-3 row exists in the table below and no `sprint-spec-20260814-pge-full-convergence-3.md`
+was ever written** — a gap in that sprint's own run, not a deliberate omission and not
+something sprint 4 backfilled. What sprint 3 did is recorded in this paragraph, in
+`docs/pge-graph.md`'s Changelog entry for `graphVersion` **1.5.0** (which names the declared
+id, why `gate_plan_out` hosts it and the five ids that stay undeclarable) and in
+`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`; the table skips from 2 to
+4 accordingly.
 
 Sprint 4 closes `history`: nine graph nodes now emit the imperative engine's phase events at
 their real lifecycle boundary, through the existing `appendHistory`. The divergence set drops

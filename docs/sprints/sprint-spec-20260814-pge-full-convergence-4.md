@@ -108,11 +108,16 @@ input rather than hostage to today's dataset.
 seven replay cases gain the new lines under `expected.artifacts.history`; no other conformance
 field moved in any case.
 
-- Six cases gain the full nine-plus-terminal sequence, `iteration: 1` throughout (single-pass
-  scenarios).
+- FIVE cases gain the full nine-plus-terminal sequence, `iteration: 1` throughout (the
+  single-pass scenarios). Six of the seven gain nine node events each — the sixth is the
+  multi-round case below, whose nine are a different mix — for 6 × 9 + 1 = **55** new
+  entries across the dataset.
 - `replay-plan-clarify-rounds-exhausted` gains only `pipeline-start` — the scenario never
   reaches `plan_materialize`, so `planning-complete` correctly never fires, matching what the
-  imperative engine would do for the identical clarify-never-settles scenario.
+  imperative engine would do for the identical clarify-never-settles scenario. It is also the
+  one case whose `history` was `[]` before this sprint rather than the one shared
+  `pipeline-complete` line: that run never reaches `finalize` either, so its array is ONE
+  entry with no terminal line at all.
 - `replay-full-run-evaluation-fails` — `evaluationPasses: false`, the one multi-round case —
   gains two full `generator-start`/`evaluator-start` pairs at `iteration: 1` and `iteration: 2`
   (the fix described above, verified against real output rather than reasoned about in the
