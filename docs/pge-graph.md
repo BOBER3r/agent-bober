@@ -626,27 +626,31 @@ at all** — the figure rose because a case was written that exercises behaviour
 graph already had, not because anything about the graph, the interpreter or the coverage rule
 moved.
 
-**`context_compact` is a TOPOLOGY finding, not a coverage footnote — and it is the third of
-its kind in `spec-20260814-pge-full-convergence`.** The three are worth reading together,
-because they are the same KIND of finding and nothing else in this document places them side
-by side:
+**These are TOPOLOGY findings, not coverage footnotes — and `spec-20260814-pge-full-convergence`
+has now produced FOUR of them.** `context_compact` (sprint 8) was the third; `synthesize`
+(sprint 9) is the fourth, established by a sprint that tried to drive the node before accepting
+the block rather than inheriting sprint 8's finding by assumption. The four are worth reading
+together, because they are the same KIND of finding and nothing else in this document places
+them side by side:
 
 | where | limit | what the shipped architecture cannot express | cost to close |
 | --- | --- | --- | --- |
 | sprint 1/3 → ADR-1 | `audits` — five checkpoint ids permanently undeclarable | a per-branch interrupt inside a fan-out: `Checkpoint.interrupt` is one slot, and `grantScope`/`clearScope`/`resumeMessageId` carry no branch key (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) | a keyed, branch-aware interrupt slot plus branch discriminators through the resume path — a runtime redesign |
 | sprint 6 | `pipelineResult.errors` | an imperative-engine write site for a FAIL_CLOSED refusal — no interpreter, and an auto-commit (`src/orchestrator/pipeline.ts:451`) that calls `commitAll` inside a `try`/`catch` which only debug-logs, with no HITL gate to refuse | giving the imperative engine a checkpoint-gated commit — an architecture change |
 | sprint 8 | `context_compact` unreachable | a supervisor decision that reads the message window: no handler path returns `COMPACT_LABEL`, and `supervisor.reads` does not authorise `messages` | a topology reads-list change + a minor `graphVersion` bump + new handler logic |
+| sprint 9 | `synthesize` unreachable | the PRECONDITION its one inbound edge needs: `route_after_eval` selects `partial` only at `reworkRoundsTaken >= 2`, and two independent barriers stop any run reaching a second `route_after_eval` — the supervisor checks `sprints` strictly before `evaluate` (`nodes/supervisor.ts:165`), and `reduce_sprints` refuses any run holding a badly-settled branch (`nodes/gates.ts:1001-1028`). Unlike `context_compact`, the reacting CODE exists and is correct — `evalRouterNode`'s `partial`/`exhausted` branches are proven right against synthetic state — it is simply never fed the precondition | a production change to how the graph DECIDES: the supervisor's dispatch order, or `reduce_sprints`' refusal predicate. No case, binding, seed or fixture substitutes for either |
 
-What makes them one kind rather than three coincidences: each was established by RUNNING or
+What makes them one kind rather than four coincidences: each was established by RUNNING or
 reading the shipped system rather than by assuming (the `context_compact` block was confirmed
 against a fresh trace, `pipelineResult.errors` by running the harness after the fix that was
-supposed to close it); each was RECORDED rather than worked around, on the authority of the
-owning contract's own stop condition; each carries a named, non-trivial cost in **shipped
-production code** that no case, binding, seed or fixture can substitute for; and in each the
-implementation was right while the CONTRACT's premise was wrong, which is why all three were
-adjudicated `pass-AMENDED` rather than sent back for a retry. Read together they say something
-about how this spec was scoped — it assumed missing writers and missing cases everywhere, and
-in three places the answer was a missing capability.
+supposed to close it, `synthesize` by attacking SEVEN candidate paths to the node and finding
+none); each was RECORDED rather than worked around, on the authority of the owning contract's
+own stop condition; each carries a named, non-trivial cost in **shipped production code** that
+no case, binding, seed or fixture can substitute for; and in each the implementation was right
+while the CONTRACT's premise was wrong, which is why all four were adjudicated `pass-AMENDED`
+rather than sent back for a retry. Read together they say something about how this spec was
+scoped — it assumed missing writers and missing cases everywhere, and in four places the answer
+was a missing capability.
 
 **What that implied for the two sprints that inherit it.** Sprint 9's real remaining target was
 `synthesize` alone: its `sc-9-1` (`rework_route` executes) was satisfied by sprint 8, forced by
@@ -657,10 +661,12 @@ contract was the honest form — `NEVER_EXECUTED` contains ONLY nodes proven str
 unreachable, each with a recorded reason and a claim test, and coverage asserts every node
 executes EXCEPT those, computed against the topology artifact rather than a hardcoded count,
 with the guard still biting in BOTH directions. **Deleting the guard is not a way to satisfy
-the criterion.** Sprint 11 therefore owns three unsatisfiable-as-written criteria rather than
+the criterion.** Sprint 11 therefore owned three unsatisfiable-as-written criteria rather than
 one — `sc-11-1` (`equivalent: true`, "Engine migration disposition" below) plus these two — and
 the satisfiable work in each case is the same: re-specify the bar around a named, accepted,
-individually-justified exception set rather than around emptiness.
+individually-justified exception set rather than around emptiness. **Sprint 9 closed its own
+two against that amended form**, so what sprint 11 actually inherits is `sc-11-1` alone plus
+the write-up — see "What four structural limits mean for sprint 11's `sc-11-1`" below.
 
 **Sprint 9's own outcome.** Both amended criteria are now met against that re-specified bar:
 `sc-9-1` reconfirmed (`rework_route` still executes, unchanged since sprint 8); `synthesize`
@@ -673,6 +679,58 @@ committed golden case removed in a scratch edit, each restored after confirming 
 (`src/pge/nodes/root.test.ts`, `src/pge/golden/coverage.test.ts`). Node coverage did not move,
 and was not expected to: no production `.ts` file's runtime behaviour changed, only a new test
 file and doc-comment additions that back a claim already recorded.
+
+**The SECOND proof chain for `synthesize`, and the one gap in it.** The sprint-9 evaluator
+re-derived the block through two independent chains, not one, and the second is worth recording
+in its own right because it holds for a completely different reason:
+
+- **Chain A — dispatch order (ENCODED as tests).** `supervisorNode` checks `SPRINTS_LABEL`
+  strictly before `EVALUATE_LABEL` (`nodes/supervisor.ts:165`), so the only state
+  `evaluate_global` is ever dispatched from is one where every planned contract has settled
+  `"succeeded"`; and `evaluate_global`, `route_after_eval` and `critique` declare writes of
+  exactly `["messages","evaluations","ledger"]`, `["counters"]` and `["messages","ledger"]` —
+  none of them touches `sprintContracts` or `branchStatus` — so that state is EXACTLY what
+  `rework_route` inspects. This is what `src/pge/nodes/root.test.ts`'s four `CLAIM` blocks
+  encode.
+- **Chain B — `reduce_sprints`' refusal (ARGUED, NOT encoded as a test).**
+  `reduceSprintsGate` (`nodes/gates.ts:1001-1028`) refuses — routing back to `fanout_sprints`,
+  **not** to `supervisor` — whenever ANY `branchStatus` entry is `"failed"` or `"abandoned"`,
+  and its own `fanoutRetries` budget (`coding.graph.ts:791`, `maxIterations: 2`,
+  `onExhausted: "graceful_failure"`) degrades straight to the failure terminal once spent.
+  `sprint_exit` is the ONLY node that writes a new terminal `branchStatus`
+  (`nodes/sprint-review.ts`), and `"abandoned"` is grep-verified as never written by any
+  production `.ts` — every non-test occurrence is a read or a filter. So **every branch is
+  provably `"succeeded"` by the time a run can reach `evaluate_global` at all**: a run still
+  holding a bad branch never passes the join, it is re-fanned-out twice and then ends at
+  `graceful_failure`.
+
+Either chain alone is sufficient. `maxIterations: 2` on `rework_route` (`coding.graph.ts:872`)
+is a fixed topology constant rather than a `bober.config.json` knob, and moot either way — both
+blocks sit upstream of the loop bound entirely. The apparent contradiction in `CLAIM 3`'s
+negative control is reconciled by chain B: `reworkRouterNode` genuinely CAN select `"rework"`
+given a `"failed"` `branchStatus` entry, and that state provably never arises at `rework_route`.
+
+**The gap, stated plainly: chain B is not backed by a test.** The four `CLAIM` blocks cover
+chain A only; chain B lives in prose here, in `coverage.test.ts`'s doc block and in sprint 9's
+eval result. If `reduce_sprints`' refusal predicate were relaxed, or a production writer began
+setting `"abandoned"`, chain B would stop holding and nothing would report it — and because
+chain A would still hold, the `NEVER_EXECUTED` entry would remain correct, which is precisely
+what makes the silence easy to miss. Encoding it (a gate-predicate claim test beside the
+existing ones, plus a source scan for `"abandoned"` writers) is the obvious follow-up.
+
+**What four structural limits mean for sprint 11's `sc-11-1`.** That criterion asks the
+conformance harness to report `equivalent: true` on a real run. It is **unsatisfiable by
+building** — not "not yet built". The divergence set is `["audits", "pipelineResult"]`, both
+entries architectural and both tracing to one root cause (the graph has a checkpoint-gated
+commit the imperative engine lacks), and no further implementation inside this spec's scope
+moves either. The same is true one level away for node coverage: **`NEVER_EXECUTED` will not
+empty and coverage will not reach 44/44**, because `context_compact` and `synthesize` are
+blocked by shipped-code and decision-order facts rather than by missing cases. Sprint 11's
+satisfiable work is the re-specification its `sc-11-3`/`sc-11-5` already ask for — name the
+accepted exception set, justify each member individually, and phrase the bar around it rather
+than around emptiness. Anything that appears to satisfy `sc-11-1`, or to empty
+`NEVER_EXECUTED`, without the production changes named in the table above should be treated as
+a contrivance and rejected.
 
 ### A defect this coverage work surfaced
 
@@ -1732,6 +1790,14 @@ them this spec's to do (`nonGoals`):**
    coverage computed against the artifact at 42/44 — so sprint 11 inherits `sc-9-3`/`sc-9-4`
    as CLOSED, and its own remaining work is `sc-11-1` alone plus the write-up `sc-11-3`/
    `sc-11-5` ask for.
+
+   **And `sc-11-1` is unsatisfiable BY BUILDING, not merely as written.** `synthesize` is the
+   FOURTH structural limit this spec has produced (`audits`, `pipelineResult.errors`,
+   `context_compact`, `synthesize` — tabulated together in "How much of the graph the committed
+   cases execute" above). Two of the four ARE the divergence set; the other two block the
+   coverage bar one level away. No further implementation inside this spec's scope closes any
+   of them, so sprint 11 cannot reach `equivalent: true` by writing more code, and should not
+   be asked to try. Its whole deliverable is the honest re-specification.
 
 **One carried-forward fact from sprint 5/6 is now CLOSED, not merely unchanged — see the
 sprint 7 bullet above.** An earlier version of this paragraph read: *"`verdictFrom`
