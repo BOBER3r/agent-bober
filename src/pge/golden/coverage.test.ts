@@ -99,7 +99,8 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  * excludes exactly the branches whose status is `"succeeded"` or `"abandoned"` — so
  * `rework_route`'s own dispatch set is empty and it selects the `"exhausted"` label rather
  * than re-offering the branch, still ending a `status: "ok"` span. Sprint 9's remaining work
- * on this graph narrows to `synthesize` alone.
+ * on this graph narrowed to `synthesize` alone, and confirmed it is the same kind of
+ * structural block rather than a missing scenario — see the `synthesize` bullet below.
  *
  * `context_compact` and `synthesize` remain structural: no set of bindings, however
  * imaginative, can make case authoring close either, which is why they stay recorded here
@@ -151,6 +152,22 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    `abandoned`" — the CONCLUSION (dispatch set always empty) is right, but that mechanism
  *    is not: no branch is ever `"abandoned"` in this shipped graph. `"succeeded"`, not
  *    `"abandoned"`, is the exclusion that actually bites.
+ *
+ *    Sprint 9 of `spec-20260814-pge-full-convergence` genuinely tried to drive `synthesize`
+ *    before accepting this block (per that sprint's `preFlightFinding` and its own
+ *    stopCondition), independently re-derived the same conclusion from a SECOND code path —
+ *    `supervisorNode` itself never selects its `"evaluate"` label while
+ *    `dispatchableContracts(state, state.sprintContracts)` is non-empty
+ *    (`nodes/supervisor.ts:165` checks `"sprints"` first), and `evaluate_global`,
+ *    `route_after_eval` and `critique` write neither `sprintContracts` nor `branchStatus`
+ *    (`coding.graph.ts`), so the all-succeeded state that guard requires is exactly what
+ *    `rework_route` still sees when it runs — and closed the one gap this block had left
+ *    open: the claim above was prose only, unlike `context_compact`'s, which
+ *    `nodes/supervisor.test.ts` backs with a test. `src/pge/nodes/root.test.ts` now backs
+ *    it the same way, in four mutation-proven pieces, and also proves `evalRouterNode`'s
+ *    `"partial"`/`"exhausted"` branches are themselves correctly implemented (unlike
+ *    `context_compact`'s label-selection code, which does not exist at all) — the
+ *    precondition is what is unreachable, not the code that would react to it.
  */
 const NEVER_EXECUTED = ["context_compact", "synthesize"] as const;
 

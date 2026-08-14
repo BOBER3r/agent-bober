@@ -549,7 +549,9 @@ measured rather than asserted — `src/pge/golden/coverage.test.ts` executes eve
 `replay` case, reads the node ids and the STATUS of the resulting span files, and pins the
 executed set against the committed artifact.
 
-**42 of the 44 declared nodes execute, as of sprint 8 of `spec-20260814-pge-full-convergence`.**
+**42 of the 44 declared nodes execute, as of sprint 8 of `spec-20260814-pge-full-convergence`
+(reconfirmed, unmoved, by sprint 9 — see "What that implied for the two sprints that inherit
+it" below).**
 The figure moved three times, and each move is worth separating. Sprint 9 of
 `spec-20260812-pge-real-workload-errors` corrected the RULE — the committed figure before
 that sprint read **"39 of the 44"**, and the drop to **"38 of the 44"** was a correction, not
@@ -598,7 +600,7 @@ The two nodes no case executes are pinned in `NEVER_EXECUTED`. Both are genuine
 | node | why no case executes it |
 | --- | --- |
 | `context_compact` | its only edge in is `supervisor -> context_compact` under the `compact` label, and the shipped supervisor's handler (`nodes/supervisor.ts:140-177`) has **no code path that returns that label at all** — its five branches select `plan`, `sprints`, `evaluate`, the graceful-failure hop for a refusal, or end the run; `COMPACT_LABEL` is declared and referenced nowhere else in `src/`. The committed artifact's `supervisor.reads` — exactly `["branchStatus", "counters", "evaluations", "spec"]`, still no `messages` at `graphVersion 1.5.0`, re-verified for sprint 8 — is WHY no such path exists: a supervisor cannot decide a message window crossed a compression threshold without reading the messages. The block is therefore at LABEL SELECTION, one step upstream of the node itself — `contextCompactNode`'s own body would return a `status: "ok"` span even below its threshold if it were ever entered, so this is not a token-threshold problem and enlarging a case's message count changes nothing. What would close it — teaching the supervisor to measure the window and select `COMPACT_LABEL`, which first requires adding `messages` to `supervisor.reads` — is a topology change (a minor `graphVersion` bump) plus a shipped-code change, not a case. Recorded as artifact drift in `nodes/supervisor.ts`, and backed by a claim test in `nodes/supervisor.test.ts` that fails the moment the handler gains a path returning `COMPACT_LABEL`. |
-| `synthesize` | **structural block, and the one recorded reason sprint 9 of spec-20260812-pge-real-workload-errors rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous paragraph), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7 of spec-20260812-pge-real-workload-errors) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. Sprint 9 of `spec-20260814-pge-full-convergence` inherits this node as the only remaining gap. |
+| `synthesize` | **structural block, and the one recorded reason sprint 9 of spec-20260812-pge-real-workload-errors rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous paragraph), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7 of spec-20260812-pge-real-workload-errors) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. **Sprint 9 of `spec-20260814-pge-full-convergence` genuinely tried to drive this node before accepting the block** (per that sprint's `preFlightFinding` and its own stopCondition), independently re-derived the same conclusion from a SECOND code path — `supervisorNode` itself never selects its `"evaluate"` label while `dispatchableContracts(state, state.sprintContracts)` is non-empty (`nodes/supervisor.ts:165` checks `"sprints"` first), so the all-succeeded state that guard requires is exactly what `rework_route` still sees — and closed the one gap the earlier analysis left open: unlike `context_compact`, whose claim `nodes/supervisor.test.ts` backs with a test, this claim was prose only. `src/pge/nodes/root.test.ts` (new, sprint 9) now backs it the same way, in four mutation-proven pieces, and separately proves `evalRouterNode`'s `"partial"`/`"exhausted"` branches are themselves correctly implemented — unlike `context_compact`'s label-selection code, which does not exist at all, the precondition is what is unreachable here, not the code that would react to it. Node coverage did not move: still 42/44. |
 
 The pin is **two-directional**, like the conformance divergence set: a node that stops being
 executed fails, and a node that *starts* being executed fails too — because each entry above
@@ -646,12 +648,12 @@ adjudicated `pass-AMENDED` rather than sent back for a retry. Read together they
 about how this spec was scoped — it assumed missing writers and missing cases everywhere, and
 in three places the answer was a missing capability.
 
-**What that implies for the two sprints that inherit it.** Sprint 9's real remaining target is
+**What that implied for the two sprints that inherit it.** Sprint 9's real remaining target was
 `synthesize` alone: its `sc-9-1` (`rework_route` executes) was satisfied by sprint 8, forced by
 topology. Its `sc-9-3` ("`NEVER_EXECUTED` is empty") and `sc-9-4` ("every node in the committed
-topology executed") are **unsatisfiable as literally written**, because `context_compact`
+topology executed") were **unsatisfiable as literally written**, because `context_compact`
 cannot execute without production code that does not exist; the amended intent recorded on that
-contract is the honest form — `NEVER_EXECUTED` contains ONLY nodes proven structurally
+contract was the honest form — `NEVER_EXECUTED` contains ONLY nodes proven structurally
 unreachable, each with a recorded reason and a claim test, and coverage asserts every node
 executes EXCEPT those, computed against the topology artifact rather than a hardcoded count,
 with the guard still biting in BOTH directions. **Deleting the guard is not a way to satisfy
@@ -659,6 +661,18 @@ the criterion.** Sprint 11 therefore owns three unsatisfiable-as-written criteri
 one — `sc-11-1` (`equivalent: true`, "Engine migration disposition" below) plus these two — and
 the satisfiable work in each case is the same: re-specify the bar around a named, accepted,
 individually-justified exception set rather than around emptiness.
+
+**Sprint 9's own outcome.** Both amended criteria are now met against that re-specified bar:
+`sc-9-1` reconfirmed (`rework_route` still executes, unchanged since sprint 8); `synthesize`
+investigated on its own merits rather than assumed structurally blocked by inheritance, and
+independently reconfirmed unreachable from a second code path (the table row above); coverage
+computed against the artifact, unchanged at 42/44; the two-directional guard proven to bite —
+by mutation, not assertion — three ways: `nodes/supervisor.ts:165`'s dispatch-order guard
+reverted (`CLAIM 1`), `reworkRouterNode`'s own `"exhausted"` branch disabled (`CLAIM 3`), and a
+committed golden case removed in a scratch edit, each restored after confirming red
+(`src/pge/nodes/root.test.ts`, `src/pge/golden/coverage.test.ts`). Node coverage did not move,
+and was not expected to: no production `.ts` file's runtime behaviour changed, only a new test
+file and doc-comment additions that back a claim already recorded.
 
 ### A defect this coverage work surfaced
 
@@ -1711,6 +1725,13 @@ them this spec's to do (`nonGoals`):**
    execute" above. Sprint 11 consolidates three such criteria, not one, and the remedy is
    identical in each: a named, accepted, individually-justified exception set instead of a bar
    phrased as emptiness.
+
+   **Sprint 9 closed its own two against that amended form** — `synthesize` investigated on
+   its own merits and independently reconfirmed structurally unreachable, `NEVER_EXECUTED`
+   unchanged at `['context_compact', 'synthesize']` with both entries claim-tested, and node
+   coverage computed against the artifact at 42/44 — so sprint 11 inherits `sc-9-3`/`sc-9-4`
+   as CLOSED, and its own remaining work is `sc-11-1` alone plus the write-up `sc-11-3`/
+   `sc-11-5` ask for.
 
 **One carried-forward fact from sprint 5/6 is now CLOSED, not merely unchanged — see the
 sprint 7 bullet above.** An earlier version of this paragraph read: *"`verdictFrom`
