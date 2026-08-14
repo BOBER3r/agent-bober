@@ -1,0 +1,144 @@
+{
+  "formatVersion": 1,
+  "caseId": "plan-gate-out-refuses-zero-contracts",
+  "title": "gate_plan_out refuses a plan that materialised nothing",
+  "intent": "Pin gate_plan_out: a materialiser that returns an empty contract list is a refusal, not a plan with zero sprints.",
+  "tags": [
+    "plan",
+    "gate:gate_plan_out",
+    "refusal"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "plan_draft"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "ready",
+        "spec": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "plan_materialize",
+      "branchKey": null,
+      "effectName": "plan.materialize",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "spec": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      },
+      "response": []
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "gate_plan_out refused: the plan materialised zero contracts",
+          "node": "gate_plan_out",
+          "runId": "golden-run",
+          "detail": "The run stopped at gate_plan_out: gate_plan_out refused: the plan materialised zero contracts."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "specs": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      ]
+    },
+    "notes": "The spec IS persisted — plan_materialize is the sole writer of the spec channel and ran — while contracts stay absent. Pinning both together is what distinguishes 'the gate refused' from 'nothing ran'."
+  }
+}

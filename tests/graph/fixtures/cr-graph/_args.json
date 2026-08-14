@@ -1,0 +1,80 @@
+{
+  "_comment": "Real tools/call argument shapes captured live from code-review-graph 2.3.7 (MCP serverInfo.version=3.4.4) via the initialize+tools/call probe documented in the sprint-4 briefing. Each key is a captured fixture tool name; the value is the exact `arguments` object sent in that capture.",
+  "capturedAt": "2026-07-27T03:49:05Z",
+  "crGraphVersion": "2.3.7",
+  "mcpServerInfoVersion": "3.4.4",
+  "queryGraphPatternEnum": [
+    "callers_of",
+    "callees_of",
+    "imports_of",
+    "importers_of",
+    "children_of",
+    "tests_for",
+    "inheritors_of",
+    "triggers_of",
+    "triggered_by",
+    "publishers_of",
+    "listeners_of",
+    "handlers_of",
+    "endpoints_for",
+    "consumers_of",
+    "file_summary"
+  ],
+  "toolArgs": {
+    "semantic_search_nodes_tool": {
+      "query": "add",
+      "limit": 5
+    },
+    "query_graph_tool": {
+      "pattern": "callers_of",
+      "target": "add"
+    },
+    "get_impact_radius_tool": {
+      "changed_files": [
+        "src/math_utils.py"
+      ]
+    },
+    "get_review_context_tool": {
+      "changed_files": [
+        "src/main.py"
+      ]
+    },
+    "get_architecture_overview_tool": {},
+    "detect_changes_tool": {
+      "base": "HEAD~1"
+    },
+    "traverse_graph_tool": {
+      "query": "compute"
+    },
+    "list_graph_stats_tool": {}
+  },
+  "sprint6QueryCaptures": {
+    "_comment": "Sprint-6 live captures (code-review-graph 2.3.7, MCP serverInfo 3.4.4) mapping bober's 4 QueryPatterns to query_graph_tool. Paths sanitized WORK->/repo. callers/callees/tests_for require a qualified_name target (bare names are status:'ambiguous'); imports/importers take a file path. Sample project: src/math_utils.py {add,multiply,Calculator.compute}, src/main.py {run,helper,another}, tests/test_math_utils.py {test_add,test_multiply}.",
+    "query_graph_callers_of_tool.json": {
+      "pattern": "callers_of",
+      "target": "/repo/src/math_utils.py::multiply"
+    },
+    "query_graph_callees_of_tool.json": {
+      "pattern": "callees_of",
+      "target": "/repo/src/math_utils.py::multiply"
+    },
+    "query_graph_importers_of_tool.json": {
+      "pattern": "importers_of",
+      "target": "src/math_utils.py"
+    },
+    "query_graph_imports_of_tool.json": {
+      "pattern": "imports_of",
+      "target": "src/main.py"
+    },
+    "query_graph_tests_for_tool.json": {
+      "pattern": "tests_for",
+      "target": "/repo/src/math_utils.py::multiply"
+    }
+  },
+  "sprint6DirectionMap": {
+    "callers_of": "query_graph_tool pattern='callers_of', target=NodeRef.id (qualified_name) -> results[] via crToNodeRef  [INBOUND]",
+    "callees_of": "query_graph_tool pattern='callees_of', target=NodeRef.id (qualified_name) -> results[] via crToNodeRef  [OUTBOUND]",
+    "imports_of": "query_graph_tool pattern='importers_of' (NOT 'imports_of'!), target=NodeRef.file -> results[].importer as module NodeRefs  [dependents, matches tokensave file_dependents]",
+    "tests_for": "query_graph_tool pattern='tests_for', target=NodeRef.id (qualified_name, NOT file!) -> results[] test-symbol rows via crToNodeRef"
+  }
+}

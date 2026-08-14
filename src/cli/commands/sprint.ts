@@ -2,7 +2,7 @@ import chalk from "chalk";
 
 import { loadConfig } from "../../config/loader.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
-import { updateContractStatus } from "../../contracts/sprint-contract.js";
+import { updateContractStatus, isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import {
   createHandoff,
   summarizeOlderSprints,
@@ -156,8 +156,8 @@ export async function runSprintCommand(
     );
 
     // Get completed sprints
-    const completedContracts = contracts.filter(
-      (c) => c.status === "passed",
+    const completedContracts = contracts.filter((c) =>
+      isSettledContractStatus(c.status),
     );
 
     const maxIterations = config.evaluator.maxIterations;
@@ -282,7 +282,7 @@ export async function runSprintCommand(
 
       if (evaluation.passed) {
         logger.success(`Sprint passed! Score: ${evaluation.score}/100`);
-        currentContract = updateContractStatus(currentContract, "passed");
+        currentContract = updateContractStatus(currentContract, "completed");
         currentContract = {
           ...currentContract,
           evaluatorFeedback: evaluation.summary,

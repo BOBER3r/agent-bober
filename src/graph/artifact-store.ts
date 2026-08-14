@@ -24,7 +24,16 @@ export class GraphArtifactStore {
   async readManifest(): Promise<GraphManifest | null> {
     if (!(await fileExists(this.manifestPath))) return null;
     try {
-      return await readJson<GraphManifest>(this.manifestPath);
+      const raw = await readJson<Partial<GraphManifest>>(this.manifestPath);
+      // Legacy manifests (pre-backend-selection) lack `backend`/`backendVersion`.
+      // Normalize additively: backend defaults to 'tokensave' (the only engine
+      // that existed before this field was introduced), and backendVersion
+      // falls back to the always-written tokensaveVersion.
+      return {
+        ...raw,
+        backend: raw.backend ?? "tokensave",
+        backendVersion: raw.backendVersion ?? raw.tokensaveVersion ?? "",
+      } as GraphManifest;
     } catch (err) {
       console.error(
         `[GraphArtifactStore] Malformed manifest at ${this.manifestPath}:`,

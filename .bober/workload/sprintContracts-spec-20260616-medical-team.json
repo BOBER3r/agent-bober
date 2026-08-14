@@ -1,0 +1,807 @@
+{
+  "entryId": "sprintContracts-spec-20260616-medical-team",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260616-medical-team-1.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-2.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-3.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-4.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-5.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-6.json",
+      ".bober/contracts/sprint-spec-20260616-medical-team-7.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260616-medical-team-1",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 1,
+      "title": "Additive pipeline plumbing + medical team registration",
+      "description": "Risk-first integration linchpin. Add `medical-sop` as a new additive PipelineEngineName member (src/orchestrator/workflow/engine.ts) and widen every Zod enum that mirrors it (team pipelineShape at src/config/schema.ts:366 + the PipelineSectionSchema engine enum) in lockstep. Extend BOTH exhaustive switches in src/orchestrator/workflow/selector.ts: selectPipelineEngineForTeam returns a new MedicalSopEngine for a `medical-sop` team; selectPipelineEngine (the config/programming path that reads config.pipeline.engine and can never legitimately be medical-sop) handles the member defensively (fall through to TsPipelineEngine) so the switch stays exhaustive without changing programming behavior. Create a new src/medical/ module with a MINIMAL MedicalSopEngine stub (implements PipelineEngine; run returns a trivial PipelineResult for now), the GuardrailSet type filling Team.guardrails, and buildMedicalTeam(config) + registry wiring so loadTeam(config, 'medical') resolves to a Team with pipelineShape 'medical-sop'. Byte-zero impact on ts|skill|workflow and the programming team is a HARD requirement. This sprint is plumbing + skeleton only — gates, store, numerics, ingestion, egress, and retrieval are later sprints.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "All tests pass with zero failures, including new collocated tests under src/medical (npm run test), and the FULL pre-existing suite remains green (no regression).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "PipelineEngineName (src/orchestrator/workflow/engine.ts) includes 'medical-sop' and every Zod enum mirroring it is widened in lockstep: the team pipelineShape enum (src/config/schema.ts:366) and the PipelineSectionSchema engine enum. A unit test parses a config/team declaring pipelineShape 'medical-sop' successfully and asserts the TS union and the Zod enum agree.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "Both switches in src/orchestrator/workflow/selector.ts are exhaustive over the widened PipelineEngineName with the compile-time `never` guard intact. selectPipelineEngineForTeam(medicalTeam, config) returns a MedicalSopEngine instance (instanceof / name === 'medical-sop'); selectPipelineEngine(config) is unchanged for ts/skill/workflow.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "loadTeam(config, 'medical') returns a Team with id 'medical', pipelineShape === 'medical-sop', and a concrete GuardrailSet object in its guardrails slot (not undefined). A unit test asserts these fields.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "Regression: loadTeam(config) with no id still returns the byte-identical programming team (providers deep-equal resolveRoleProviders(config), pipelineShape === resolveEngineName(config), memoryNamespace unchanged); a test asserts the programming team and existing engine selection are unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/medical (grep returns nothing); the module is ESM/NodeNext with .js import extensions and strict TS.",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the consent gate, audit log, or disclaimer — that is Sprint 2 (the MedicalSopEngine stub may have placeholder hooks but no enforcement).",
+        "Do not implement the red-flag detector / GuardrailSet.evaluate logic — that is Sprint 3 (define the GuardrailSet TYPE only this sprint).",
+        "Do not implement HealthDataStore or NumericsQueryLayer — that is Sprint 4.",
+        "Do not implement ingestion or the CLI import command — that is Sprint 5.",
+        "Do not implement EgressGuard, the ESLint medical boundary, medications wiring, or the full SOP — that is Sprint 6.",
+        "Do not implement LiteratureRetriever networking — that is Sprint 7.",
+        "Do not change the behavior of ts|skill|workflow engines, selectPipelineEngine for those names, resolveRoleProviders, runPipeline, or the programming team."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "medical-sop is wired through PipelineEngineName + both Zod enums + both selector switches with the never guard intact, loadTeam(config,'medical') resolves to a medical-sop team with a GuardrailSet, and the programming team + ts/skill/workflow are byte-identical"
+      ],
+      "definitionOfDone": "A new src/medical/ module exposes a minimal MedicalSopEngine (implements PipelineEngine; readonly name = 'medical-sop'; run returns a trivial PipelineResult), a GuardrailSet type, and buildMedicalTeam(config): Team. PipelineEngineName gains the additive 'medical-sop' member; the team pipelineShape Zod enum (schema.ts:366) and the PipelineSectionSchema engine enum are widened to match. Both selector switches handle medical-sop exhaustively (team switch -> MedicalSopEngine; config switch -> defensive TsPipelineEngine fall-through). loadTeam registers a built-in 'medical' team. Build, typecheck, and the full test suite pass; the programming team and ts|skill|workflow behavior are byte-identical; no SDK types leak into src/medical.",
+      "assumptions": [
+        "PipelineEngine is an INTERFACE (src/orchestrator/workflow/engine.ts:9) — MedicalSopEngine implements it (the architecture's `extends` is shorthand). run signature: run(userPrompt, projectRoot, config, opts?: { runId?: string }): Promise<PipelineResult>.",
+        "resolveEngineNameForTeam (selector.ts:75) returns team.pipelineShape verbatim for any value except 'workflow' (only workflow is downgraded), so 'medical-sop' flows through unchanged — verified.",
+        "selectPipelineEngine (selector.ts:51) reads config.pipeline.engine and will never legitimately be 'medical-sop'; the added case is a defensive exhaustiveness branch (fall through to TsPipelineEngine) and changes no real programming path.",
+        "Team.guardrails is `?: unknown` today (types.ts:29); a concrete GuardrailSet type is assigned only for the medical team and leaves other teams' undefined guardrails valid.",
+        "The 'medical' team is registered in code in src/teams/registry.ts (like the built-in 'programming' team), not via a .bober/teams/*.json file."
+      ],
+      "outOfScope": [
+        "Consent/audit/disclaimer enforcement (Sprint 2)",
+        "Red-flag detection logic (Sprint 3)",
+        "Health store + numerics (Sprint 4)",
+        "Ingestion + CLI (Sprint 5)",
+        "Egress guard + full SOP + medications (Sprint 6)",
+        "Literature retrieval networking (Sprint 7)",
+        "Any change to existing engine/team public behavior"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Create src/medical/ with small single-purpose files + unicode box-header section comments (project principles). Suggested files: src/medical/types.ts (GuardrailSet, GuardrailVerdict, GuardrailContext, MedicalAnswer, and shared medical types), src/medical/engine.ts (MedicalSopEngine stub), src/medical/team.ts (buildMedicalTeam), with collocated *.test.ts.\n\nVERIFIED integration anchors (read these before editing):\n- src/orchestrator/workflow/engine.ts:6  export type PipelineEngineName = 'ts' | 'skill' | 'workflow';  -> add '| \"medical-sop\"'. The doc comment says it 'Mirrors the z.enum in PipelineSectionSchema' — find and widen that enum too.\n- src/orchestrator/workflow/engine.ts:9  export interface PipelineEngine { readonly name: PipelineEngineName; run(userPrompt, projectRoot, config, opts?: {runId?: string}): Promise<PipelineResult>; }  -> MedicalSopEngine implements this.\n- src/orchestrator/workflow/selector.ts:51 selectPipelineEngine(config) switch (resolveEngineName(config)) — has cases ts/skill/workflow and NO default; adding the union member breaks exhaustiveness, so ADD `case 'medical-sop': return new TsPipelineEngine();` (defensive — config.pipeline.engine is never medical-sop) OR a `never`-typed default; keep ts/skill/workflow byte-identical.\n- src/orchestrator/workflow/selector.ts:103 selectPipelineEngineForTeam(team, config) switch (resolveEngineNameForTeam(team, config)) — ADD `case 'medical-sop': return new MedicalSopEngine();` (import from ../../medical/engine.js).\n- src/orchestrator/workflow/selector.ts:75 resolveEngineNameForTeam returns `requested` verbatim unless 'workflow' — medical-sop passes through; no change needed there.\n- src/config/schema.ts:366 pipelineShape: z.enum(['ts','skill','workflow']).optional() -> add 'medical-sop'. Also widen the PipelineSectionSchema engine enum (search schema.ts for the other z.enum(['ts','skill','workflow'])).\n- src/teams/types.ts:27,29 pipelineShape: PipelineEngineName; guardrails?: unknown.\n- src/teams/registry.ts:34 loadTeam(config, teamId?) — register a built-in 'medical' team. Mirror how the 'programming' team is built. buildMedicalTeam(config) returns { id:'medical', displayName:'Medical team', memoryNamespace:'medical', providers: resolveRoleProviders(config), pipelineShape:'medical-sop', roles: <descriptors>, guardrails: <a concrete GuardrailSet instance with rulesetVersion> }.\n\nMedicalSopEngine stub: readonly name = 'medical-sop' as const; async run(...) returns a minimal PipelineResult (look at PipelineResult shape at src/orchestrator/pipeline.ts:66 and what TsPipelineEngine.run returns for the required fields — return a stub success/placeholder result; the real SOP lands in S2/S3/S6). Do NOT call any LLM in the stub.\n\nGuardrailSet TYPE this sprint: define `interface GuardrailSet { evaluate(prompt: string, ctx: GuardrailContext): GuardrailVerdict; readonly rulesetVersion: string }` and a trivial implementation that returns { kind: 'allow' } (real logic in S3) so buildMedicalTeam can fill the slot. GuardrailVerdict union per the data model.\n\nKeep createDefaultConfig emitting NO teams (back-compat). Tests: loadTeam(config,'medical') field assertions; selectPipelineEngineForTeam(medicalTeam) instanceof MedicalSopEngine; programming-team regression (deep-equal providers + engine unchanged); Zod parse of pipelineShape:'medical-sop'. Use no network, no fs (pure).",
+      "evaluatorNotes": "sc-1-4: grep engine.ts for the widened union; parse via the team schema a config with a team whose pipelineShape is 'medical-sop' (expect success) and one with 'bogus' (expect Zod failure); confirm the PipelineSectionSchema engine enum was also widened (search for the second z.enum).\nsc-1-5: assert both switches compile with the never guard (typecheck) and that removing a case would fail; runtime: selectPipelineEngineForTeam(buildMedicalTeam(config), config).name === 'medical-sop'; selectPipelineEngine(config) for engine 'ts'/'workflow' returns the same engine type as before.\nsc-1-6: loadTeam(config,'medical') -> id==='medical', pipelineShape==='medical-sop', guardrails is a non-undefined object exposing rulesetVersion + evaluate.\nsc-1-7: REGRESSION — loadTeam(config) (no id) deep-equals the programming team (providers === resolveRoleProviders(config), pipelineShape === resolveEngineName(config)); run the FULL suite and confirm nothing else changed.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/medical — expect none.\nBuild + typecheck must be clean. Confirm the MedicalSopEngine stub makes zero LLM calls (no provider import used in engine.ts beyond types).",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/engine.ts",
+        "src/orchestrator/workflow/selector.ts",
+        "src/config/schema.ts",
+        "src/teams/registry.ts",
+        "src/medical/types.ts",
+        "src/medical/engine.ts",
+        "src/medical/team.ts",
+        "src/medical/engine.test.ts",
+        "src/medical/team.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-1-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-1-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T21:57:55.000Z",
+      "startedAt": "2026-06-16T17:55:33.818Z",
+      "completedAt": "2026-06-16T21:57:55.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-2",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 2,
+      "title": "Consent gate, append-only audit log, and disclaimer footer (Gate 1 + audit substrate)",
+      "description": "Implement the compliance substrate and wire it as the FIRST gate of the medical SOP. ConsentGate is fail-closed: when no ConsentRecord is present, MedicalSopEngine.run returns a refuse verdict and makes ZERO downstream calls. AuditLog appends IDs/enums-only entries to .bober/medical/audit-<date>.jsonl with O_APPEND|O_CREAT and file mode 0600 — never prompt text or health values. DisclaimerComposer produces a versioned per-response footer. ConsentGate depends on AuditLog (records a 'consent' event). This sprint wires consent + audit + footer into the engine stub from Sprint 1; the red-flag gate (S3), numerics (S4), and retrieval (S6/S7) are later.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "All tests pass including new collocated tests for ConsentGate, AuditLog, and DisclaimerComposer; the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "Fail-closed consent: with no ConsentRecord present, MedicalSopEngine.run returns a refuse verdict (MedicalAnswer with shortCircuit/refuse semantics) and makes ZERO downstream calls — verified with a spy/fake for numerics + LLMClient asserted never invoked.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "ConsentGate.recordConsent persists a ConsentRecord and ConsentGate.current()/hasConsent() round-trip it (consentVersion, acceptedAtIso, rulesetVersion, disclaimerVersion).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "AuditLog.append writes to .bober/medical/audit-<date>.jsonl with file mode 0600 and append-only (O_APPEND|O_CREAT) semantics; a test asserts the file mode and that a second append adds a line without truncating the first.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "Audit entries contain IDs/enums ONLY (event, rulesetVersion?, patternsetVersion?, ruleId?, tIso) — a test feeds prompts/health values through the SOP and asserts NO prompt text and NO health value substring appears anywhere in the serialized audit file.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "DisclaimerComposer.footer() returns a non-empty string carrying disclaimerVersion, and every MedicalAnswer the engine produces includes the footer; all timestamps (acceptedAtIso, audit tIso) are injected parameters, asserted by a deterministic test (no wall-clock read).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement red-flag detection — GuardrailSet.evaluate still returns allow this sprint (Sprint 3 adds the detector).",
+        "Do not implement HealthDataStore or numerics (Sprint 4).",
+        "Do not implement ingestion (Sprint 5).",
+        "Do not implement EgressGuard, the full SOP ordering, or medications (Sprint 6).",
+        "Do not implement literature retrieval (Sprint 7).",
+        "Do not read timestamps from the system clock anywhere — timestamps are parameters."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "No-consent => refuse + 0 downstream calls; audit is 0600 append-only IDs/enums-only with no PHI leak; footer carries disclaimerVersion; timestamps are injected"
+      ],
+      "definitionOfDone": "src/medical/ gains ConsentGate (hasConsent/recordConsent/current; fail-closed), AuditLog (append to .bober/medical/audit-<date>.jsonl, O_APPEND|O_CREAT, 0600, IDs/enums only), and DisclaimerComposer (versioned footer). MedicalSopEngine.run runs the consent gate FIRST: absent consent => refuse with zero downstream calls + a 'refuse' (or 'consent') audit entry; present consent => proceeds to the (still allow-only) guardrail and attaches the disclaimer footer to the MedicalAnswer. Timestamps are injected parameters. Build, typecheck, and all tests pass; no PHI in the audit file.",
+      "assumptions": [
+        "ConsentRecord + AuditEntry shapes are per the spec data model. The audit 'date' in the filename is derived from an injected timestamp parameter, not Date.now().",
+        "ConsentRecord persists as JSON under .bober/medical/ (e.g. consent.json) via node:fs/promises; AuditLog uses an O_APPEND|O_CREAT file handle with mode 0600.",
+        "MedicalAnswer.shortCircuit/abstained/refuse semantics: a consent refusal sets a refuse-style MedicalAnswer (body = canned consent-required message, abstained=false, shortCircuit semantics) — match the data model union.",
+        "ConsentGate depends on AuditLog (records a 'consent' event on recordConsent) per the architecture component graph."
+      ],
+      "outOfScope": [
+        "Red-flag logic (Sprint 3)",
+        "Numerics/store (Sprint 4)",
+        "Ingestion (Sprint 5)",
+        "Egress + full SOP + medications (Sprint 6)",
+        "Literature retrieval (Sprint 7)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Add small files under src/medical/: consent.ts (ConsentGate), audit.ts (AuditLog), disclaimer.ts (DisclaimerComposer), collocated *.test.ts. Wire them into the MedicalSopEngine stub from Sprint 1.\n\nAuditLog: open with node:fs/promises fs.open(path, 'a', 0o600) or appendFile with mode; for the mode-0600 + O_APPEND guarantee prefer fs.open(path, constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY, 0o600) then handle.write(JSON.stringify(entry)+'\\n'). Ensure .bober/medical/ exists (fs.mkdir recursive, mode 0700). Filename audit-<date>.jsonl where <date> is YYYY-MM-DD derived from the injected tIso parameter — NEVER new Date()/Date.now(). The AuditEntry written must include ONLY: tIso, event, rulesetVersion?, patternsetVersion?, ruleId?. Do NOT serialize the prompt, the answer body, or any health value.\n\nConsentGate: hasConsent() reads .bober/medical/consent.json existence + validity; current() returns the parsed ConsentRecord | undefined; recordConsent(record) writes it (and appends a 'consent' audit entry via AuditLog). Fail-closed: hasConsent() false on missing/corrupt file.\n\nDisclaimerComposer: footer() returns a fixed, non-empty, non-diagnostic wellness disclaimer string; expose readonly disclaimerVersion. Keep wording low-risk (general wellness, not diagnosis/treatment) consistent with the FFDCA posture in the architecture.\n\nMedicalSopEngine.run ordering THIS sprint: (1) ConsentGate.hasConsent() — if false, append audit 'refuse' (ruleId 'consent-required'), return a refuse MedicalAnswer with the disclaimer footer, and DO NOT touch numerics/LLM; (2) else GuardrailSet.evaluate (still allow), then return a placeholder answer WITH the footer + an 'answer' audit entry. The timestamp used for audit/consent comes from opts or an injected clock param so tests are deterministic — thread a `now: string` (ISO) parameter or a small injected Clock; default it from opts.runId-independent injected value, not the wall clock.\n\nTests: assert no-consent => refuse + spy LLMClient never called + numerics fake never called; recordConsent round-trip; audit file mode === 0o600 (statSync mode & 0o777); append-only (two appends => two lines, first intact); PHI-leak test (feed a prompt containing 'my blood pressure is 180' and a health value, assert neither appears in the audit file bytes); footer non-empty + disclaimerVersion present; deterministic-timestamp test (inject a fixed ISO, assert it appears verbatim in the entry).",
+      "evaluatorNotes": "sc-2-4: construct MedicalSopEngine with fakes for the numerics layer and LLMClient; call run with no consent on disk; assert the result is a refuse MedicalAnswer and BOTH fakes recorded zero calls.\nsc-2-6: statSync the audit file, assert (mode & 0o777) === 0o600; append twice, assert two newline-delimited JSON lines and the first line is byte-identical after the second append.\nsc-2-7: run an SOP turn with a prompt embedding a distinctive token (e.g. 'SECRETBP=180') and a numeric health value; read the audit file bytes and assert the token and the value string are ABSENT; assert each line parses to an object whose keys are a subset of {tIso,event,rulesetVersion,patternsetVersion,ruleId}.\nsc-2-8: assert footer() is non-empty and includes/exposes disclaimerVersion; inject a fixed ISO timestamp and assert it appears verbatim in the consent record and audit entries (proves no wall-clock read).\nsc-2-5: recordConsent then current()/hasConsent round-trip.\nRun full suite + build + typecheck; confirm Sprint 1 plumbing still green.",
+      "estimatedFiles": [
+        "src/medical/consent.ts",
+        "src/medical/audit.ts",
+        "src/medical/disclaimer.ts",
+        "src/medical/engine.ts",
+        "src/medical/consent.test.ts",
+        "src/medical/audit.test.ts",
+        "src/medical/disclaimer.test.ts",
+        "src/medical/engine.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-2-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-2-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T22:15:30.000Z",
+      "startedAt": "2026-06-16T19:06:27Z",
+      "completedAt": "2026-06-16T22:15:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-3",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 3,
+      "title": "Red-flag emergency short-circuit (Gate 2, 0 LLM calls)",
+      "description": "The headline safety guarantee. Implement a deterministic, pure/synchronous RedFlagDetector (categories cardiac|stroke|anaphylaxis|self-harm|overdose|none with a patternsetVersion) and the real GuardrailSet.evaluate (allow|short-circuit|refuse with rulesetVersion) wrapping it, wired into MedicalSopEngine.run immediately AFTER the consent gate and BEFORE any numerics or LLM call. A red-flag match returns a short-circuit verdict with a canned 911/988 escalation and makes ZERO downstream calls (no numerics, no retrieval, no LLM). The short-circuit is audited with ruleId + versions. This replaces the allow-only GuardrailSet stub from Sprints 1-2.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "All tests pass including new RedFlagDetector + GuardrailSet tests; the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "For at least one representative prompt in EACH red-flag category (cardiac, stroke, anaphylaxis, self-harm, overdose), GuardrailSet.evaluate returns a short-circuit verdict with a canned escalation, and MedicalSopEngine.run makes ZERO LLM calls and ZERO numerics calls — verified with spy/fake dependencies asserted never invoked.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "RedFlagDetector.detect is pure and synchronous (no async, no I/O, no network, no model): identical input yields identical RedFlagMatch across repeated calls, asserted by a test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "A non-emergency prompt returns category 'none' and the SOP proceeds past the guardrail to normal (allow) handling.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "A short-circuit appends an audit entry with event 'short-circuit' carrying ruleId, rulesetVersion, and patternsetVersion (IDs/enums only — no prompt text).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "GuardrailSet.evaluate throws on an empty prompt; the detector and guardrail require no network and no LLMClient (a test confirms no provider is constructed).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement HealthDataStore or numerics (Sprint 4) — the numerics dependency in run may remain a fake/stub this sprint.",
+        "Do not implement ingestion (Sprint 5).",
+        "Do not implement EgressGuard, medications, or the full retrieval SOP (Sprint 6).",
+        "Do not implement literature retrieval (Sprint 7).",
+        "Do not use an LLM for red-flag classification — detection is deterministic and local ONLY."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Every red-flag category short-circuits with a canned escalation and 0 LLM/numerics calls; 'none' proceeds; short-circuit is audited; evaluate throws on empty prompt"
+      ],
+      "definitionOfDone": "src/medical/ gains RedFlagDetector (pure detect(prompt): RedFlagMatch over a versioned pattern set, categories cardiac|stroke|anaphylaxis|self-harm|overdose|none) and a real GuardrailSet implementation whose evaluate(prompt, ctx) runs the detector first and returns short-circuit{rule,cannedResponse} on a match, refuse{rule,reason} for code-enforced refusals, else allow. MedicalSopEngine.run runs consent (S2) then GuardrailSet.evaluate; a short-circuit returns the canned escalation MedicalAnswer (shortCircuit=true) with the disclaimer footer + a 'short-circuit' audit entry and reaches NO numerics/LLM. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "RedFlagMatch = { category: 'cardiac'|'stroke'|'anaphylaxis'|'self-harm'|'overdose'|'none'; ruleId?: string }. patternsetVersion is a string constant exported by the detector.",
+        "The pattern set is conservative keyword/phrase matching (case-insensitive, word-boundary aware) — deliberately favoring escalation reliability over paraphrase coverage (architecture ADR-2 accepts possible misses on novel phrasing).",
+        "self-harm/overdose escalate to 988 (US Suicide & Crisis Lifeline); cardiac/stroke/anaphylaxis escalate to 911. Canned responses are fixed strings, not model-generated.",
+        "The numerics dependency may be a fake this sprint; the LLMClient is injected so a spy can assert zero calls."
+      ],
+      "outOfScope": [
+        "Numerics/store (Sprint 4)",
+        "Ingestion (Sprint 5)",
+        "Egress + full SOP + medications (Sprint 6)",
+        "Literature retrieval (Sprint 7)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Add src/medical/red-flag.ts (RedFlagDetector + patternsetVersion) and src/medical/guardrails.ts (the real GuardrailSet replacing the S1 allow-only stub), collocated *.test.ts.\n\nRedFlagDetector.detect MUST be a pure sync function: normalize the prompt (lowercase, trim), test against a per-category list of conservative patterns (word-boundary regexes or phrase includes), return the first matching category + a ruleId, else { category:'none' }. NO async, NO fs, NO network, NO LLM import. Export a patternsetVersion string (e.g. 'redflag-2026.06.16'). Keep categories: cardiac (e.g. 'chest pain' + radiating/short of breath), stroke (FAST: face droop, arm weakness, slurred speech, 'sudden numbness'), anaphylaxis ('throat closing', 'trouble breathing' + 'allergic'/sting/peanut), self-harm ('kill myself','suicidal','end my life'), overdose ('overdose','took too many','too much'). Favor reliability; document that novel phrasing may miss (ADR-2 risk).\n\nGuardrailSet.evaluate(prompt, ctx): throw on empty/whitespace prompt; run detector; if category !== 'none' return { kind:'short-circuit', rule: ruleId, cannedResponse: escalationFor(category) }; (refuse branch for non-emergency code-enforced refusals can be a documented placeholder this sprint or minimal); else { kind:'allow' }. Expose rulesetVersion (e.g. 'guardrail-2026.06.16').\n\nescalationFor(category): fixed strings. 911 for cardiac/stroke/anaphylaxis ('This may be a medical emergency. Call 911 (or your local emergency number) now.'), 988 for self-harm/overdose ('If you are in crisis, call or text 988 (US Suicide & Crisis Lifeline) now, or 911 if you are in immediate danger.'). NEVER model-generated.\n\nMedicalSopEngine.run wiring: after consent gate, call this.guardrails.evaluate(prompt, ctx). On short-circuit: append audit { event:'short-circuit', ruleId, rulesetVersion, patternsetVersion } and return MedicalAnswer { body: cannedResponse, abstained:false, shortCircuit:true, citations:[], disclaimerFooter: footer() } WITHOUT calling numerics or the LLM. On allow: proceed to the placeholder normal path (numerics fake + footer). Inject the LLMClient and numerics layer so tests can spy.\n\nTests: parametrized over the 5 categories asserting short-circuit + spy LLM/numerics zero calls + audit entry; determinism (call detect twice, deep-equal); 'none' proceeds; empty prompt throws; assert guardrails.ts has no provider/network import.",
+      "evaluatorNotes": "sc-3-4: for each category, feed a representative emergency prompt to MedicalSopEngine.run with a spy LLMClient and a spy numerics layer; assert result.shortCircuit===true, body contains the right hotline (911 vs 988), and BOTH spies have zero calls.\nsc-3-5: call detect(samePrompt) twice; deepEqual the results; assert the function is synchronous (not returning a Promise) and red-flag.ts imports nothing from src/providers or any network module.\nsc-3-6: a benign prompt ('what was my average resting heart rate last week') => detect 'none' and run proceeds to the allow path.\nsc-3-7: after a short-circuit, read the audit file; assert an entry with event 'short-circuit', a ruleId, rulesetVersion, patternsetVersion, and NO prompt text.\nsc-3-8: evaluate('') and evaluate('   ') throw.\nFull suite + build + typecheck green; confirm S1/S2 still pass (consent gate still fires before the guardrail).",
+      "estimatedFiles": [
+        "src/medical/red-flag.ts",
+        "src/medical/guardrails.ts",
+        "src/medical/engine.ts",
+        "src/medical/red-flag.test.ts",
+        "src/medical/guardrails.test.ts",
+        "src/medical/engine.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-3-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-3-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T19:42:00.000Z",
+      "startedAt": "2026-06-16T19:24:53Z",
+      "completedAt": "2026-06-16T19:42:00.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-4",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 4,
+      "title": "HealthDataStore + deterministic NumericsQueryLayer",
+      "description": "Implement the data + numerics layer that keeps arithmetic out of the LLM. HealthDataStore is a single generic events table (better-sqlite3 sync, mirroring FactStore) with INSERT OR IGNORE on a deterministic SHA-256 id of (metric|tStart|source|value); it exposes upsertObservations (returns NEW-row count), getObservations, getLabSeries, getBaseline/putBaseline, getPreference, close. NumericsQueryLayer exposes ONLY the closed NumericPrimitive whitelist (mean|min|max|latest|delta|slope|percentile|zscore) via getMetric plus getLabTrend; sampleCount 0 => value null (abstain). No eval, no codegen, no subprocess. The LLM never performs arithmetic.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-1"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "All tests pass including new HealthDataStore + NumericsQueryLayer tests (using temp dirs, no fs mocks); the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "HealthDataStore.upsertObservations dedupes via INSERT OR IGNORE on the deterministic SHA-256 id and returns the count of NEW rows only: a test inserts N rows then re-inserts the same N and asserts the second call returns 0 while getObservations still returns N.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "Each of the 8 NumericPrimitives (mean,min,max,latest,delta,slope,percentile,zscore) returns the correct value on a known fixture series (asserted against hand-computed expected values).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "getMetric over an empty window returns NumericResult { value: null, sampleCount: 0 } (abstain) and does NOT throw; getLabTrend on an unknown biomarker abstains similarly.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "NumericsQueryLayer reads the per-row unit and refuses (does not silently mix) aggregation across heterogeneous units for the same metric — a test with mixed units asserts a refusal/abstain rather than a blended number.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-8",
+          "description": "No eval, no Function constructor, no code generation, and no child_process/execa appears anywhere in the numerics code (grep/test over src/medical numerics files returns nothing).",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement ingestion / SAX parsing (Sprint 5) — tests insert observations directly via upsertObservations.",
+        "Do not implement EgressGuard, medications, or the full SOP wiring (Sprint 6).",
+        "Do not implement literature retrieval (Sprint 7).",
+        "Do not add numeric primitives beyond the 8 whitelisted ones.",
+        "Do not store medications in HealthDataStore (medications are FactStore value-of-record — Sprint 6 / ADR-7)."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Dedup + NEW-row count correct; all 8 primitives correct; empty window abstains; cross-unit refused; no eval/codegen/subprocess"
+      ],
+      "definitionOfDone": "src/medical/ gains HealthDataStore (better-sqlite3 sync, generic single events table + a lab_results table or shared table, deterministic SHA-256 id, INSERT OR IGNORE, the full accessor surface) and NumericsQueryLayer (closed NumericPrimitive whitelist + getLabTrend, sampleCount-0 abstain, cross-unit refusal). No eval/codegen/subprocess. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "HealthObservation + LabResult + NumericResult shapes per the spec data model. The deterministic id is SHA-256 of `${metric}|${tStart}|${source}|${value}` (mirroring FactStore factId at src/state/facts.ts:58-69).",
+        "better-sqlite3 is already a dependency (used by FactStore at src/state/facts.ts); HealthDataStore uses the same sync API and a per-store db file path passed in (temp dir in tests).",
+        "slope is a simple linear least-squares slope over (t,value); percentile uses a documented method (e.g. nearest-rank or linear interpolation — pick one and test it); zscore is (latest - mean)/stddev. Document the chosen method in code.",
+        "Timestamps (tStart) are ISO string parameters on the observations; the store never reads the clock."
+      ],
+      "outOfScope": [
+        "Ingestion (Sprint 5)",
+        "Egress + full SOP + medications (Sprint 6)",
+        "Literature retrieval (Sprint 7)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Add src/medical/health-store.ts (HealthDataStore) and src/medical/numerics.ts (NumericsQueryLayer), collocated *.test.ts.\n\nHealthDataStore: model on FactStore (src/state/facts.ts) — same better-sqlite3 sync pattern. Single generic observations table: columns (id TEXT PRIMARY KEY, metric TEXT, value REAL, unit TEXT, t_start TEXT, t_end TEXT, source TEXT). A separate lab_results table (id, biomarker, value, unit, collected_at, ref_low, ref_high) OR a typed view — keep labs distinct from observations. id = sha256(`${metric}|${tStart}|${source}|${value}`) via node:crypto (see facts.ts:58-69 for the exact factId helper to mirror). upsertObservations uses `INSERT OR IGNORE` in a transaction and returns db.changes summed (count of NEW rows). getObservations(metric, fromIso, toIso) filters by metric and t_start range, ordered by t_start. getBaseline/putBaseline + getPreference back a small key/value table. close() closes the db. All sync. Use node:fs/promises only for mkdir of the parent dir if needed.\n\nNumericsQueryLayer(store): getMetric(window: MetricWindow, primitive: NumericPrimitive): NumericResult. Pull rows via store.getObservations(window.metric, window.fromIso, window.toIso). If rows.length === 0 => { primitive, value: null, unit: window.unit ?? '', sampleCount: 0 }. UNIT CHECK: collect distinct units across rows; if >1 distinct unit => abstain ({ value:null, sampleCount:0 }) or throw a documented 'cross-unit' refusal — pick abstain to match the no-throw contract, but make it observable (e.g. a separate reason) and TEST it. Compute the primitive over the numeric values: mean, min, max, latest (max t_start), delta (latest - earliest), slope (least-squares over epoch-ms vs value), percentile (document method; getMetric may take a percentile param or default p50), zscore ((latest-mean)/stddev, sampleCount<2 => abstain). getLabTrend(biomarker): build a LabTrend from store.getLabSeries; unknown biomarker => abstain.\n\nABSOLUTELY NO eval, Function(), new Function, vm, child_process, or execa anywhere in numerics.ts/health-store.ts. The primitive dispatch is a plain switch over the NumericPrimitive union (exhaustive, never guard).\n\nTests use a temp dir (mkdtemp) + real better-sqlite3 (no mocks); clean up in afterEach. Assert dedup NEW-row count; each primitive against hand-computed values on a fixture series; empty-window abstain; cross-unit refusal; grep test (read the file source and assert /eval|new Function|child_process|execa|\\bvm\\b/ is absent).",
+      "evaluatorNotes": "sc-4-4: insert 5 distinct observations (upsert => 5), re-insert the same 5 (=> 0), getObservations returns 5.\nsc-4-5: fixture series e.g. values [10,20,30,40] at increasing timestamps; assert mean=25, min=10, max=40, latest=40, delta=30, slope>0 (matches least-squares), percentile/zscore against documented formulas.\nsc-4-6: getMetric on an empty window => value null, sampleCount 0, no throw; getLabTrend('unknown') abstains.\nsc-4-7: insert two observations for metric 'weight' with units 'kg' and 'lb'; getMetric mean => abstain/refuse, NOT a blended number.\nsc-4-8: read numerics.ts + health-store.ts source; assert no eval/new Function/child_process/execa/vm.\nConfirm better-sqlite3 sync usage (no await on store methods). Full suite + build + typecheck green.",
+      "estimatedFiles": [
+        "src/medical/health-store.ts",
+        "src/medical/numerics.ts",
+        "src/medical/health-store.test.ts",
+        "src/medical/numerics.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-4-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-4-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T19:56:00.000Z",
+      "startedAt": "2026-06-16T19:45:56Z",
+      "completedAt": "2026-06-16T19:56:00.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-5",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 5,
+      "title": "Apple Health ingestion (SAX streaming) + `bober medical import`",
+      "description": "Implement bounded, streaming ingestion. IngestionNormalizer holds an IngestionAdapter registry and drives importFile through the matching adapter into the HealthDataStore via an ObservationSink. AppleHealthAdapter stream-parses Apple Health export XML via SAX with bounded (~1000-row) batches and pause/resume backpressure, never loading the whole ~4GB document into memory. A `bober medical import <file>` CLI command wires it end-to-end. importFile throws a clear error when no adapter canHandle the file.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-4"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "All tests pass including new ingestion tests against a fixture Apple Health XML; the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "AppleHealthAdapter ingests a fixture Apple Health export XML via STREAMING SAX (no whole-file read): a test asserts the parser is fed via a read stream and that batches are flushed at a bounded cap (e.g. <=1000 rows per writeBatch).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "Backpressure: the ObservationSink.writeBatch is awaited and the parse stream pauses/resumes around it so unbounded rows do not buffer in memory — asserted by a test using a slow sink that the parser waits on.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "Re-importing the same file is idempotent: the second import adds 0 new rows (dedup via HealthDataStore INSERT OR IGNORE), asserted against the store row count.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "IngestionNormalizer.importFile throws a clear error naming the problem when no registered adapter canHandle the file; register() adds adapters that canHandle dispatches to.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-8",
+          "description": "`bober medical import <file>` is registered in the CLI, callable, and reports an IngestionResult (e.g. new-row / total counts) on completion; a test or smoke invocation exercises the command wiring.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add Whoop or CSV adapters — Apple Health XML only (the registry makes them additive later).",
+        "Do not implement EgressGuard, medications, or the full SOP wiring (Sprint 6).",
+        "Do not implement literature retrieval (Sprint 7).",
+        "Do not parse medications from the file into HealthDataStore (medications are FactStore value-of-record — Sprint 6 / ADR-7).",
+        "Do not load the whole document into memory at any point."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Apple Health XML streams via SAX with bounded batches + backpressure, re-import is idempotent, unknown files throw, and `bober medical import` works end-to-end"
+      ],
+      "definitionOfDone": "src/medical/ gains IngestionNormalizer (register/importFile + adapter registry), an ObservationSink that batches into HealthDataStore.upsertObservations, and AppleHealthAdapter (SAX streaming, bounded batches, backpressure). A `bober medical import <file>` CLI command (registered like src/cli/commands/run.ts) drives importFile and prints the IngestionResult. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "A streaming SAX XML parser is available (e.g. an existing dep; if none, add a small well-known SAX dep such as 'sax' — justify in the PR and keep it light). Apple Health exports use <Record type=\"...\" unit=\"...\" value=\"...\" startDate=\"...\" endDate=\"...\" sourceName=\"...\"/> elements.",
+        "Record.type maps to HealthObservation.metric, value->value (parseFloat), unit->unit, startDate->tStart, endDate->tEnd, sourceName->source 'apple-health'. Non-numeric records are skipped.",
+        "writeBatch is async and awaited; the SAX stream is paused while a batch is flushing and resumed after (backpressure). Batch cap ~1000.",
+        "IngestionResult reports counts (recordsParsed, newRows) and is returned by importFile."
+      ],
+      "outOfScope": [
+        "Whoop/CSV adapters",
+        "Egress + full SOP + medications (Sprint 6)",
+        "Literature retrieval (Sprint 7)"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Add src/medical/ingestion.ts (IngestionNormalizer + ObservationSink + IngestionAdapter interface), src/medical/adapters/apple-health.ts (AppleHealthAdapter), and a CLI command src/cli/commands/medical.ts (or extend an existing command registrar) for `bober medical import <file>`. Collocate tests.\n\nIngestionNormalizer: register(adapter) pushes to an array; importFile(filePath) finds the first adapter where canHandle(filePath) is true (e.g. by extension/sniff), else throw new Error(`No ingestion adapter can handle '${filePath}'`). Then await adapter.ingest(filePath, sink) and return its IngestionResult.\n\nObservationSink.writeBatch(obs, labs): await store.upsertObservations(obs) (sync call wrapped) + lab upsert; accumulate counts. Keep the sink small.\n\nAppleHealthAdapter.ingest: open a read stream (fs.createReadStream) and pipe into a SAX parser (streaming, event-based). On each <Record> open tag, map attributes to a HealthObservation, push into a buffer. When buffer.length >= 1000: parser.pause() (or stream.pause()), await sink.writeBatch(batch, []), clear buffer, parser.resume(). On stream end, flush the remainder. NEVER fs.readFile the whole file. canHandle: filePath endsWith '.xml' and (optionally) a quick header sniff for 'HealthData' / 'export.xml'.\n\nCLI: mirror src/cli/commands/run.ts registration. `bober medical import <file>`: build the medical HealthDataStore path under .bober/medical/health.db, construct the store + normalizer + AppleHealthAdapter, call importFile, print the IngestionResult counts, close the store.\n\nFIXTURE: create a small test fixture Apple Health XML (a handful of <Record> elements) under a test dir; a test asserts streaming (spy that fs.readFile is NOT called for the whole file; or assert createReadStream is used), bounded batches (cap), backpressure (a sink that delays and a test that the parser awaited it), idempotent re-import (run twice, second newRows===0), unknown-file throw, and the CLI command exists + runs on the fixture.\n\nIf adding the 'sax' dep, keep it isolated to the adapter file and ensure it has no network surface (it does not).",
+      "evaluatorNotes": "sc-5-4/5-5: run AppleHealthAdapter.ingest on the fixture with a sink that records batch sizes and introduces an await delay; assert every batch size <= the cap and that ingest awaited the slow sink (e.g. ordering/timing or a pause/resume spy). Assert the adapter uses createReadStream, not fs.readFile, on the whole file.\nsc-5-6: import the fixture twice into the same store; assert second IngestionResult.newRows === 0 and the store row count is unchanged.\nsc-5-7: importFile on a '.bin' file with no matching adapter throws an Error whose message contains the path.\nsc-5-8: invoke the `bober medical import <fixture>` command wiring (programmatically or via the CLI test harness) and assert it returns/prints counts and exits cleanly.\nFull suite + build + typecheck green; confirm S4 store dedup is what provides idempotency.",
+      "estimatedFiles": [
+        "src/medical/ingestion.ts",
+        "src/medical/adapters/apple-health.ts",
+        "src/cli/commands/medical.ts",
+        "src/medical/ingestion.test.ts",
+        "src/medical/adapters/apple-health.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-5-1",
+          "result": "pass",
+          "note": "first generator attempt crashed on transient API socket error; recovered via focused lint-fix+commit"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-5-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T20:20:00.000Z",
+      "startedAt": "2026-06-16T20:03:05Z",
+      "completedAt": "2026-06-16T20:20:00.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-6",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 6,
+      "title": "EgressGuard + medications-in-FactStore + full SOP wiring (zero-egress end-to-end)",
+      "description": "Wire the complete SOP under a code-enforced zero-egress default. EgressGuard exposes two independently opt-in axes (cloud-inference, literature-retrieval, both default false; assertAllowed throws when off). A `no-restricted-imports` ESLint block scoped to src/medical/**/*.ts forbids network modules everywhere except the one designated retrieval network file (created/stubbed here, real source in S7). Medications are read from FactStore.getActiveFacts (bi-temporal, ADR-7), never HealthDataStore. MedicalSopEngine.run is wired in full order: consent -> red-flag -> numerics -> meds -> egress check -> (literature disabled => abstain) -> disclaimer footer -> audit -> PipelineResult. With both axes off, a numeric question is answered from deterministic compute and a literature question abstains — default outbound bytes = 0.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-3",
+        "sprint-spec-20260616-medical-team-4"
+      ],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "Lint passes, INCLUDING the new src/medical/**/*.ts no-restricted-imports boundary (npm run lint).",
+          "verificationMethod": "lint",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "All tests pass including EgressGuard, medications-via-FactStore, and full-SOP tests; the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "EgressGuard: both axes (cloud-inference, literature-retrieval) default false; isAllowed returns false by default; assertAllowed(axis) throws when the axis is off and returns void when on. Tests cover both axes independently (enabling one does not enable the other).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-6",
+          "description": "A `files: ['src/medical/**/*.ts']` no-restricted-imports ESLint block forbids undici/got/axios/node-fetch/node:http/node:https/node:net/node:tls and the fetch global everywhere in src/medical EXCEPT the one designated retrieval network file; a deliberately-added forbidden import in a non-sanctioned medical file would fail lint (verified by the rule config + a focused test/fixture or by reviewing the config).",
+          "verificationMethod": "lint",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-7",
+          "description": "Medications are read via FactStore.getActiveFacts under a medical scope (value-of-record); a test asserts the engine reads active medication facts from FactStore and that HealthDataStore is NOT used to store medication-list state.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-8",
+          "description": "Full zero-egress SOP turn: with both axes off and consent present, a numeric question yields a MedicalAnswer answered from deterministic compute with the disclaimer footer + an 'answer' audit entry; a literature question yields LiteratureRetriever.retrieve() === {disabled} and an abstained MedicalAnswer; a spy LLMClient + a network spy confirm ZERO outbound bytes / zero network module reached.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the real MedlinePlus networking — the designated retrieval file returns {disabled}/{abstain} only this sprint (Sprint 7 adds the live source).",
+        "Do not build a cloud-inference synthesis path — the axis exists and defaults off; nothing cloud is exercised.",
+        "Do not add new numeric primitives or ingestion adapters.",
+        "Do not change ts|skill|workflow or programming-team behavior."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "EgressGuard two-axis default-off + assertAllowed throws; medical ESLint boundary passes; medications via FactStore; full SOP turn zero-egress with footer + audit; literature abstains when disabled"
+      ],
+      "definitionOfDone": "src/medical/ gains EgressGuard (two axes, default false, isAllowed/assertAllowed) and the designated LiteratureRetriever network file (returning {disabled} when the axis is off; real source deferred to S7). eslint.config.js gains a src/medical/**/*.ts no-restricted-imports block (mirroring the telemetry block) with the single retrieval file as the exception. MedicalSopEngine.run runs the FULL ordered SOP: consent (S2) -> red-flag/guardrail (S3) -> numerics (S4) -> medications via FactStore.getActiveFacts (ADR-7) -> EgressGuard.isAllowed('literature-retrieval') gate -> retrieve (disabled => abstain) -> DisclaimerComposer footer -> AuditLog answer/abstain -> PipelineResult. With both axes off the path is fully local. Build, typecheck, lint, and all tests pass.",
+      "assumptions": [
+        "EgressGuard axes are driven by config (e.g. a medical section / team config flags) defaulting false; the medical team registered in S1 wires the guard from config.",
+        "FactStore.getActiveFacts(scope, subject, predicate) exists (src/state/facts.ts); medications are stored under a medical scope with a 'takes-medication' predicate. Writing medications (reconcile/invalidate path) can be exercised via the existing FactStore API; this sprint focuses on READING active medications in the SOP.",
+        "The designated retrieval network file is e.g. src/medical/retrieval/medline-source.ts — the ONLY file allowed network imports by the ESLint exception; this sprint it has no real network call yet.",
+        "MetricWindow for the numeric path is derived from the prompt by a small deterministic parser or passed in; full NL->query parsing is minimal here (numerics correctness was proven in S4)."
+      ],
+      "outOfScope": [
+        "Real MedlinePlus networking + cited synthesis (Sprint 7)",
+        "Cloud-inference synthesis path",
+        "New primitives/adapters"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Add src/medical/egress.ts (EgressGuard), src/medical/retrieval/medline-source.ts (the designated network file — stub returning {disabled}/{abstain} this sprint), and src/medical/retrieval/literature.ts (LiteratureRetriever orchestration that checks the axis and calls the source). Wire the full SOP in src/medical/engine.ts. Update eslint.config.js.\n\nESLint: copy the telemetry no-restricted-imports block pattern (eslint.config.js ~42-69). Add a block: { files: ['src/medical/**/*.ts'], rules: { 'no-restricted-imports': ['error', { paths: [...network modules...], patterns: ['node:http','node:https','node:net','node:tls'] }], 'no-restricted-globals': ['error', { name:'fetch', message:'... egress only via the sanctioned retrieval file' }] } } and a follow-up override { files: ['src/medical/retrieval/medline-source.ts'], rules: { 'no-restricted-imports':'off','no-restricted-globals':'off' } } as the single exception. Forbid: undici, got, axios, node-fetch, node:http, node:https, node:net, node:tls + the fetch global. Confirm test files (*.test.ts) under src/medical are either also covered or allowed as appropriate (prefer covered, with the retrieval test importing through the source module).\n\nEgressGuard(config): isAllowed(axis): boolean reads config flags (cloudInference / literatureRetrieval) defaulting false; assertAllowed(axis): if(!isAllowed(axis)) throw new Error(`Egress axis '${axis}' not enabled`). Two axes independent.\n\nLiteratureRetriever.retrieve(query): if (!egress.isAllowed('literature-retrieval')) return { kind:'disabled' } SYNCHRONOUSLY (no network attempt); else delegate to medline-source (stub abstain this sprint). synthesize stays minimal (returns an abstained MedicalAnswer when outcome is disabled/abstain).\n\nMedications: read via FactStore.getActiveFacts (src/state/facts.ts) under a medical scope. Do NOT write medication state to HealthDataStore. A test seeds a FactStore with an active medication fact and asserts the engine reads it.\n\nMedicalSopEngine.run FULL order: consent -> guardrail.evaluate (short-circuit/refuse return early) -> derive MetricWindow + numerics.getMetric (deterministic, no LLM) -> FactStore active meds -> egress gate + retrieve (disabled => abstain) -> compose MedicalAnswer (numeric result + meds context + footer) -> audit 'answer'/'abstain' -> return PipelineResult. With literature-retrieval off, NO network module is reached; with a numeric prompt, the answer comes from compute.\n\nTests: EgressGuard both-axes default-off + independence + assertAllowed throw/pass; lint boundary (rely on `npm run lint` passing with the config; optionally a fixture asserting the rule object forbids the modules); medications-from-FactStore; full SOP zero-egress turn (numeric answer + footer + audit; literature prompt => disabled + abstain) with a network spy asserting zero reach and a spy LLMClient asserting zero calls on the disabled path.",
+      "evaluatorNotes": "sc-6-5: new EgressGuard with default config => isAllowed('cloud-inference') and isAllowed('literature-retrieval') both false; assertAllowed throws for each; enable only literature-retrieval => isAllowed('literature-retrieval') true but 'cloud-inference' still false.\nsc-6-6: run `npm run lint` and confirm green WITH the new block; inspect eslint.config.js to confirm the src/medical glob forbids undici/got/axios/node-fetch/node:http(s)/node:net/node:tls + fetch and that ONLY medline-source.ts is excepted. (Optionally verify a temporary forbidden import in a non-sanctioned medical file fails lint, then revert.)\nsc-6-7: seed FactStore with an active 'takes-medication' fact; assert engine.run surfaces/uses it via getActiveFacts and that no medication row is written to HealthDataStore.\nsc-6-8: with both axes off + consent present: numeric prompt => MedicalAnswer from compute + footer + 'answer' audit entry; literature prompt => retrieve()==={disabled} + abstained answer; a network spy (e.g. monkeypatched http/https/fetch in the test) records ZERO calls and the spy LLMClient records ZERO calls on the disabled literature path.\nFull suite + build + typecheck + lint green; S1-S5 unaffected.",
+      "estimatedFiles": [
+        "src/medical/egress.ts",
+        "src/medical/retrieval/literature.ts",
+        "src/medical/retrieval/medline-source.ts",
+        "src/medical/engine.ts",
+        "eslint.config.js",
+        "src/medical/egress.test.ts",
+        "src/medical/engine.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-6-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-6-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-16T20:44:30.000Z",
+      "startedAt": "2026-06-16T20:29:40Z",
+      "completedAt": "2026-06-16T20:44:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260616-medical-team-7",
+      "specId": "spec-20260616-medical-team",
+      "sprintNumber": 7,
+      "title": "MedlinePlus grounded retrieval + cited synthesis (opt-in)",
+      "description": "The opt-in networked slice. Implement the real MedlinePlus / NIH (no-auth) source inside the single sanctioned retrieval network file (the ESLint exception from Sprint 6), reachable only after the literature-retrieval egress axis is opted in. retrieve returns disabled | abstain{reason} | grounded{passages}. synthesize runs the single LLM call (local Ollama default via the provider-agnostic LLMClient) and abstains unless a retrieved passage supports the claim; every non-abstained clinical claim carries >=1 citation. A source failure abstains — never fail-open. The cloud-inference axis stays independently off.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260616-medical-team-6"
+      ],
+      "features": [
+        "feat-7"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "The project builds with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "Lint passes — the only network import in src/medical remains in the designated retrieval file (the ESLint boundary from Sprint 6 still holds).",
+          "verificationMethod": "lint",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "All tests pass including retrieval + synthesis tests driven by RECORDED/FIXTURE MedlinePlus responses (no live network in CI); the full pre-existing suite stays green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "With literature-retrieval ON, LiteratureRetriever.retrieve queries MedlinePlus and returns grounded{passages} parsed from a recorded fixture response; with the axis OFF it still returns {disabled} (Sprint 6 behavior preserved).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-6",
+          "description": "synthesize abstains (abstained=true) when no retrieved passage supports the claim, and produces a cited answer (>=1 citation) when a passage does — verified with a fake LLMClient and fixture passages.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-7",
+          "description": "Fail-closed on source error: when the MedlinePlus source is unreachable/errors, retrieve returns abstain{reason} and synthesize emits an abstained MedicalAnswer — NO uncited clinical claim is ever produced (no fail-open path).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-8",
+          "description": "Axis independence: enabling literature-retrieval does NOT enable cloud-inference; synthesize uses the local Ollama model by default and there is no automatic cloud fallback (a test asserts the cloud-inference axis stays off and no cloud provider is constructed by the literature path).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add PubMed/PMC or any second literature source — MedlinePlus/NIH only.",
+        "Do not build a cloud-inference synthesis path or any auto cloud fallback.",
+        "Do not call live network in tests — use recorded/fixture responses.",
+        "Do not relax the src/medical ESLint network boundary beyond the single sanctioned file."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Opt-in MedlinePlus retrieval returns grounded passages from fixtures, synthesis abstains-unless-supported with citations, source failure abstains (never fail-open), and cloud-inference stays independently off"
+      ],
+      "definitionOfDone": "The designated retrieval file (src/medical/retrieval/medline-source.ts) implements a real MedlinePlus / NIH (no-auth) fetch + parse into passages, reachable only after EgressGuard.assertAllowed('literature-retrieval'). LiteratureRetriever.retrieve returns disabled|abstain{reason}|grounded{passages}; synthesize runs the single LLM call via the provider-agnostic LLMClient (local Ollama default) and abstains unless a passage supports the claim, attaching citations otherwise. Source failure abstains (never fail-open). cloud-inference remains independently off. Build, typecheck, lint, and all tests pass.",
+      "assumptions": [
+        "MedlinePlus offers a no-auth endpoint (e.g. the MedlinePlus Connect / Web service / health-topics XML or JSON API) suitable for consumer-health topic lookup; the exact endpoint + response shape is captured as a recorded fixture committed under the test dir.",
+        "The single network call lives ONLY in medline-source.ts using the fetch global or undici (allowed there by the S6 ESLint exception); all other medical files stay network-free.",
+        "synthesize sends retrieved passages + the user question to the LLMClient with an instruction to answer ONLY from the passages and to abstain otherwise; citations reference the passage source URLs/titles.",
+        "Tests inject a fake source (returning fixture passages or throwing) and a fake LLMClient — no live HTTP in CI; an optional integration test behind an env flag may hit the live endpoint but is skipped by default."
+      ],
+      "outOfScope": [
+        "PubMed/PMC or additional sources",
+        "Cloud-inference synthesis / auto fallback",
+        "Live network in CI"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Flesh out src/medical/retrieval/medline-source.ts (the sanctioned network file) and src/medical/retrieval/literature.ts (orchestration + synthesize). Collocate tests with committed fixtures.\n\nmedline-source.ts: export an async function querying MedlinePlus (no auth). Use the fetch global (allowed here per the S6 ESLint exception). Parse the response into Passage[] { title, url, text, source:'medlineplus' }. Wrap the network call so any error/timeout maps to a thrown error the retriever converts to abstain — NEVER return fabricated content. Keep this the ONLY file importing/using network in src/medical.\n\nliterature.ts LiteratureRetriever.retrieve(query): if (!egress.isAllowed('literature-retrieval')) return { kind:'disabled' }; try { const passages = await medlineSource.query(query); return passages.length ? { kind:'grounded', passages } : { kind:'abstain', reason:'no-passages' }; } catch (e) { return { kind:'abstain', reason:'source-error' }; }. synthesize(query, outcome, llm): if outcome is disabled/abstain => return an abstained MedicalAnswer (body = a 'cannot ground an answer' message + footer, citations:[]). If grounded => call llm.complete with a prompt that pins the model to the passages and instructs abstention if unsupported; parse the model output; if the answer is unsupported/empty => abstained; else attach citations derived from the passages (>=1). Use the provider-agnostic LLMClient resolved for the medical team's chat/synthesis role; default local Ollama via the openai-compat path (src/providers/factory.ts) — do NOT construct a cloud provider and do NOT auto-fallback to cloud on Ollama unavailability (abstain + 'model unavailable' footer instead).\n\nWire synthesize into MedicalSopEngine.run's retrieval step (replacing the S6 always-abstain stub) so a literature question with the axis ON produces a grounded, cited answer.\n\nFIXTURES: commit a recorded MedlinePlus response (sanitized) under e.g. src/medical/retrieval/__fixtures__/. Tests: inject a fake source returning fixture passages => retrieve grounded + synthesize cited (with a fake LLMClient returning a supported answer); fake source throwing => abstain (sc-7-7); empty passages => abstain; fake LLMClient returning an unsupported/empty answer => abstained even when passages exist (sc-7-6); axis OFF => disabled (sc-7-5); assert no cloud provider constructed and cloud-inference axis stays false (sc-7-8). Keep any live-network test behind an env flag, skipped by default.",
+      "evaluatorNotes": "sc-7-5: with the axis enabled and a fake source returning fixture passages, retrieve => { kind:'grounded', passages:[...] }; with the axis off, retrieve => { kind:'disabled' }.\nsc-7-6: synthesize with grounded passages + a fake LLMClient whose answer is supported by a passage => abstained=false and citations.length>=1; with a fake LLMClient whose answer is unsupported/empty => abstained=true.\nsc-7-7: fake source throws => retrieve abstain{reason:'source-error'}; synthesize => abstained MedicalAnswer; assert NO uncited claim body is emitted (abstained answers carry no clinical assertion).\nsc-7-8: assert the literature path constructs only the local/Ollama LLMClient (no cloud provider), the cloud-inference axis remains false, and there is no auto-fallback to cloud when the local model is 'unavailable' (simulate and assert abstain+footer).\nsc-7-3: `npm run lint` green; confirm grep shows the only fetch/undici/http usage in src/medical is in medline-source.ts.\nNo live network in CI (fixtures only). Full suite + build + typecheck + lint green; S1-S6 unaffected.",
+      "estimatedFiles": [
+        "src/medical/retrieval/medline-source.ts",
+        "src/medical/retrieval/literature.ts",
+        "src/medical/engine.ts",
+        "src/medical/retrieval/medline-source.test.ts",
+        "src/medical/retrieval/literature.test.ts",
+        "src/medical/retrieval/__fixtures__/medlineplus-sample.json"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260616-medical-team-7-1",
+          "result": "pass"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260616-medical-team-7-1",
+      "createdAt": "2026-06-16T00:00:00Z",
+      "updatedAt": "2026-06-17T00:08:00.000Z",
+      "startedAt": "2026-06-16T20:51:58Z",
+      "completedAt": "2026-06-17T00:08:00.000Z"
+    }
+  ]
+}

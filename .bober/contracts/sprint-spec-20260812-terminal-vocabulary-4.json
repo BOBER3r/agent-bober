@@ -1,0 +1,85 @@
+{
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-4",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "sprintNumber": 4,
+  "title": "The channel join becomes rank-aware, and pipelineResult converges",
+  "description": "mergeEntries resolves a duplicate id by canonical order, under which every settled status sorts before the seeded \"proposed\" \u2014 so the channel keeps the planned copy and a pge run reports a contract still marked \"proposed\" inside completedSprints. Switch to the rank-aware join already shipping in the same module. This closes the pipelineResult divergence, so the two-directional pin must be edited deliberately here.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260812-terminal-vocabulary-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "mergeEntries resolves duplicates with rankIsGreater rather than joinByCanonicalOrder. No new ranking logic is introduced \u2014 versionRank and rankIsGreater are reused exactly as they ship.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A test proves the settled contract outranks the seeded \"proposed\" one, so a pge run no longer reports \"proposed\" inside completedSprints.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "The latent lastWriteWinsByKey defect is fixed and pinned: attempts:10 must outrank attempts:9, which canonical order got backwards.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "ORDER-INVARIANCE IS PRESERVED \u2014 the property appendById exists for. A test merges the same containers in several different arrival orders and asserts an identical result. This is the criterion most likely to be broken silently by a ranking change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "The pipelineResult conformance divergence is CLOSED, and conformance.engines.test.ts's divergence-set pin and its per-field record are edited DELIBERATELY in the same commit as the docs/pge-graph.md disposition they change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "Any golden case whose recorded artifacts move is re-captured in THIS sprint, with the diff verified confined to the contract status/version and their direct consequences.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green; golden gate passes with the replay count at or above its floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing what any writer writes (sprint 5).",
+    "Weakening a pin to accommodate the change \u2014 the pin moves because the behaviour legitimately changed, and it must still fail in both directions afterwards.",
+    "Closing the contracts, history or audits divergences."
+  ],
+  "stopConditions": [
+    "Order-invariance cannot be preserved under the rank-aware join \u2014 stop and report, because that property is why appendById exists.",
+    "A divergence other than pipelineResult moves \u2014 that is unplanned and must be understood before committing."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "The change itself is one line at reducers.ts:187. Everything else is proving it safe. rankIsGreater's total order is version, then updatedAt, then canonical JSON \u2014 the last term is what keeps it deterministic when the first two tie, which is what preserves order-invariance. Say in the code why that fallback matters. For sc-4-5, remember the discipline the previous spec established: a pin edit and the doc disposition it changes go in ONE commit, never as a side effect.",
+  "evaluatorNotes": "sc-4-4 is where a subtle break hides. Do not just run the generator's test \u2014 construct your own containers, shuffle them into several orders, and confirm identical results including when ranks TIE. Then verify sc-4-5 by reading the pin diff: it should record pipelineResult closing, not merely drop it. Confirm the divergence set is now exactly what a real run produces by running the harness yourself.",
+  "estimatedFiles": [
+    "src/pge/registry/reducers.ts",
+    "src/pge/registry/reducers.test.ts",
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    "docs/pge-graph.md",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T18:49:05Z",
+  "completedAt": "2026-08-12T18:49:05Z"
+}

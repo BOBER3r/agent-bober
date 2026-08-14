@@ -1,0 +1,129 @@
+{
+  "formatVersion": 1,
+  "caseId": "sprint-curate-brief-explain-mocks",
+  "title": "The curator briefs, explains and writes mocks in one round",
+  "intent": "Pin the curation path and the two calls sprint_curate_explain makes: curator.brief at callIndex 0 and curator.explain at callIndex 1 on the SAME node and branch.",
+  "tags": [
+    "sprint",
+    "curator",
+    "region:sprint",
+    "artifacts:briefings"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "sprint_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_curate_explain",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.brief",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "spec": {
+          "specId": "spec-20260805-golden-fixture"
+        },
+        "completedSprints": [],
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "timestamp": "2026-08-05T12:00:00.000Z",
+        "briefing": "The parser is one entry point; add the block schema beside the existing ones.",
+        "filesAnalyzed": [
+          "src/config/parse.ts",
+          "src/config/errors.ts"
+        ],
+        "patternsFound": 2,
+        "utilsIdentified": 1
+      }
+    },
+    {
+      "nodeId": "sprint_curate_explain",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.explain",
+      "callIndex": 1,
+      "request": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "testIds": [
+          "t-1",
+          "t-2"
+        ],
+        "briefing": "The parser is one entry point.",
+        "promptRef": "curator/explain",
+        "model": "light-model"
+      },
+      "response": {
+        "explanations": [
+          {
+            "testId": "t-1",
+            "expectedBehavior": "A valid block parses into the typed value."
+          },
+          {
+            "testId": "t-2",
+            "expectedBehavior": "A malformed block throws ConfigError naming the key."
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_curate_mocks",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.mocks",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "projectRoot": "/tmp/golden-run",
+        "explanations": [
+          {
+            "testId": "t-1",
+            "expectedBehavior": "A valid block parses into the typed value."
+          }
+        ],
+        "round": 1,
+        "rejection": null,
+        "promptRef": "curator/mocks",
+        "model": "light-model"
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "tests": [
+          {
+            "testId": "t-1",
+            "category": "happy-path",
+            "intent": "A valid block parses.",
+            "path": "src/fixture/sprint-1.test.ts"
+          },
+          {
+            "testId": "t-2",
+            "category": "negative",
+            "intent": "A malformed block throws.",
+            "path": "src/fixture/sprint-1.test.ts"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "gate_mock_coverage",
+    "artifacts": {
+      "briefings": [
+        {
+          "content": "The parser is one entry point; add the block schema beside the existing ones.",
+          "contractId": "spec-20260805-golden-fixture-1"
+        }
+      ]
+    },
+    "notes": "Two effects on one node execution share a callIndex sequence — the recorder counts per (nodeId, branchKey) across ALL effect names — so brief is 0 and explain is 1. A runtime that counted per effect name would look up the wrong recording here."
+  }
+}

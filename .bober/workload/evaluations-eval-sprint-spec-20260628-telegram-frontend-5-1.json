@@ -1,0 +1,18 @@
+{
+  "entryId": "evaluations-eval-sprint-spec-20260628-telegram-frontend-5-1",
+  "channel": "evaluations",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/eval-results/eval-sprint-spec-20260628-telegram-frontend-5-1.json"
+  },
+  "value": {
+    "id": "eval-sprint-spec-20260628-telegram-frontend-5-1",
+    "seq": 0,
+    "contractId": "sprint-spec-20260628-telegram-frontend-5",
+    "sprintNumber": 5,
+    "iteration": 1,
+    "verdict": "pass",
+    "summary": "Sprint 5 passes all 5 required criteria (fresh evaluator after 2 prior API drops). Build/typecheck 0; suite 3667 green (+17). §A: registerUpload only stashes (no auto-ingest); Yes=exactly 1 ingest with downloaded file; No/no-confirm=0 ingest + temp dir removed in finally; prompt names LOCAL_INGEST_DEST + 'not end-to-end' before confirm; reply 'Imported N results' integer-only (no PHI/marker values); non-whitelisted callback ingests nothing; EgressGuard/ConsentGate/AuditLog run in the execa subprocess, not duplicated. §B FUNNEL UNIFIED: sendSafeKeyboard (outbound.ts:62) is the SOLE transport.sendKeyboard chokepoint; bot.ts routes both upload opt-in (308) and /pending approvals (368) through it; grammy import isolated to bot.ts:9; Sprint-4 approvals.test.ts 11/11 still green; only src/telegram/* changed, no new dep.",
+    "evalId": "eval-sprint-spec-20260628-telegram-frontend-5-1"
+  }
+}

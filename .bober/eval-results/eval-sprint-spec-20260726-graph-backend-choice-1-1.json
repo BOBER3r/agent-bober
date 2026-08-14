@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-1-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-1",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings in untouched src/orchestrator/eval-persist.test.ts" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "tests/graph/ 224/224; full suite 4974 passed | 1 pre-existing skip | 0 failures" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-1-1", "required": true, "result": "pass", "evidence": "build + typecheck independently re-run, exit 0" },
+    { "criterionId": "sc-1-2", "required": true, "result": "pass", "evidence": "GraphBackend interface + CallPlan<T>={tool,params,narrow} + id, covers all 6 ops" },
+    { "criterionId": "sc-1-3", "required": true, "result": "pass", "evidence": "tokensave-backend.ts narrows diffed byte-for-byte vs pre-refactor client.ts; 15 backend tests green" },
+    { "criterionId": "sc-1-4", "required": true, "result": "pass", "evidence": "grep tokensave_ in client.ts = 0; catalog now in backend; types.ts diff = 0 lines; signatures unchanged" },
+    { "criterionId": "sc-1-5", "required": true, "result": "pass", "evidence": "keepNode/staleness/health/toFailureResult/prefetch textually identical; client.test.ts diff = 6 added constructor-arg lines only" },
+    { "criterionId": "sc-1-6", "required": true, "result": "pass", "evidence": "full suite 4974 passed / 0 failures, no regressions" },
+    { "criterionId": "sc-1-7", "required": false, "result": "pass", "evidence": "lint 0 errors; ESM .js, import type, unicode headers, no sync fs, no any in new files" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Independent re-run matched all generator numbers; byte-identical refactor confirmed via diff of narrows + client.test.ts; no nonGoal/outOfScope violations (mcp-client/prereq/cli/schema/types.ts byte-unchanged). All 6 required + 1 optional criteria pass.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent re-run of build/typecheck/lint/full-suite + line-by-line narrow diff)"
+}

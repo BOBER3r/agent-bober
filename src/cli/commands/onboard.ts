@@ -13,12 +13,17 @@ import type { Command } from "commander";
 
 import { loadConfig } from "../../config/loader.js";
 import { findProjectRoot } from "../../utils/fs.js";
-import { TokensavePrereqCheck } from "../../graph/prereq.js";
+import { GenericPrereqCheck } from "../../graph/prereq.js";
 import { GraphArtifactStore } from "../../graph/artifact-store.js";
 import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
+import {
+  resolveGraphBackend,
+  binaryForBackend,
+  processSpecForBackend,
+} from "../../graph/backends/registry.js";
 import { OnboardingComposer } from "../../graph/onboarding-composer.js";
 import type { OnboardingInputs } from "../../graph/types.js";
 
@@ -66,12 +71,17 @@ export function registerOnboardCommand(program: Command): void {
         return;
       }
 
+      // Resolve which engine to run — explicit config.graph.backend wins,
+      // else auto-detect (tokensave preferred when both are installed).
+      const backend = await resolveGraphBackend(config);
+      const binary = binaryForBackend(backend, config);
+
       // Prereq check
-      const checker = new TokensavePrereqCheck(graphCfg.tokensavePath ?? "tokensave");
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const prereq = await checker.check();
       if (!prereq.ok) {
         process.stderr.write(
-          `tokensave is not available. To install:\n  ${prereq.hint}\n`,
+          `${backend.id} is not available. To install:\n  ${prereq.hint}\n`,
         );
         process.exitCode = 1;
         return;
@@ -84,11 +94,13 @@ export function registerOnboardCommand(program: Command): void {
       const fallback = new GraphFallback("dual");
 
       // Spawn a short-lived MCP client for the duration of this command
+      // (processSpecForBackend threads a per-backend binary override — e.g.
+      // graph.codeReviewGraphPath — into the serve subprocess).
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        graphCfg.tokensavePath ?? "tokensave",
+        processSpecForBackend(backend, config),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
@@ -111,6 +123,7 @@ export function registerOnboardCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
+          backend,
         );
 
         process.stdout.write(chalk.cyan("Querying code graph...\n"));
@@ -131,7 +144,11 @@ export function registerOnboardCommand(program: Command): void {
         // Build onboarding inputs from graph results
         const inputs: OnboardingInputs = {
           status: {
-            tokensaveVersion: manifest?.tokensaveVersion ?? prereq.version ?? "",
+            // Source the version from the RESOLVED backend, not tokensave
+            // specifically — manifest.backendVersion mirrors tokensaveVersion
+            // on the tokensave path (byte-identical there) but is the correct
+            // (and only) source of truth when a non-tokensave engine is active.
+            tokensaveVersion: manifest?.backendVersion ?? prereq.version ?? "",
             indexedFileCount: manifest?.indexedFileCount ?? 0,
           },
           hotspots: hotspotsResult.ok

@@ -1,0 +1,438 @@
+{
+  "entryId": "sprintContracts-spec-20260614-bober-chat-session-layer",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260614-bober-chat-session-layer-1.json",
+      ".bober/contracts/sprint-spec-20260614-bober-chat-session-layer-2.json",
+      ".bober/contracts/sprint-spec-20260614-bober-chat-session-layer-3.json",
+      ".bober/contracts/sprint-spec-20260614-bober-chat-session-layer-4.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260614-bober-chat-session-layer-1",
+      "specId": "spec-20260614-bober-chat-session-layer",
+      "sprintNumber": 1,
+      "title": "Chat REPL that answers — walking skeleton, chat role, resumable session",
+      "description": "Build the thin `bober chat` REPL skeleton: a ChatSession turn loop that reads the disk roster and the .bober/memory/ distill, classifies each turn with one loose-JSON LLMClient.chat call (jsonObjectMode), and answers. Add a dedicated `chat` role to BoberConfig (Zod + defaults) and resolve its provider via resolveRoleProviders/createClient so it runs identically on Anthropic and DeepSeek. Persist conversation to a resumable per-session JSONL and wire deterministic slash-commands /runs, /exit, /help. Spawn and steer-stop are NOT implemented this sprint — the classifier may emit spawn/steer but the session replies that those actions arrive in a later sprint (graceful stub).",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "TypeScript compilation produces zero type errors (strict mode).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "All tests pass with zero failures, including new collocated tests for this sprint (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "BoberConfig parses a `chat` role (Zod schema in src/config/schema.ts) with model and provider fields; defaults (src/config/defaults.ts) set it to model opus, provider anthropic. A unit test parses a config with a DeepSeek chat role override successfully.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "TurnClassifier.classify calls LLMClient.chat with jsonObjectMode:true and returns a ClassifierAction; given malformed/non-JSON text it returns {action:\"answer\"} (covered by a unit test with a fake LLMClient).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "RosterReader.read delegates to readRunStatesFromDisk (NOT RunManager.load); a unit test writes a 'running' state.json to a temp .bober/runs and asserts RosterReader still reports it as 'running' after read. Grep confirms src/chat contains no reference to RunManager.load.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "ConversationStore appends turns to .bober/chat/<sessionId>.jsonl and loadRecent returns them newest-last; a unit test creates a store, appends, then a NEW store instance with the same sessionId loads the prior turns (resume).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/chat (grep returns nothing); all LLM interaction goes through src/providers.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-9",
+          "description": "Deterministic slash-commands /help, /runs, and /exit are handled WITHOUT an LLM call: /runs prints the roster summary, /help lists commands, /exit ends the loop. A unit test verifies the slash dispatcher routes these without invoking the injected LLMClient.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the spawn action handler (RunSpawner) — that is Sprint 2",
+        "Do not implement completion weaving / history tailing — that is Sprint 3",
+        "Do not implement steer-stop / kill-by-PID — that is Sprint 4",
+        "Do not modify runPipeline, RunManager, EventStreamManager, memory, or provider public APIs",
+        "Do not add the --run-id flag yet (Sprint 2)"
+      ],
+      "stopConditions": [
+        "All nine success criteria pass",
+        "Running `bober chat` (or the session.handleTurn entry) answers a plain question using roster + memory distill context and resumes prior conversation on a second launch with the same session id"
+      ],
+      "definitionOfDone": "A new src/chat/ module exposes a ChatSession with start() and handleTurn(input). Each turn reads the disk roster (RosterReader -> readRunStatesFromDisk), reads the .bober/memory/ distill, and classifies via TurnClassifier (one jsonObjectMode LLMClient.chat call, parse-fail -> answer). The answer path composes roster + distill + recent history into one Answerer LLMClient.chat call. A `chat` role exists in BoberConfig with opus/anthropic defaults, overridable to DeepSeek, and the session builds its client via resolveRoleProviders + createClient. Conversation persists to a resumable .bober/chat/<sessionId>.jsonl. Slash-commands /runs, /help, /exit work deterministically. spawn/steer classifier outputs are acknowledged as not-yet-available. Build, typecheck, and all tests pass; no SDK types leak into src/chat.",
+      "assumptions": [
+        "A stable session id (e.g. the literal 'default' per project) is acceptable for resume in Phase 1; multi-session handshakes are deferred",
+        "The memory distill can be read as a plain string for prompt context via the existing reader (src/state/memory.ts:196,242,272)",
+        "The `bober chat <team>` team argument is optional in Phase 1 and ignored beyond labeling (fixed programming role set)"
+      ],
+      "outOfScope": [
+        "Spawn, completion-weaving, and stop (Sprints 2-4)",
+        "Any change to existing public APIs",
+        "Rich structured memory distillation"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/chat/ with one small file per component (principles: small single-purpose modules, section comments with unicode box headers).\n\nVerified reuse signatures:\n- readRunStatesFromDisk(projectRoot): Promise<RunState[]> — src/state/run-state.ts:110. NEVER call RunManager.load() (it reconciles running->failed, run-manager.ts:251-256).\n- RunState shape — src/mcp/run-manager.ts:35-55.\n- LLMClient.chat(params): Promise<ChatResponse> — src/providers/types.ts:216. ChatParams has jsonObjectMode?:boolean at :183 (use true for the classifier). ChatResponse.text is the reply (:194-206). Message/TextMessage at :96-132 (role 'user'|'assistant', content).\n- createClient(provider?, endpoint?, providerConfig?, model?, role?): LLMClient — src/providers/factory.ts:172. resolveRoleProviders(config): RoleProviderMap — src/config/role-providers.ts:92. Add 'chat' to the RoleName/RoleProviderMap surface and to BoberConfig schema + defaults.\n- Memory distill reader — src/state/memory.ts:196 (appendLesson), :242 (loadLessonIndex), :272 (loadLesson). Compose a compact string for the prompt.\n\nClassifier: system prompt instructs the model to return ONLY a JSON object {\"action\":\"answer\"|\"spawn\"|\"steer\", ...}. Request jsonObjectMode:true. Parse defensively: strip code fences, extract first balanced {...}, zod-validate against the ClassifierAction schema; ANY failure => {action:\"answer\"}. Keep the ClassifierAction type exactly as in the architecture (answer | spawn{task} | steer{op:inspect} | steer{op:stop,runId}) even though only answer is handled this sprint.\n\nConversationStore: append-only JSONL at .bober/chat/<sessionId>.jsonl using node:fs/promises (async only). loadRecent(limit) reads + parses, skips malformed lines, returns newest-last. Use ensureDir from src/utils/fs.ts (or src/state/helpers.ts).\n\nSlash-command dispatcher: if input.trimStart().startsWith('/'), handle deterministically and return WITHOUT touching the LLMClient. /runs => RosterReader.summarize(await RosterReader.read()). /help => static text. /exit => signal loop end.\n\nWire a `bober chat` CLI command (src/cli/commands/) that constructs the ChatSession with a real client from config and calls start(). Register it in the CLI entry (mirror how `run` is registered).\n\nTests: collocate *.test.ts. Use a fake LLMClient (returns canned ChatResponse) for classifier + answerer tests — do NOT hit a network. Use temp dirs for ConversationStore + RosterReader (principle: no fs mocks, real temp dirs, clean up).",
+      "evaluatorNotes": "sc-1-4: parse a config object with chat:{model:'deepseek-chat',provider:'deepseek'} and assert success; assert defaults give opus/anthropic.\nsc-1-5: call classify with a fake LLMClient returning '```json {\\\"action\\\":\\\"answer\\\"}```', then returning garbage 'not json' — both must yield a valid action, garbage => answer.\nsc-1-6: write a temp .bober/runs/<id>/state.json with status 'running'; after RosterReader.read() the same status must still be 'running' on disk AND in the returned array. Grep src/chat for 'RunManager' — load() must not appear.\nsc-1-7: append two turns, construct a fresh ConversationStore with the same sessionId+projectRoot, loadRecent(10) returns the two turns in order.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/chat — expect no matches.\nsc-1-9: feed '/runs','/help','/exit' to a session whose injected LLMClient throws if called; the turn must succeed without calling it.\nRun npm run build, npm run typecheck (tsc), npm run test.",
+      "estimatedFiles": [
+        "src/chat/chat-session.ts",
+        "src/chat/turn-classifier.ts",
+        "src/chat/roster-reader.ts",
+        "src/chat/answerer.ts",
+        "src/chat/conversation-store.ts",
+        "src/chat/slash-commands.ts",
+        "src/config/schema.ts",
+        "src/config/defaults.ts",
+        "src/config/role-providers.ts",
+        "src/cli/commands/chat.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-14T00:00:00Z",
+      "updatedAt": "2026-06-14T00:00:00Z",
+      "completedAt": "2026-06-14T13:37:03Z"
+    },
+    {
+      "contractId": "sprint-spec-20260614-bober-chat-session-layer-2",
+      "specId": "spec-20260614-bober-chat-session-layer",
+      "sprintNumber": 2,
+      "title": "Non-blocking detached spawn with session-generated runId (--run-id flag)",
+      "description": "Add an additive `--run-id <id>` flag to the `agent-bober run` command, threaded into the pipeline so the detached child honors a caller-supplied runId instead of self-generating one. Implement RunSpawner.spawn: the ChatSession generates a runId, RunSpawner writes the roster state.json (so the run is visible the same turn), launches a detached `agent-bober run <task> --run-id <id>` child (cwd=projectRoot, detached, stdio ignore, unref), records runId->pid in a session pid sidecar, and returns an immediate ack. Wire the classifier `spawn` action to this path. Existing `run` invocations without --run-id remain unchanged.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260614-bober-chat-session-layer-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds successfully with zero TypeScript errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "TypeScript compilation produces zero type errors.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "`agent-bober run <task> --run-id X` causes the pipeline to use id X as its run identifier: the completion marker .bober/runs/X.completed.json is keyed on X (not a run-<timestamp> id). Verified by a unit/integration test that invokes the run command's handler (or the threaded pipeline runId param) with a fixed id and asserts the id propagates to pipelineRunId.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "`agent-bober run <task>` WITHOUT --run-id behaves exactly as before (self-generates run-<timestamp>); an existing run-command test (or a new one) confirms no regression.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "RunSpawner.spawn writes the roster state.json via writeRunState BEFORE launching the child and returns a SpawnAck synchronously (does not await child completion); a unit test asserts the state.json exists with status 'running' immediately after spawn returns and that spawn did not block (uses a fake spawn function).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "RunSpawner records runId->{pid,task,spawnedAt} in .bober/chat/<sessionId>.pids.json; a unit test asserts the sidecar contains the entry after spawn and that a fresh sidecar read (new instance) still returns it (persistence).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "The classifier spawn action routes to RunSpawner.spawn and the session returns an immediate ack string containing the runId; /runs then lists the new run as running (roster read shows it).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-9",
+          "description": "The detached child is launched with cwd=projectRoot so it writes into the same .bober/ the session reads; a unit test asserts the spawn invocation passes cwd=projectRoot and detached:true with .unref() semantics (via an injected spawn function capturing the args).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement completion weaving / history tailing (Sprint 3)",
+        "Do not implement stop / kill-by-PID (Sprint 4)",
+        "Do not change runPipeline's signature beyond honoring an injected runId; the change must be additive (optional param / option)",
+        "Do not block the REPL waiting for the spawned run"
+      ],
+      "stopConditions": [
+        "All nine success criteria pass",
+        "Asking the chat to build a feature spawns a detached run that survives REPL exit, returns an immediate ack, and shows up under /runs as running"
+      ],
+      "definitionOfDone": "An additive --run-id <id> flag exists on `agent-bober run` and threads through to pipelineRunId so the child honors it (marker + roster keyed on the id). RunSpawner.spawn(task, runId) writes the roster state.json then launches a detached `agent-bober run <task> --run-id <id>` child (cwd=projectRoot, detached, stdio:'ignore', unref), records the runId->pid pid sidecar, and returns an immediate SpawnAck without blocking. The ChatSession generates the runId and routes the classifier spawn action to RunSpawner. Existing run invocations are unaffected. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "runPipeline (or the run command handler) can accept an injected runId via an additive optional parameter/option without breaking existing callers — pipelineRunId is generated at src/orchestrator/pipeline.ts:583 and can default to that when no id is supplied",
+        "writeRunState (src/state/run-state.ts) is the correct primitive for the session-owned spawn-time roster write",
+        "The CLI entry path used by the detached child is the same resolved entry used by the fleet ChildRunner (src/fleet/runner.ts:91-100)"
+      ],
+      "outOfScope": [
+        "Completion detection (Sprint 3) and stop (Sprint 4)",
+        "Killing or supervising the child beyond launch",
+        "Any non-additive change to the run command or pipeline"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Two parts: (A) the additive flag, (B) RunSpawner.\n\n(A) --run-id flag: in src/cli/commands/run.ts add an optional `--run-id <id>` option to RunCommandOptions and the commander registration. Thread it to runPipeline. In src/orchestrator/pipeline.ts the id is generated at line 583 (`const pipelineRunId = `run-${Date.now()}``); change to honor an injected id: `const pipelineRunId = opts?.runId ?? `run-${Date.now()}``, adding an optional field to the pipeline's config/opts object WITHOUT breaking existing callers (default preserves current behavior). Confirm where the completion marker writeCompletionMarker(projectRoot, pipelineRunId, ...) is called (src/orchestrator/checkpoints/feedback-router.ts:387) so the keyed id flows through.\n\n(B) RunSpawner (src/chat/run-spawner.ts): spawn(task, runId): writeRunState(projectRoot, {runId, task, status:'running', startedAt:nowIso(), progress:{completed:0,total:0}, projectRoot, ...}) — match the RunState shape (run-manager.ts:35-55); then spawn the detached child using the SAME shape as src/fleet/runner.ts:91-100 but with the args [cliEntry, 'run', task, '--run-id', runId] and options {cwd: projectRoot, detached: true, stdio: 'ignore'}; call .unref(). Resolve cliEntry the same way the fleet runner does. Record the pid via a PidSidecar module (src/chat/pid-sidecar.ts) writing .bober/chat/<sessionId>.pids.json. Return SpawnAck {runId, task, pid, cwd, spawnError?}. On spawn error, set spawnError and do not throw.\n\nDependency-inject the spawn function (default execa) so tests can capture args without launching a process. Time: avoid Date.now() nondeterminism in tests by injecting a clock or asserting on structure not exact time.\n\nChatSession: on classifier {action:'spawn',task}, generate runId (e.g. `run-${injectedClock()}-${counter}` or randomUUID), call RunSpawner.spawn, append the ack to ConversationStore, return it. Keep it non-blocking.",
+      "evaluatorNotes": "sc-2-4: drive the run handler/pipeline with runId='test-run-123' and assert pipelineRunId === 'test-run-123' (and/or the completion marker path includes test-run-123). \nsc-2-5: with no --run-id, assert the id still matches /^run-\\d+/.\nsc-2-6: inject a fake spawn that records the call and returns a fake pid; assert state.json with status 'running' exists synchronously after spawn() resolves and that the fake spawn was called once (no await on run completion).\nsc-2-7: after spawn, read .bober/chat/<sessionId>.pids.json and assert the runId entry; construct a new PidSidecar and assert it reads the same entry.\nsc-2-8: feed a classifier action {action:'spawn',task:'build X'} (fake classifier) and assert the returned reply contains the runId; then RosterReader.read shows it.\nsc-2-9: assert the injected spawn received cwd===projectRoot, detached:true, and that unref was invoked on the returned child.\nUse temp dirs; do not launch real long-running pipelines. Run build, typecheck, test.",
+      "estimatedFiles": [
+        "src/cli/commands/run.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/chat/run-spawner.ts",
+        "src/chat/pid-sidecar.ts",
+        "src/chat/chat-session.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-14T00:00:00Z",
+      "updatedAt": "2026-06-14T00:00:00Z",
+      "completedAt": "2026-06-14T13:55:58Z"
+    },
+    {
+      "contractId": "sprint-spec-20260614-bober-chat-session-layer-3",
+      "specId": "spec-20260614-bober-chat-session-layer",
+      "sprintNumber": 3,
+      "title": "Rotation-safe completion weaving (history.jsonl tailer)",
+      "description": "Implement CompletionTailer: tail .bober/history.jsonl from a persisted byte cursor, return new `pipeline-complete` events, and survive log rotation/shrink by detecting size-shrink, resetting the cursor to 0, re-scanning, and deduping completions by runId. Persist the cursor + last-observed-size + seenRunIds set to .bober/chat/<sessionId>.cursor.json so dedupe holds across a session restart. Wire the ChatSession prelude to poll each turn and fold new completions into the next reply (and append a system note). Use the .bober/runs/<id>.completed.json marker as a fallback correlation source when a completion line was rotated away.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260614-bober-chat-session-layer-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds successfully with zero TypeScript errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "TypeScript compilation produces zero type errors.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "CompletionTailer.poll(cursor) reads .bober/history.jsonl from the byte cursor, returns only new lines with event==='pipeline-complete' as CompletionEvent[], and advances the cursor to EOF; a unit test appends two history lines (one pipeline-complete, one other) and asserts exactly one CompletionEvent is returned.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "When the history file size is smaller than the stored cursor (rotation/truncation), poll resets the cursor to 0, re-scans the whole file, and returns the still-unseen completions without duplicating already-seen ones; a unit test simulates a shrink and asserts no dropped or duplicated completions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "Completions are deduped by runId across polls and across a session restart: the seenRunIds set persists in .bober/chat/<sessionId>.cursor.json; a unit test polls, persists, constructs a fresh tailer, and asserts an already-seen completion is not re-emitted.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "When a spawned run completes, the next ChatSession turn surfaces a completion notice referencing the runId in its reply; a unit test drives a turn after injecting a pipeline-complete line and asserts the reply/system-note mentions the run.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "poll handles a missing history file gracefully by returning {events:[], cursor:0} (no throw); covered by a unit test against a temp dir with no history.jsonl.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement stop / kill-by-PID (Sprint 4)",
+        "Do not add live between-turn push — completions surface on the next turn only",
+        "Do not modify EventStreamManager or the history/rotation modules",
+        "Do not read the rotated history.archive.jsonl; use the runId completion marker as the fallback instead"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Spawning a short run and then taking another chat turn after it finishes surfaces a 'run X finished' notice exactly once"
+      ],
+      "definitionOfDone": "CompletionTailer.poll(cursor) tails .bober/history.jsonl for pipeline-complete events, is rotation-safe (size-shrink => cursor reset + re-scan + runId dedupe), and persists byteCursor/lastSize/seenRunIds to .bober/chat/<sessionId>.cursor.json so dedupe survives restart. The ChatSession prelude polls each turn and weaves new completions into the reply and conversation. The .bober/runs/<id>.completed.json marker is used as a fallback correlation source. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "The terminal completion line is event:'pipeline-complete', phase:'complete'|'failed', details:{completed,failed,durationMs} (src/orchestrator/pipeline.ts:923-932); runId is correlated via the matching .completed.json marker since the line itself may omit runId",
+        "history.jsonl rotates via rotateIfNeeded(...,2000) on every append (src/state/history.ts:99, src/state/history-rotation.ts:89-100), so a byte offset can exceed the file size after rotation",
+        "Reading bytes [cursor,EOF) and parsing whole lines is acceptable; a partial trailing line (mid-write) is tolerated by skipping unparseable lines and not advancing past them"
+      ],
+      "outOfScope": [
+        "Stop semantics (Sprint 4)",
+        "Live push / file watching",
+        "Reading the rotated archive file"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Create src/chat/completion-tailer.ts and a cursor-store (src/chat/cursor-store.ts) for .bober/chat/<sessionId>.cursor.json (CursorFile {byteCursor, lastSize, seenRunIds}).\n\npoll(cursor): \n1. stat .bober/history.jsonl. If ENOENT => return {events:[], cursor:0}.\n2. If stat.size < cursor (shrink/rotation/truncation) => set readFrom=0; else readFrom=cursor.\n3. Read bytes [readFrom, EOF) via a fs read with a position (use a file handle + read, or readFile then slice — file is bounded to ~2000 lines so readFile is acceptable). Split into lines; keep complete lines only (last line without trailing newline may be partial — only consume up to the last newline; set new cursor to readFrom + bytesOfConsumedComplete).\n4. Parse each line as JSON (HistoryEntrySchema-shaped, src/state/history.ts:38-45); keep event==='pipeline-complete'. Map to CompletionEvent {runId?, phase, completed, failed, durationMs, timestamp}. Derive runId from the line if present (extractRunId logic, src/mcp/event-stream.ts:47-58) else by scanning for a fresh .bober/runs/<id>.completed.json marker.\n5. Filter out completions whose runId is already in seenRunIds; add newly-emitted runIds to seenRunIds.\n6. Persist {byteCursor:newCursor, lastSize:stat.size, seenRunIds} via cursor-store.\n\nDedupe by runId is the correctness keystone after a shrink reset — without it the re-scan re-emits everything. If a completion has no resolvable runId, fall back to a synthetic key (timestamp+durationMs) for dedupe.\n\nChatSession prelude: call tailer.poll(currentCursor) at the start of each turn; pass resulting events to the Answerer (completions input) and append a concise system ChatTurn noting the weave; update the in-memory cursor.\n\nTests: write history lines to a temp .bober/history.jsonl by hand; simulate rotation by truncating/rewriting the file to a shorter content; assert cursor reset + dedupe. Use real temp dirs.",
+      "evaluatorNotes": "sc-3-4: append a pipeline-complete line + a 'phase-start' line; poll(0) returns exactly one event with phase from the complete line.\nsc-3-5: poll once (cursor advances), rewrite the file shorter (simulate rotation) keeping one NEW unseen completion; poll(prevCursor) must reset, return only the unseen completion, not the previously-seen one.\nsc-3-6: poll, persist, build a new tailer from the persisted cursor file, append nothing, poll again => zero events for already-seen runIds.\nsc-3-7: inject a pipeline-complete line for a runId that was spawned; run a chat turn (fake classifier=answer) and assert the reply or an appended system turn references the runId.\nsc-3-8: poll against a temp dir lacking history.jsonl => {events:[],cursor:0}, no throw.\nRun build, typecheck, test.",
+      "estimatedFiles": [
+        "src/chat/completion-tailer.ts",
+        "src/chat/cursor-store.ts",
+        "src/chat/chat-session.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-14T00:00:00Z",
+      "updatedAt": "2026-06-14T00:00:00Z",
+      "completedAt": "2026-06-14T17:21:55Z"
+    },
+    {
+      "contractId": "sprint-spec-20260614-bober-chat-session-layer-4",
+      "specId": "spec-20260614-bober-chat-session-layer",
+      "sprintNumber": 4,
+      "title": "Steer: inspect + kill-by-PID stop with /stop command",
+      "description": "Implement the steer paths. Inspect summarizes the disk roster (already available via /runs and the classifier steer:inspect action). Stop performs a real hard-stop: RunSpawner.stop resolves the PID from the session pid sidecar, calls process.kill, and flips the run's disk state.json status to 'aborted' via writeRunState; when the PID is unknown it falls back to the disk 'aborted' flip only and reports fallbackFlagOnly. Add a deterministic `/stop <runId>` slash-command and wire the classifier steer:stop action. The target runId is resolved against the disk roster at stop-time (never from spawn-time memory).",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260614-bober-chat-session-layer-3"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "The project builds successfully with zero TypeScript errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "TypeScript compilation produces zero type errors.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "RunSpawner.stop(runId) resolves the PID from the pid sidecar, calls the (injected) kill function with that PID, and flips state.json status to 'aborted' via writeRunState; a unit test asserts both the kill call with the recorded PID and the on-disk status change to 'aborted'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "When the PID is unknown (no sidecar entry), stop does NOT call kill on any pid, flips the disk status to 'aborted' only, and returns StopResult with fallbackFlagOnly:true; covered by a unit test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "A deterministic `/stop <runId>` slash-command invokes RunSpawner.stop without an LLM call; a unit test feeds '/stop run-x' to a session whose injected LLMClient throws if called and asserts stop ran.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "The classifier steer:stop action routes to RunSpawner.stop, and the target runId is resolved against the current disk roster at stop-time (a unit test asserts a runId not present in the roster yields a 'no such running run' reply rather than killing anything).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-8",
+          "description": "The classifier steer:inspect action and `/runs` both return a roster summary; a unit test asserts the steer:inspect path returns the same summary RosterReader.summarize produces.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-9",
+          "description": "process.kill is only ever called with a PID recorded by this session lifetime; a unit test confirms an unknown/stale runId never reaches the kill function (guards against killing arbitrary PIDs).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement child-side cooperative abort polling (the child may not observe the disk flag in Phase 1)",
+        "Do not implement pause/resume or A2A input-required states (Phase 2)",
+        "Do not use RunManager.abortRun for cross-process stop (it no-ops; run-manager.ts:123)",
+        "Do not kill PIDs not recorded by this session"
+      ],
+      "stopConditions": [
+        "All nine success criteria pass",
+        "Spawning a detached run and then issuing /stop <runId> terminates the child process and the roster shows the run as 'aborted'"
+      ],
+      "definitionOfDone": "RunSpawner.stop(runId, reason) resolves the PID from the session pid sidecar, calls process.kill, and flips the disk state.json to 'aborted'; unknown PID falls back to the disk flip only with fallbackFlagOnly:true. A deterministic /stop <runId> command and the classifier steer:stop action both route here, resolving the runId against the disk roster at stop-time. steer:inspect and /runs return the roster summary. process.kill is restricted to session-recorded PIDs. Build, typecheck, and all tests pass.",
+      "assumptions": [
+        "process.kill is acceptable for a real hard-stop of the detached child in Phase 1; cooperative child shutdown is deferred",
+        "writeRunState is the primitive for the stop-time 'aborted' status flip (src/state/run-state.ts)",
+        "The pid sidecar from Sprint 2 (.bober/chat/<sessionId>.pids.json) is the authoritative source of session-recorded PIDs"
+      ],
+      "outOfScope": [
+        "Pause/resume (Phase 2)",
+        "Cooperative/graceful child shutdown handshakes",
+        "Killing runs not spawned by this session"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Extend src/chat/run-spawner.ts with stop(runId, reason): \n1. Resolve the entry from the PidSidecar (src/chat/pid-sidecar.ts). \n2. If found: call the injected kill fn (default process.kill) with entry.pid; then writeRunState(projectRoot, {...existing, status:'aborted'}) — read current state via readRunState (run-state.ts:61) first, then write the flip. Return {stopped:true, runId, killedPid:entry.pid}.\n3. If NOT found: do not call kill; read+writeRunState status 'aborted' if the run exists on disk; return {stopped:true, runId, fallbackFlagOnly:true} (or stopped:false if the run isn't on disk at all).\n\nDependency-inject the kill function so tests never kill real processes. Guard: only call kill when a sidecar entry exists (sc-4-9).\n\nChatSession: \n- /stop <runId> slash-command => RosterReader.read, confirm the runId is a running run, call RunSpawner.stop; reply with the StopResult. No LLM call.\n- classifier {action:'steer',op:'stop',runId} => same resolution path (resolve against disk roster at stop-time; if not running, reply 'no such running run' and do NOT kill).\n- classifier {action:'steer',op:'inspect'} and /runs => RosterReader.summarize(await RosterReader.read()).\n\nKeep NL stop and slash /stop sharing one internal stop handler so behavior is identical.",
+      "evaluatorNotes": "sc-4-4: spawn (or pre-seed a pid sidecar entry + a running state.json), call stop with an injected kill capturing the pid; assert kill got the recorded pid and state.json is now 'aborted'.\nsc-4-5: stop a runId with a state.json but no sidecar entry; assert kill NOT called, status 'aborted', fallbackFlagOnly true.\nsc-4-6: feed '/stop run-x' to a session whose LLMClient throws on call; assert the internal stop handler ran.\nsc-4-7: classifier returns steer:stop for a runId absent from the roster; assert reply indicates no such running run and kill not called.\nsc-4-8: steer:inspect reply equals RosterReader.summarize output for the same states.\nsc-4-9: unknown/stale runId path never reaches the injected kill fn.\nRun build, typecheck, test. Optionally an integration test spawning a trivial detached sleep-like child and killing it, if feasible without flakiness.",
+      "estimatedFiles": [
+        "src/chat/run-spawner.ts",
+        "src/chat/pid-sidecar.ts",
+        "src/chat/chat-session.ts",
+        "src/chat/slash-commands.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-14T00:00:00Z",
+      "updatedAt": "2026-06-14T00:00:00Z",
+      "completedAt": "2026-06-14T17:37:45Z"
+    }
+  ]
+}

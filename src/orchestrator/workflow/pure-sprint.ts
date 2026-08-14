@@ -19,6 +19,7 @@
 import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { EvalResult } from "../../contracts/eval-result.js";
 import type { PlanSpec } from "../../contracts/spec.js";
+import type { LoopBoundInfo } from "../loop-bounds.js";
 import { reconcile } from "./reconciler.js";
 
 export type SprintOutcomeKind = "passed" | "needs-rework" | "failed";
@@ -39,6 +40,12 @@ export interface SprintOutcome {
   outcome: SprintOutcomeKind;
   /** The per-lens verdicts from the final iteration (length >= 1). */
   lensVerdicts: EvalResult[];
+  /**
+   * True only when the loop exited because it exhausted `maxIterations` rather
+   * than because it converged or the generator blocked. Absent on every other
+   * exit so an existing consumer sees no change.
+   */
+  boundExhausted?: true;
 }
 
 /** One generation attempt's result (provider-agnostic, side-effect-free). */
@@ -69,6 +76,17 @@ export interface PureSprintDeps {
   evaluate: (input: SprintInput, iteration: number) => Promise<EvalResult[]>;
   /** Reduce lens verdicts to one verdict. Defaults to the majority-vote reconciler. */
   reconcile?: ReconcileFn;
+  /**
+   * Bounded-exit hook: called exactly once, and only when the loop exits
+   * because it exhausted `input.maxIterations`.
+   *
+   * This module stays side-effect free by contract (the host is the sole clock
+   * and the sole writer), so it CANNOT call emit() itself. The host injects a
+   * hook that forwards to `emitLoopBoundExhausted` — the same helper the live
+   * runSprintCycle path uses — keeping the "bounded exits are observable"
+   * invariant without giving this function a filesystem dependency.
+   */
+  onBoundExhausted?: (info: LoopBoundInfo) => void;
 }
 
 /** Use a verdict's own timestamp (evaluation data); epoch fallback if none. */
@@ -138,6 +156,16 @@ export async function runPureSprint(
   }
 
   // Iteration budget exhausted without passing → retryable rework.
+  // This is the loop's ONLY bounded exit: announce it rather than falling out
+  // silently, so a run that burned its full budget is distinguishable in
+  // telemetry from one that converged on its last legal iteration.
+  deps.onBoundExhausted?.({
+    loopId: "pure-sprint",
+    maxIterations: maxIter,
+    iterationsUsed: maxIter,
+    contractId,
+  });
+
   const finalVerdict = lastVerdict ?? reduce(contractId, maxIter, [], new Date(0).toISOString());
   return {
     contract: input.contract,
@@ -145,5 +173,6 @@ export async function runPureSprint(
     iterationsUsed: maxIter,
     outcome: "needs-rework",
     lensVerdicts: lastLensVerdicts,
+    boundExhausted: true,
   };
 }

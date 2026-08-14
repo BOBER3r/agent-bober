@@ -1,0 +1,566 @@
+{
+  "entryId": "sprintContracts-spec-20260604-workflow-engine",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-1.json",
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-2.json",
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-3.json",
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-4.json",
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-5.json",
+      ".bober/contracts/sprint-spec-20260604-workflow-engine-6.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-1",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 1,
+      "title": "Engine-selection seam, pipeline.engine config, and eligibility probe",
+      "description": "Introduce the engine-selection seam at the frozen runPipeline boundary. Add pipeline.engine to the Zod config (enum ts|skill|workflow, default 'ts'). Extract the current runPipeline body into a TS engine that implements a new PipelineEngine interface, and make the exported runPipeline a thin seam that resolves config.pipeline.engine via a PipelineEngineSelector and dispatches. Add a WorkflowEligibilityCheck probe that reports ineligible by default; selecting 'workflow' when ineligible (or mode='careful') resolves the TS engine and logs exactly one downgrade line. No behavior change on the default path.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "pipeline.engine exists in PipelineSectionSchema as z.enum(['ts','skill','workflow']) defaulting to 'ts', mirrored in createDefaultConfig; a schema unit test asserts the default and rejects an unknown engine string.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "A PipelineEngine interface { name; run(userPrompt, projectRoot, config): Promise<PipelineResult> } and PipelineEngineName type exist; a TsPipelineEngine wraps the extracted runPipeline body and a PipelineEngineSelector with pure resolveEngineName + select resolves config.pipeline.engine.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "resolveEngineName returns 'ts' when engine is unset; returns 'ts' (downgrade) when engine='workflow' and the eligibility probe is ineligible OR mode='careful'; returns 'skill'/'workflow' verbatim only when eligible. A unit test covers each branch and asserts exactly one downgrade log line on the workflow→ts case.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "The exported async runPipeline(userPrompt, projectRoot, config): Promise<PipelineResult> signature is unchanged and now delegates to selector.select(config).run(...); the TS engine path is the unchanged former body.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run typecheck and npm run build exit 0, and the existing orchestrator/pipeline test suite stays green with no new failures beyond the documented flaky tool-count baseline.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the real WorkflowEngine.run or any agent dispatch — that is sprint 6.",
+        "Do not change the runPipeline algorithm, phase order, or any .bober/ write behavior on the TS path.",
+        "Do not make the eligibility probe actually contact the runtime; a conservative default-ineligible probe is sufficient this sprint.",
+        "Do not touch agents/*.md, the contracts protocol, or providers/types.ts."
+      ],
+      "stopConditions": [
+        "Stop when engine selection resolves correctly for all branches, the TS path is unchanged, and typecheck/build/tests are green.",
+        "Stop when changes are confined to src/config/schema.ts, src/config/defaults.ts (if present), src/orchestrator/pipeline.ts, and new files under src/orchestrator/workflow/."
+      ],
+      "definitionOfDone": "pipeline.engine is a validated config field defaulting to 'ts'; runPipeline is a thin seam over a PipelineEngineSelector that resolves to a TsPipelineEngine (former body, unchanged) or downgrades workflow→ts when ineligible/careful with one log line; new engine types and selector live under src/orchestrator/workflow/; typecheck, build, and existing tests are green.",
+      "assumptions": [
+        "The seam can be added by extracting the existing runPipeline body into TsPipelineEngine.run without altering its logic.",
+        "A default-ineligible eligibility probe is acceptable for this sprint; the real probe heuristic is refined in sprint 6."
+      ],
+      "outOfScope": [
+        "Real workflow invoke",
+        "reconciler",
+        "args builder",
+        "flusher",
+        "conformance harness"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Add to src/config/schema.ts PipelineSectionSchema: `engine: z.enum(['ts','skill','workflow']).default('ts')` and export type PipelineEngineName = z.infer accordingly (or define the union in the workflow module and reference it). Mirror the default in createDefaultConfig's pipeline block and in bober.config.json is NOT required (config files rely on defaults). Create src/orchestrator/workflow/engine.ts with: `export type PipelineEngineName = 'ts'|'skill'|'workflow'`; `export interface PipelineEngine { readonly name: PipelineEngineName; run(userPrompt: string, projectRoot: string, config: BoberConfig): Promise<PipelineResult>; }`. Create src/orchestrator/workflow/eligibility.ts exporting `isWorkflowEligible(config): boolean` returning false for now (default-ineligible; leave a TODO referencing CC>=2.1.154 probe). Create src/orchestrator/workflow/selector.ts with pure `resolveEngineName(config): PipelineEngineName` mirroring registry.ts:65 style (unset→'ts'; 'workflow' && (!eligible || mode==='careful')→'ts' with a single logger.info downgrade line; else verbatim) and `select(config): PipelineEngine`. In src/orchestrator/pipeline.ts: rename the current `runPipeline` body to a TsPipelineEngine.run (or keep the function as `runTsPipeline` and have TsPipelineEngine delegate to it), then redefine exported `runPipeline` to `return selectPipelineEngine(config).select(config).run(userPrompt, projectRoot, config)` — keep the signature identical. Import PipelineResult from pipeline.ts into the engine module (avoid a cycle: define PipelineEngine in workflow/engine.ts importing the PipelineResult type only). Use `import type` for type-only imports (consistent-type-imports). ESM .js specifiers. Conventional commit: bober(sprint-1): add engine-selection seam + pipeline.engine config.",
+      "evaluatorNotes": "Confirm PipelineSectionSchema.engine default 'ts' and that PartialBoberConfigSchema still parses a config with no engine field (default applies). Run a schema test: parse {} pipeline → engine==='ts'; parse {engine:'bogus'} → throws. Confirm resolveEngineName branches: unset→ts, workflow+ineligible→ts (one downgrade log), careful+workflow→ts, ts→ts, skill→skill. Verify runPipeline exported signature unchanged (grep the export). Run npm run typecheck (exit 0), npm run build (exit 0), and the existing pipeline/selector tests; tolerate only the documented flaky tool-count baseline. Confirm git diff is confined to config schema/defaults, pipeline.ts, and new src/orchestrator/workflow/ files; no agents/*.md, contracts/, or providers/types.ts changes.",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/config/defaults.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/orchestrator/workflow/engine.ts",
+        "src/orchestrator/workflow/eligibility.ts",
+        "src/orchestrator/workflow/selector.ts",
+        "src/orchestrator/workflow/selector.test.ts",
+        "src/config/schema.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-1-1",
+          "result": "pass",
+          "timestamp": "2026-06-03T23:17:03.897Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-1-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-03T23:17:03.897Z",
+      "startedAt": "2026-06-03T23:04:36.829Z",
+      "completedAt": "2026-06-03T23:17:03.897Z"
+    },
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-2",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 2,
+      "title": "EvaluatorPanelReconciler — pure TS majority-vote reducer",
+      "description": "Implement reconcile(sprintId, round, lensVerdicts): EvalResult as a pure, side-effect-free majority-vote reducer over per-lens EvalResult[] (ADR-4). It produces a canonical EvalResult with evaluator='panel', passed=strict-majority, fail-closed on tie, unioning failing details and feedback from minority/failing lenses. The timestamp is supplied by the caller (no Date.now). Empty input throws. This is the conformance-critical core; the JS port and drift gate follow in sprint 3.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260604-workflow-engine-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "reconcile is a pure function with signature reconcile(sprintId: string, round: number, lensVerdicts: EvalResult[], timestamp: string): EvalResult; it calls no Date.now/Math.random and performs no fs/IO, verified by code inspection and a passing unit suite.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "passed=true only when a strict majority of lenses have passed=true; a tie (equal pass/fail) yields passed=false (fail-closed), asserted by unit tests for unanimous-pass, unanimous-fail, majority-pass, majority-fail, and 2v2 tie vectors.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "The canonical result has evaluator='panel', details = the union of all failing details across lenses (de-duplicated by criterion+message), and feedback aggregating the failing lenses' feedback; the injected timestamp is used verbatim.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "reconcile([]) throws a descriptive error; a single-lens input returns that lens's verdict re-stamped as evaluator='panel'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "The returned object validates against EvalResultSchema (zod safeParse success), and npm run typecheck + npm run build exit 0 with the new suite green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not write the pure-JS port or any .claude/workflows/ file — that is sprint 3.",
+        "Do not wire reconcile into any pipeline or script yet.",
+        "Do not introduce a new EvalResult shape; reuse the frozen EvalResultSchema from src/contracts/eval-result.ts.",
+        "Do not generate the timestamp inside the reducer."
+      ],
+      "stopConditions": [
+        "Stop when reconcile passes all fixture-vector unit tests, returns schema-valid EvalResults, and typecheck/build are green.",
+        "Stop when changes are confined to new files under src/orchestrator/workflow/ (reconciler.ts + reconciler.test.ts)."
+      ],
+      "definitionOfDone": "A pure reconcile reducer producing a canonical evaluator='panel' EvalResult by strict-majority vote (fail-closed on tie) with unioned failing details and a caller-injected timestamp; empty input throws; output validates against EvalResultSchema; comprehensive unit tests over ties/mixed/empty-detail/unanimous vectors pass; typecheck and build green.",
+      "assumptions": [
+        "Strict majority means passCount > failCount; equal counts fail closed.",
+        "Detail de-duplication by (criterion, message) is acceptable for the union; severity is preserved from the first occurrence."
+      ],
+      "outOfScope": [
+        "JS port",
+        "conformance harness",
+        "script wiring",
+        "host flush"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Create src/orchestrator/workflow/reconciler.ts. Import type { EvalResult, EvalDetail } from '../../contracts/eval-result.js'. Signature: `export function reconcile(sprintId: string, round: number, lensVerdicts: EvalResult[], timestamp: string): EvalResult`. Algorithm: throw if lensVerdicts.length===0. passCount = lenses with passed===true. passed = passCount > (lensVerdicts.length - passCount). Build details: concat all details where passed===false across lenses, de-dup by `${criterion}␟${message}`. summary: e.g. `Panel verdict: ${passCount}/${n} lenses passed`. feedback: join failing lenses' feedback with newlines (or 'All lenses passed.' when passed). Set evaluator:'panel', timestamp (the injected arg), passed, details, summary, feedback. Optionally compute score as round(100*passCount/n). Keep it pure — no Date, no Math.random, no IO. Single-lens: return that lens re-stamped (evaluator:'panel', timestamp). Add a unicode section header. Create src/orchestrator/workflow/reconciler.test.ts with Vitest: cases for n=1, unanimous pass, unanimous fail, 3-pass/2-fail (majority pass), 2-pass/3-fail (majority fail), 2v2 tie (fail-closed), empty (expect throw), empty-detail lenses, and a zod safeParse assertion on the output. ESM .js specifiers, import type for types. Conventional commit: bober(sprint-2): add pure EvaluatorPanelReconciler majority-vote reducer.",
+      "evaluatorNotes": "Inspect reconciler.ts for any Date.now/new Date()/Math.random/fs usage — there must be none. Run npx vitest run src/orchestrator/workflow/reconciler.test.ts and confirm all vectors pass, especially the 2v2 tie → passed:false and empty → throw. Confirm the output object passes EvalResultSchema.safeParse (the test should assert this; if not, run a quick check). Verify the injected timestamp is echoed verbatim (pass a sentinel like '2026-01-01T00:00:00.000Z' and assert equality). Run npm run typecheck and npm run build (exit 0). Confirm git diff is confined to the two new reconciler files. Tolerate only the documented flaky tool-count baseline in the full suite.",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/reconciler.ts",
+        "src/orchestrator/workflow/reconciler.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-2-1",
+          "result": "pass",
+          "timestamp": "2026-06-03T23:25:18.549Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-2-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-03T23:25:18.549Z",
+      "startedAt": "2026-06-03T23:17:28.605Z",
+      "completedAt": "2026-06-03T23:25:18.549Z"
+    },
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-3",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 3,
+      "title": "Pure-JS reducer port and twin/port drift gate",
+      "description": "Hand-write a pure-JS port of the reconciler at .claude/workflows/lib/reconcile.js mirroring the TS twin exactly (ADR-4), and add a shared fixture set of lens-vectors plus a CI conformance test asserting the TS twin and JS port produce byte-identical reconciled EvalResult (timestamp excluded) over every fixture. This is the drift gate that prevents a sprint passing under one engine and failing under the other.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260604-workflow-engine-2"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": ".claude/workflows/lib/reconcile.js exports a pure reconcile(sprintId, round, lensVerdicts, timestamp) with no fs/Date.now/Math.random, parseable as an ES module, structurally mirroring the TS twin.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "A shared fixtures file (e.g. src/orchestrator/workflow/__fixtures__/lens-vectors.json) holds named lens-vectors covering ties, majority-pass, majority-fail, unanimous, single-lens, and empty-detail cases, consumed by both the TS and JS conformance assertions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "A conformance test (reconcile-conformance.test.ts) imports both the TS twin and the JS port, runs every fixture through both with a fixed sentinel timestamp, and asserts deep-equality of the resulting EvalResult; the test fails if either implementation is edited divergently.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "The JS port output validates against EvalResultSchema for every fixture (imported into the test for validation).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run typecheck, npm run build, and the lint command exit 0; the conformance suite is green and runs as part of npm run test.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not auto-generate the JS port from the TS source via a build step — it is hand-written per ADR-4.",
+        "Do not implement the full bober-pipeline.js script yet (sprint 5).",
+        "Do not change the TS reconciler's algorithm; if a divergence is found, fix the port to match the twin, not vice versa, unless the twin has a genuine bug (note it).",
+        "Do not add a runtime dependency on the workflow runtime."
+      ],
+      "stopConditions": [
+        "Stop when twin and port are byte-identical over all fixtures and the conformance test is wired into npm run test.",
+        "Stop when changes are confined to .claude/workflows/lib/reconcile.js, the fixtures file, and the conformance test."
+      ],
+      "definitionOfDone": "A hand-written pure-JS reconcile port mirrors the TS twin; a shared fixture set drives a CI conformance test asserting byte-identical EvalResult across twin and port; the port output is schema-valid; typecheck/build/lint/test are green and the gate trips on divergence.",
+      "assumptions": [
+        "Vitest can import the .js port directly (ESM) from a test alongside the TS twin.",
+        "Deep-equality with the timestamp field excluded (or both passed the same sentinel) is the correct byte-identity check."
+      ],
+      "outOfScope": [
+        "bober-pipeline.js orchestration",
+        "args builder",
+        "flusher",
+        "engine wiring"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create .claude/workflows/lib/reconcile.js as a plain ESM module: `export function reconcile(sprintId, round, lensVerdicts, timestamp) { ... }` mirroring src/orchestrator/workflow/reconciler.ts line-for-line in behavior (same majority math, same fail-closed tie, same detail de-dup key `${criterion}␟${message}`, same summary/feedback construction, same evaluator:'panel'). No TypeScript syntax. No imports of Node builtins. Create src/orchestrator/workflow/__fixtures__/lens-vectors.json: an array of { name, lensVerdicts: EvalResult[] } objects covering: single-lens, unanimous-pass, unanimous-fail, majority-pass (3p/2f), majority-fail (2p/3f), tie (2p/2f), empty-detail lenses (lenses with details:[]). Use minimal valid EvalResult objects (evaluator, passed, details, summary, feedback, timestamp). Create src/orchestrator/workflow/reconcile-conformance.test.ts: import { reconcile as tsReconcile } from './reconciler.js'; import { reconcile as jsReconcile } from '../../../.claude/workflows/lib/reconcile.js' (use a relative path that resolves from the test file; if path resolution is awkward, place the test so the relative import works, or add a tiny re-export shim — but do NOT duplicate logic). Load fixtures, and for each, with a fixed timestamp '2026-01-01T00:00:00.000Z', assert expect(jsReconcile(...)).toEqual(tsReconcile(...)) and EvalResultSchema.safeParse(jsReconcile(...)).success===true. Verify ESLint is OK with importing a .js file outside src (adjust eslint ignores only if necessary and minimally; prefer importing via a relative path the linter accepts). Conventional commit: bober(sprint-3): add pure-JS reconciler port + twin/port drift conformance gate.",
+      "evaluatorNotes": "Confirm .claude/workflows/lib/reconcile.js is pure JS (no TS types, no Date.now, no Math.random, no fs/require). Run npx vitest run src/orchestrator/workflow/reconcile-conformance.test.ts: every fixture must show toEqual parity between tsReconcile and jsReconcile and schema validity. Deliberately reason about whether a hand-edit to one side would trip the test (it should). Run npm run typecheck, npm run build, and the lint command (exit 0). Confirm npm run test includes the conformance test and it passes (tolerate only the flaky tool-count baseline). Confirm git diff is confined to the JS port, the fixtures JSON, the conformance test, and at most a minimal eslint ignore tweak if strictly required.",
+      "estimatedFiles": [
+        ".claude/workflows/lib/reconcile.js",
+        "src/orchestrator/workflow/__fixtures__/lens-vectors.json",
+        "src/orchestrator/workflow/reconcile-conformance.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-3-1",
+          "result": "pass",
+          "timestamp": "2026-06-03T23:36:43.496Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-3-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-03T23:36:43.496Z",
+      "startedAt": "2026-06-03T23:25:54.042Z",
+      "completedAt": "2026-06-03T23:36:43.496Z"
+    },
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-4",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 4,
+      "title": "Workflow types, ResumeCursorReconstructor, and ArgsPayloadBuilder",
+      "description": "Add the new TS types (WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport) and the host-side input plumbing. ResumeCursorReconstructor re-derives completed-sprint state from durable contract status + history for crash-safe resume. ArgsPayloadBuilder marshals config, principles, models, and lenses into one JSON-serializable WorkflowArgs, throwing MissingKnobError on an unset required knob, AgentCapError when the worst-case agent count (maxSprints × maxIterations × lenses) exceeds the 16/1000 caps, and NonSerializableArgError on a non-serializable model.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260604-workflow-engine-1"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "src/orchestrator/workflow/types.ts defines WorkflowArgs, WorkflowRunResult, ResumeCursor, and ConformanceReport exactly per the architecture data model, reusing frozen PlanSpec/SprintContract/EvalResult/HistoryEntry types from src/contracts/.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "ResumeCursorReconstructor.reconstruct(projectRoot, specId) returns a ResumeCursor whose completedSprintNumbers are derived from durable contract status (status passed/completed) via loadHistory + contract reads; with no history it returns completedSprintNumbers:[]; when contract status disagrees with history it trusts contract status. Unit tests cover all three.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "ArgsPayloadBuilder.build(userPrompt, config, cursor) returns a fully JSON-serializable WorkflowArgs (JSON.parse(JSON.stringify(args)) deep-equals args), with knobs/models/evaluatorLenses populated from config (lenses from config.evaluator.strategies or a sensible default).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "build throws MissingKnobError when a required knob is unset, AgentCapError when maxSprints × maxIterations × lenses > 16 concurrent or > 1000 total (computed worst-case, pre-invoke), and NonSerializableArgError on a non-serializable model value; each path has a unit test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run typecheck and npm run build exit 0 and the new suites are green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not write bober-pipeline.js or the RunResultFlusher (sprint 5) or the WorkflowEngine (sprint 6).",
+        "Do not perform any agent dispatch.",
+        "Do not change the contracts protocol or history schema; only read them.",
+        "Do not introduce SDK types into these modules."
+      ],
+      "stopConditions": [
+        "Stop when types compile, reconstruct and build behave per criteria with green tests, and typecheck/build pass.",
+        "Stop when changes are confined to new files under src/orchestrator/workflow/ (types.ts, resume-cursor.ts, args-builder.ts, errors.ts, and their tests)."
+      ],
+      "definitionOfDone": "Workflow types are defined reusing frozen contract types; ResumeCursorReconstructor crash-safely re-derives completed sprints from durable status+history; ArgsPayloadBuilder emits a JSON-serializable WorkflowArgs and throws the three typed errors (MissingKnob/AgentCap/NonSerializableArg) at build time; unit tests cover every branch; typecheck and build are green.",
+      "assumptions": [
+        "Lenses default to a single 'default' lens when config.evaluator.strategies implies one evaluator pass; multiple lenses can be derived from strategies or an explicit evaluatorLenses config if present.",
+        "Worst-case agent count uses sprint.maxSprints and evaluator.maxIterations as upper bounds since actual sprint count is unknown pre-plan.",
+        "loadHistory exists at src/state/history.ts and contract reads are available via src/state/sprint-state.ts."
+      ],
+      "outOfScope": [
+        "script orchestration",
+        "flush",
+        "engine.run",
+        "live invoke",
+        "conformance harness"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/orchestrator/workflow/errors.ts with `export class MissingKnobError extends Error`, `AgentCapError`, `NonSerializableArgError`, `WorkflowUnavailableError` (the last is used in sprint 6 but define it here). Create src/orchestrator/workflow/types.ts: WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport exactly as in the architecture's Data Model section (import type PlanSpec from '../../contracts/spec.js' or wherever it lives, SprintContract from '../../contracts/sprint-contract.js', EvalResult + HistoryEntry from '../../contracts/eval-result.js'/'../../state/history.js' — locate the real HistoryEntry type; pendingHistory is Array<Omit<HistoryEntry,'timestamp'>>). Create src/orchestrator/workflow/resume-cursor.ts: `export class ResumeCursorReconstructor { async reconstruct(projectRoot, specId): Promise<ResumeCursor> }` — read all contracts for the spec (from .bober/contracts via existing state helpers; if a load-by-spec helper is missing, glob contract files and filter by specId+status), collect sprintNumbers with status passed/completed into completedSprintNumbers, set lastObservedSprintNumber to the max observed; use loadHistory (history.ts:74) to corroborate but trust contract status on conflict. Create src/orchestrator/workflow/args-builder.ts: `export class ArgsPayloadBuilder { build(userPrompt, config, resumeCursor): WorkflowArgs }`. Pull knobs from config (maxIterations from evaluator.maxIterations, maxSprints from sprint.maxSprints, researchPhase/architectPhase from pipeline, curatorEnabled from curator?.enabled, codeReviewEnabled from codeReview?.enabled, requireContracts from sprint.requireContracts) — throw MissingKnobError if any required one is undefined (don't silently default). models: resolve planner/curator/generator/evaluator model strings from config sections. evaluatorLenses: from config (e.g. derive from evaluator.strategies labels, or ['default']). principles: pass through (caller supplies the principles text; accept a param or read is host-side — keep build pure by accepting principles via config or a param; if reading fs, do it in a separate host method, NOT in build). Cap check: const total = knobs.maxSprints * knobs.maxIterations * evaluatorLenses.length; if (evaluatorLenses.length > 16 || total > 1000) throw new AgentCapError(...). Serializability: try JSON.stringify and compare; throw NonSerializableArgError on failure. Add reconstruct/build unit tests with temp .bober dirs (follow the no-mock-fs principle: create temp dirs, write real contract JSON, clean up). Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-4): add workflow types, ResumeCursorReconstructor, ArgsPayloadBuilder.",
+      "evaluatorNotes": "Confirm types.ts matches the architecture data model field-for-field (WorkflowArgs.knobs has the 7 knobs; WorkflowRunResult.perSprint entries have contract/finalVerdict/iterationsUsed/outcome/lensVerdicts; pendingHistory omits timestamp). For ResumeCursorReconstructor: write temp contracts with mixed statuses and assert completedSprintNumbers contains only passed/completed numbers; empty dir → []; conflicting history vs status → status wins. For ArgsPayloadBuilder: assert JSON round-trip equality; force a MissingKnobError (config missing a required knob), an AgentCapError (set maxSprints/maxIterations/lenses to exceed caps), and a NonSerializableArgError (inject a function/BigInt model). Run npm run typecheck and npm run build (exit 0); new suites green. Confirm no SDK imports and changes confined to the new workflow files. Tolerate only the flaky tool-count baseline.",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/types.ts",
+        "src/orchestrator/workflow/errors.ts",
+        "src/orchestrator/workflow/resume-cursor.ts",
+        "src/orchestrator/workflow/resume-cursor.test.ts",
+        "src/orchestrator/workflow/args-builder.ts",
+        "src/orchestrator/workflow/args-builder.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-4-1",
+          "result": "pass",
+          "timestamp": "2026-06-03T23:50:28.318Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-4-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-03T23:50:28.318Z",
+      "startedAt": "2026-06-03T23:37:21.575Z",
+      "completedAt": "2026-06-03T23:50:28.318Z"
+    },
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-5",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 5,
+      "title": "bober-pipeline.js workflow script and RunResultFlusher",
+      "description": "Author the pure-JS workflow script .claude/workflows/bober-pipeline.js that orchestrates plan→curate→generate→adversarial-panel→reconcile→retry via agent({agentType}) in parity with the TS pipeline stages, owning no truth, skipping resumeCursor.completedSprintNumbers, chunking the panel ≤16, and returning a WorkflowRunResult. Implement the host-side RunResultFlusher.flush that commits a WorkflowRunResult to durable .bober/ state (saveContract/updateContract, appendHistory, updateProgress), stamping ISO timestamps as the only clock source, atomic per file, flushing after each contract for crash-safety. Since live invoke is dormant, the script is authored + parse/lint-checked and the flusher is unit-tested with a synthetic WorkflowRunResult.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260604-workflow-engine-3",
+        "sprint-spec-20260604-workflow-engine-4"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": ".claude/workflows/bober-pipeline.js begins with a literal `export const meta = { name, description, phases }` block (pure literal) and exposes a main(args) flow that calls agent({agentType,...}) for planner/curator/generator/evaluator and uses the JS reconcile port from ./lib/reconcile.js; it parses as an ES module (node --check or an import in a test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "The script logic skips contracts whose sprintNumber is in resumeCursor.completedSprintNumbers, runs the evaluator panel per lens with chunking so no fan-out exceeds 16, branches the retry loop on reconcile().passed, and returns a WorkflowRunResult shape (verified by extracting/importing its pure helper functions in a unit test, or by a structural assertion on a dry-run harness).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "RunResultFlusher.flush(projectRoot, config, result) persists the spec, each contract (saveContract/updateContract), appends history (appendHistory) and updates progress (updateProgress), stamping ISO timestamps on pendingHistory entries and contract completedAt; it returns a PipelineResult. A unit test with a synthetic WorkflowRunResult asserts the written .bober/ files.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "flush is crash-safe: it commits after each contract (not once at end) and is idempotent — re-flushing the same result does not duplicate history beyond the documented commit-by-message idempotency; a unit test re-runs flush and asserts no duplicate contract corruption.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run typecheck, npm run build, and the lint command exit 0; the new flusher and script suites are green within npm run test.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not execute the script against the live Workflows runtime — it is dormant this release.",
+        "Do not implement WorkflowEngine.run/invoke or the eligibility wiring (sprint 6).",
+        "Do not implement careful-flow stage-splitting.",
+        "Do not let the script perform fs, Date.now, or Math.random — all clock/fs work is host-side in the flusher."
+      ],
+      "stopConditions": [
+        "Stop when the script parses and its pure helpers + the flusher pass unit tests and typecheck/build/lint are green.",
+        "Stop when changes are confined to .claude/workflows/bober-pipeline.js, src/orchestrator/workflow/flusher.ts, and their tests."
+      ],
+      "definitionOfDone": "A pure-JS bober-pipeline.js script with a literal meta block orchestrates the plan→curate→generate→panel→reconcile→retry stages via agentType, skips completed sprints, chunks the panel ≤16, and returns a WorkflowRunResult owning no truth; the host RunResultFlusher commits that result to durable .bober/ state stamping timestamps, atomic and flush-after-each-contract; script parses, flusher and script-helper unit tests pass, and typecheck/build/lint are green.",
+      "assumptions": [
+        "The script's pure helper functions (e.g. partition lenses into ≤16 chunks, decide retry) can be factored so they are unit-testable without the live agent() runtime.",
+        "Testing the script via a structural import + helper-function assertions is sufficient given the dormant runtime; full end-to-end execution is a manual Claude Code check.",
+        "RunResultFlusher reuses the same state helpers the TS pipeline uses so artifacts are byte-equivalent."
+      ],
+      "outOfScope": [
+        "WorkflowEngine wiring",
+        "eligibility probe refinement",
+        "careful stage-split",
+        "live agent dispatch"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Create .claude/workflows/bober-pipeline.js. Start with `export const meta = { name: 'bober-pipeline', description: '...', phases: [{title:'Plan'},{title:'Sprint'}] }` (PURE literal — no variables). Body uses the workflow runtime hooks (agent, parallel, pipeline, phase, log) as documented for Dynamic Workflows. main(args): PLAN → agent({agentType:'bober-planner', model: args.models.planner, schema: <PlanSpec schema ref>}); if needsClarification return early. PER-CONTRACT loop over args.preloadedContracts (or planned sprints), skipping sprintNumbers in args.resumeCursor.completedSprintNumbers: CURATE agent({agentType:'bober-curator'}); RETRY 1..args.knobs.maxIterations: GENERATE agent({agentType:'bober-generator'}); PANEL run args.evaluatorLenses via parallel chunked into groups of ≤16, each agent({agentType:'bober-evaluator', schema: EvalResult}); reconcile with the JS port `import { reconcile } from './lib/reconcile.js'` (timestamp: pass a placeholder like '' — host re-stamps on flush, or pass args-provided sentinel); if reconcile().passed break else feed feedback into next iteration. Return { spec, perSprint:[{contract, finalVerdict, iterationsUsed, outcome, lensVerdicts}], needsClarification, pendingHistory }. Factor pure helpers (chunk(lenses, 16), decideOutcome(...)) into ./lib/ so they can be unit-tested; OR export them from the script for testing. NO fs/Date.now/Math.random in the script. Create src/orchestrator/workflow/flusher.ts: `export class RunResultFlusher { async flush(projectRoot, config, result): Promise<PipelineResult> }` using saveContract/updateContract (sprint-state.ts), appendHistory (history.ts), updateProgress (history.ts), stamping new Date().toISOString() onto pendingHistory entries (the ONLY clock source) and onto contract completed/updated timestamps; flush per-contract in a loop; build and return a PipelineResult (success, spec, completedSprints, failedSprints, duration). Unit-test flusher with a synthetic WorkflowRunResult against a temp .bober dir (real fs, cleanup). Unit-test the script's pure helpers + a `node --check` style parse (or import the script module and assert typeof meta === 'object' and meta.name). Conventional commit: bober(sprint-5): add bober-pipeline.js workflow script + RunResultFlusher.",
+      "evaluatorNotes": "Confirm .claude/workflows/bober-pipeline.js parses: run `node --check .claude/workflows/bober-pipeline.js` (exit 0) OR confirm a test imports it. Confirm meta is a pure literal with name/description/phases and matches the phase titles used. Inspect the script for fs/Date.now/Math.random — must be none. Confirm the panel is chunked so no parallel fan-out exceeds 16 and completed sprintNumbers are skipped (read the loop). For RunResultFlusher: run its unit test — assert the temp .bober has the spec, contracts with stamped completedAt, history lines appended, progress updated; re-run flush and assert no corruption/duplication. Confirm timestamps are produced ONLY in the flusher (host), never in the script. Run npm run typecheck, npm run build, and lint (exit 0); suites green tolerating only the flaky tool-count baseline. Confirm git diff confined to the script, flusher.ts, and their tests.",
+      "estimatedFiles": [
+        ".claude/workflows/bober-pipeline.js",
+        "src/orchestrator/workflow/flusher.ts",
+        "src/orchestrator/workflow/flusher.test.ts",
+        "src/orchestrator/workflow/script-helpers.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-5-1",
+          "result": "pass",
+          "timestamp": "2026-06-04T00:05:13.310Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-5-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-04T00:05:13.310Z",
+      "startedAt": "2026-06-03T23:51:34.930Z",
+      "completedAt": "2026-06-04T00:05:13.310Z"
+    },
+    {
+      "contractId": "sprint-spec-20260604-workflow-engine-6",
+      "specId": "spec-20260604-workflow-engine",
+      "sprintNumber": 6,
+      "title": "WorkflowEngine assembly, selector integration, and EngineConformanceHarness",
+      "description": "Assemble WorkflowEngine (implements PipelineEngine name='workflow') wiring ResumeCursorReconstructor → ArgsPayloadBuilder → invoke → RunResultFlusher. invoke probes eligibility and, when ineligible (the dormant default) or on WorkflowUnavailableError from the first invoke, re-dispatches the TS engine before any .bober/ flush. Register the workflow engine in the selector so engine='workflow' resolves it (then downgrades). Implement EngineConformanceHarness.assertEquivalent asserting ts vs skill emit equivalent .bober/ artifacts for a fixture spec, and wire it as a CI gate. This closes the loop: engine='workflow' completes via TS downgrade in CI with no partial flush.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260604-workflow-engine-1",
+        "sprint-spec-20260604-workflow-engine-5"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "WorkflowEngine implements PipelineEngine with name='workflow' and a run() that builds a cursor + args, calls invoke, and flushes; on WorkflowUnavailableError from the first invoke it re-dispatches the TS engine and no .bober/ contract/eval artifact is written by the workflow path before the re-dispatch. A unit test forces the unavailable path and asserts TS re-dispatch with zero partial flush.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "The selector registers and resolves the workflow engine: with engine='workflow' and the dormant ineligible probe, select() returns a path that completes via TS downgrade with exactly one downgrade log line; engine='ts' and 'skill' resolve unchanged. Unit tests cover each.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "EngineConformanceHarness.assertEquivalent(fixtureSpec, ['ts','skill'], projectRootFactory) returns a ConformanceReport with equivalent=true when the two engines produce matching .bober/ artifacts and equivalent=false with populated diffs when they differ (tested by injecting a divergence).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "An integration-style test runs runPipeline with config.pipeline.engine='workflow' in the default (ineligible) environment and asserts it completes through the TS engine producing the same PipelineResult shape as engine='ts', with no orphaned .bober/ writes from the workflow path.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run typecheck, npm run build, and the lint command exit 0; the full npm run test passes (tolerating only the documented flaky tool-count baseline) and the conformance gate runs as part of it.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement the live programmatic invoke transport — invoke remains dormant (probe ineligible / throws WorkflowUnavailableError) this release.",
+        "Do not implement careful-flow stage-splitting; mode='careful' + engine='workflow' downgrades to TS via the selector (already handled in sprint 1).",
+        "Do not add a live three-engine diff to CI; the workflow lane in the harness is opt-in behind eligibility.",
+        "Do not modify the 10 agents/*.md, the contracts protocol, or providers/types.ts."
+      ],
+      "stopConditions": [
+        "Stop when engine='workflow' completes via TS downgrade with no partial flush, the conformance harness gates ts/skill equivalence, and typecheck/build/lint/test are green.",
+        "Stop when changes are confined to new files under src/orchestrator/workflow/ (workflow-engine.ts, conformance.ts, and tests) plus the selector registration in selector.ts."
+      ],
+      "definitionOfDone": "WorkflowEngine wires cursor→args→invoke→flush with a dormant probe and TS re-dispatch on WorkflowUnavailableError (no partial flush); the selector resolves engine='workflow' and downgrades cleanly with one log line; EngineConformanceHarness asserts ts/skill .bober/ artifact equivalence and is wired as a CI gate; an integration test confirms engine='workflow' completes via TS in CI; typecheck, build, lint, and test are green.",
+      "assumptions": [
+        "The dormant invoke() can be represented as a method that throws WorkflowUnavailableError (or returns ineligible) so the run path is fully testable without the live runtime.",
+        "'Equivalent artifacts' for ts vs skill is asserted on normalized .bober/ JSON (ignoring volatile timestamps/durations).",
+        "The skill engine for the harness can be represented by a deterministic stand-in that emits the same contracts protocol artifacts, since the skill orchestrator is Claude-in-session; if a runnable skill engine is unavailable, the harness compares ts against a recorded skill fixture."
+      ],
+      "outOfScope": [
+        "live invoke",
+        "careful stage-split",
+        "audit/migrate commands",
+        "planner panel"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Create src/orchestrator/workflow/workflow-engine.ts: `export class WorkflowEngine implements PipelineEngine { readonly name = 'workflow'; async run(userPrompt, projectRoot, config): Promise<PipelineResult> }`. run(): reconstruct cursor (ResumeCursorReconstructor), build args (ArgsPayloadBuilder), then `try { const result = await this.invoke(args); return await new RunResultFlusher().flush(projectRoot, config, result); } catch (e) { if (e instanceof WorkflowUnavailableError) { logger.info('workflow runtime unavailable — re-dispatching TS engine'); return new TsPipelineEngine().run(userPrompt, projectRoot, config); } throw e; }`. invoke(args): dormant — `throw new WorkflowUnavailableError(...)` (or check isWorkflowEligible and throw if not). Ensure NO contract/eval flush happens before invoke succeeds (build args is pure; reconstruct is read-only). Update src/orchestrator/workflow/selector.ts: register/resolve WorkflowEngine for name 'workflow' (but resolveEngineName already downgrades workflow→ts when ineligible/careful, so in practice select() returns TsPipelineEngine; keep WorkflowEngine reachable for when eligible). Decide the cleanest composition: either (a) resolveEngineName stays the gate and only returns 'workflow' when eligible, so select('workflow') instantiates WorkflowEngine which itself re-dispatches on invoke failure — keep BOTH guards (selector downgrade + engine-level catch) per ADR-6 belt-and-suspenders. Create src/orchestrator/workflow/conformance.ts: `export class EngineConformanceHarness { async assertEquivalent(fixtureSpec, engines, projectRootFactory): Promise<ConformanceReport> }` — run each engine against a fresh projectRoot from the factory, read back normalized .bober/ artifacts (spec, contracts, eval-results, history), strip volatile fields (timestamps, durations, runIds), deep-compare, and populate diffs[]. For the skill lane, if no runnable skill engine exists, compare against a recorded fixture or skip with a logged note (do NOT silently pass). Wire the harness into a test that runs in npm run test as the CI gate. Add workflow-engine.test.ts (force WorkflowUnavailableError → assert TS re-dispatch + no partial flush by checking the temp .bober has only what TS wrote), selector workflow-resolution cases, conformance.test.ts (equivalent + injected-divergence). Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-6): assemble WorkflowEngine + selector integration + EngineConformanceHarness CI gate.",
+      "evaluatorNotes": "This is the closing sprint — verify the whole seam end to end. Confirm WorkflowEngine.run re-dispatches TS on WorkflowUnavailableError and that, in that path, no workflow-written contract/eval artifacts exist before re-dispatch (inspect the temp .bober after a forced-unavailable run — it should match a plain TS run). Confirm exactly one downgrade/​unavailable log line. Run the selector tests (ts/skill/workflow branches). Run the conformance test: assertEquivalent(['ts','skill']) → equivalent:true on matching artifacts and equivalent:false with diffs when a divergence is injected; confirm it is part of npm run test. Run the integration test: runPipeline with engine='workflow' in the default env completes via TS with a PipelineResult matching engine='ts' shape. Run npm run typecheck, npm run build, lint (exit 0) and the full npm run test (tolerate only the flaky tool-count baseline). Confirm git diff is confined to the new workflow-engine.ts, conformance.ts, selector.ts registration, and tests; no agents/*.md, contracts/, or providers/types.ts changes. Spot-check that the exported runPipeline signature is still unchanged.",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/workflow-engine.ts",
+        "src/orchestrator/workflow/workflow-engine.test.ts",
+        "src/orchestrator/workflow/conformance.ts",
+        "src/orchestrator/workflow/conformance.test.ts",
+        "src/orchestrator/workflow/selector.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260604-workflow-engine-6-1",
+          "result": "pass",
+          "timestamp": "2026-06-04T00:21:25.051Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-6-1",
+      "createdAt": "2026-06-04T00:00:00Z",
+      "updatedAt": "2026-06-04T00:21:25.051Z",
+      "startedAt": "2026-06-04T00:07:12.592Z",
+      "completedAt": "2026-06-04T00:21:25.051Z"
+    }
+  ]
+}

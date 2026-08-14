@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260726-graph-backend-choice-8",
+  "specId": "spec-20260726-graph-backend-choice",
+  "sprintNumber": 8,
+  "title": "Documentation + deferred live-smoke follow-up + final byte-identical check",
+  "description": "Document the pluggable backend: generalize the README 'Graph (Tokensave) Integration' section to cover both engines — how selection works (auto-detect + optional graph.backend override + optional codeReviewGraphPath), install commands for tokensave and code-review-graph, and a parity table of which GraphClient operations map to which tool on each engine. Record the deferred live `code-review-graph serve` smoke run (what it is, how to run it manually, why it's not in CI). Do a final confirmation that the tokensave path is byte-identical and code-review-graph is selectable end-to-end via fixtures.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-7"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-8-1",
+      "description": "Build + typecheck pass with zero errors (docs-only sprint must not break the build; any code touched is trivial/status-string level).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-2",
+      "description": "README's graph section is generalized to both engines: it explains auto-detection (tokensave preferred when both installed), the optional graph.backend override, the optional codeReviewGraphPath, install commands for BOTH tokensave (brew/scoop/cargo) and code-review-graph (`pip install code-review-graph`, Python 3.10+), and a parity table listing each GraphClient operation (search/reviewContext/overview/impact/changes/callers/callees/imports/tests) with its tool name on each engine.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-3",
+      "description": "The deferred live-smoke follow-up is documented (in the README/docs and/or a follow-ups note): what the manual `code-review-graph serve` end-to-end smoke run verifies, the exact command(s) to run it, and a note that CI relies on committed fixtures. Any provisional fixtures from Sprint 4 (if that fallback was used) are called out with their refresh instructions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-4",
+      "description": "Final verification: with graph.backend unset/tokensave and tokensave installed, the full existing graph + CLI suite is green and byte-identical (no behavior drift across the 8 sprints); with graph.backend='code-review-graph' + mocked/fixture transport, onboard/impact/graph/query all work. Documented in the sprint record.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-5",
+      "description": "Full suite green (no NEW failures); lint clean; docs render (no broken internal links/anchors in the edited README section).",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT change adapter/selection/transport behavior — this sprint is docs + a final verification pass (plus at most cosmetic status-string tweaks).",
+    "Do NOT add the live cr-graph smoke test to default CI — it stays a documented manual step.",
+    "Do NOT paraphrase the tokensave install hints away from their verbatim strings.",
+    "Do NOT claim live cr-graph verification unless a real run was actually performed and recorded."
+  ],
+  "stopConditions": [
+    "All required success criteria pass",
+    "README + docs describe backend selection, both install paths, a parity table, and the deferred live-smoke follow-up; final byte-identical-tokensave + cr-graph-selectable check recorded; suite + lint green"
+  ],
+  "definitionOfDone": "The README graph section documents both engines (selection, install, parity table), the deferred live-smoke follow-up is written down with the manual command, the final verification (tokensave byte-identical + cr-graph selectable via fixtures) is recorded, and suite + lint are green.",
+  "assumptions": [
+    "README currently has a 'Graph (Tokensave) Integration' section (README.md:161) and a CLI section (README.md:507). Generalize the heading + body; keep tokensave-specific detail but frame it as one of two backends.",
+    "The parity table should be sourced from the actual tool mappings in the two backend modules (tokensave-backend.ts and code-review-graph-backend.ts) so it stays accurate: search, reviewContext, overview, impact, changes, callers_of, callees_of, imports_of, tests_for.",
+    "The deferred follow-up mirrors how the tokensave integration documents skipIf real-binary tests; the manual smoke is: install code-review-graph, `code-review-graph build` in a repo, set graph.backend='code-review-graph', run `agent-bober onboard` and confirm 5 artifacts.",
+    "If Sprint 4 used the provisional-fixture fallback (binary unreachable), this sprint must surface that prominently as an open follow-up with refresh steps.",
+    "This is a low-risk docs sprint; the only code changes (if any) are cosmetic (e.g. a status string), so build/lint gates are mostly guarding against accidental breakage."
+  ],
+  "outOfScope": [
+    "Any behavioral change to selection/adapters/transport",
+    "Adding live cr-graph tests to CI",
+    "New features"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read FIRST: README.md around the graph section (161) and CLI section (507), the two backend modules (for the accurate tool→operation parity table), the Sprint-3 selection logic (for the auto-detect + override + codeReviewGraphPath description), and the Sprint-4 fixture notes (to know if the provisional fallback was used).\n\nWRITE: rename/expand the README graph section to 'Graph Integration (tokensave or code-review-graph)'. Cover: (1) how selection works — auto-detect with tokensave preference, explicit graph.backend override, optional per-engine binary paths (tokensavePath / codeReviewGraphPath); (2) install — tokensave (brew/scoop/cargo, verbatim) and code-review-graph (`pip install code-review-graph`, Python 3.10+); (3) a parity table: rows = GraphClient operations, columns = tokensave tool | code-review-graph tool; (4) a 'Verification & live smoke' subsection documenting the deferred manual smoke run + that CI uses fixtures. If provisional fixtures exist, add an explicit follow-up callout.\n\nDo the FINAL check: run the full suite with tokensave (byte-identical) and the cr-graph fixture tests; record the outcome in the sprint doc. Keep code changes to at most cosmetic status strings.\n\nRun `npm run build && npm run typecheck && npx vitest run` + lint. Commit `bober(sprint-8): document pluggable graph backend + parity table + deferred live-smoke follow-up`.",
+  "evaluatorNotes": "sc-8-2: read the edited README — confirm it actually documents auto-detect + override + BOTH install paths + a parity table that matches the real tool mappings in the backend modules (spot-check 2-3 rows against code-review-graph-backend.ts). sc-8-3: confirm the deferred live-smoke is written with a concrete manual command, and any provisional fixtures are flagged. sc-8-4: confirm the sprint record states the final tokensave-byte-identical result and cr-graph-selectable result with evidence (test output). sc-8-5: full suite no new failures; lint clean; no broken README anchors. Reject if the parity table is fabricated rather than derived from the code, or if live cr-graph verification is claimed without an actual recorded run.",
+  "estimatedFiles": [
+    "README.md",
+    "docs/graph-backends.md"
+  ],
+  "estimatedDuration": "small",
+  "iterationHistory": [],
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
+}

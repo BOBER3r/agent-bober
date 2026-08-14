@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-9",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 9,
+  "title": "Node coverage counts a node only when it actually ran",
+  "description": "The coverage pin reads nodeId off each span and adds it to the executed set with no status check, so a node whose span ended failed still counts as covered -- and the commit node, refused FAIL_CLOSED under the shipped noop mechanism, is exactly such a node. The committed node-coverage figure is therefore true as REACHED and weaker than it reads as EXERCISED. Correct the rule and restate the figure.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-8"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "coverage.test.ts counts a node as executed only when it has at least one span with status ok.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "The corrected rule is proven by mutation in both directions: a node whose only span ended failed no longer counts, and a node that gains an ok span begins to count -- both failing the pin when the NEVER_EXECUTED list is not updated to match.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "The NEVER_EXECUTED list is updated to whatever the corrected rule actually yields, and each entry still carries a claim about WHY the node is unreachable, with any claim that stopped being true rewritten rather than left standing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "docs/pge-graph.md restates the node-coverage figure under the corrected rule, records the previous figure, and states plainly that the previous rule counted reached-but-refused nodes as covered.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "The recorded reason for each unreachable node is re-verified against the code rather than carried forward -- in particular the claim about why synthesize is unreachable, which the analysis behind this spec flagged as possibly misattributed.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Making any node newly reachable -- executing commit and finalize under a durable checkpoint mechanism is the next spec.",
+    "Lowering the coverage floor to accommodate the corrected, likely smaller number."
+  ],
+  "stopConditions": [
+    "The corrected figure falls far enough that the golden dataset no longer meaningfully covers the graph -- stop and report the number rather than adjusting the rule to protect it."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [
+    "VERIFIED: src/pge/golden/coverage.test.ts reads `nodeId` off each span and adds it to the executed set with NO status check (the loop around :108-110). A node whose only span ended `failed` therefore counts as covered.",
+    "VERIFIED: `commit` is refused FAIL_CLOSED under the autopilot noop mechanism yet still opens a span \u2014 so it is exactly such a node, and the committed '39 of 44' figure counts at least one node that never ran its body. The figure is true as REACHED and weaker than it reads as EXERCISED.",
+    "CHANGED SINCE THE FIGURE WAS TAKEN: sprint 7 added a sixth replay case (replay-plan-clarify-rounds-exhausted) and a new specDraft channel; graphVersion is 1.4.0 and the node count may or may not still be 44. Re-derive every number from the committed artifact and the executed cases; do not carry 39 or 44 forward as literals.",
+    "EVALUATOR FINDING from sprint 7, worth acting on here: the recorded reason for `synthesize` may be MISATTRIBUTED. The committed comment says it sits behind route_after_eval's rework/partial labels needing a non-pass evaluate_global. An earlier analysis found instead that rework_route's dispatch set is always empty (nothing in the graph ever writes `abandoned`), so reworkRounds can never reach 2 and the `partial` label is dead code. Verify which is true in the CODE and record the true one \u2014 each NEVER_EXECUTED entry is a CLAIM, and a wrong claim that passes is worse than a missing one.",
+    "NFR0: no gate may be weakened. If the corrected rule lowers the coverage figure, that is the honest number \u2014 do not relax the rule to protect it."
+  ],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "The change itself is small: src/pge/golden/coverage.test.ts:108-110 reads nodeId and ignores status. The judgement is in sc-9-3 and sc-9-5. Each NEVER_EXECUTED entry is a CLAIM about why something cannot be reached, and the two-directional pin exists so a claim that dies fails the build rather than ageing into a lie -- so when the corrected rule moves a node into the list, write the real reason rather than reusing a neighbour's. Re-read the reason recorded for synthesize specifically: the analysis behind this spec found evidence that it is unreachable because rework_route's dispatch set is always empty, not because failing paths settle earlier. Verify which is true and record the true one.",
+  "evaluatorNotes": "Verify sc-9-2 by mutating in both directions yourself; a pin that only catches one direction is half a pin, and this repository's own standard says a gate that cannot fail is worse than no gate. For sc-9-5, do not accept a restated reason at face value -- trace it in the code. Check that the documented figure and the test's own floor agree; a document claiming a number the test does not enforce is the exact failure this sprint is correcting.",
+  "estimatedFiles": [
+    "src/pge/golden/coverage.test.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-9-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T13:49:26Z"
+    }
+  ],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T13:49:26Z",
+  "completedAt": "2026-08-12T13:49:26Z",
+  "completionNote": "All 6 criteria met on iteration 1. Coverage rule now requires status 'ok'; the figure fell 39/44 -> 38/44 and `commit` joined NEVER_EXECUTED (6 entries). The evaluator RE-DERIVED 38/44 with its own executor script rather than trusting the test, and confirmed commit's spans are status 'interrupted' with errorClass FailClosed \u2014 NOT 'failed' as this contract's own assumption worded it; the generator measured rather than carried the wording forward. SYNTHESIZE: neither candidate explanation was right. The true mechanism, independently traced by the evaluator through gates.ts, sprint-fanout.ts, supervisor.ts, the artifact and the interpreter: reduce_sprints refuses admission while any branch is failed/abandoned (re-dispatching instead), so evaluate_global is reached only once EVERY branch is succeeded, which makes rework_route's dispatch set always empty, so reworkRounds can never reach 2 and route_after_eval's partial branch is dead code by construction. The sprint-7 'abandoned is never written' theory was right-conclusion-wrong-mechanism. SECONDARY: the file's blanket claim that every entry is a structural block was already false for critique and rework_route \u2014 both are closable by a missing scenario \u2014 and was corrected in place rather than by adding a case (out of scope). Suite 6897 -> 6902."
+}

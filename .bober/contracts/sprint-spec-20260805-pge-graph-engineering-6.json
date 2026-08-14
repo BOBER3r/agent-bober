@@ -1,0 +1,134 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-6",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 6,
+  "title": "Runtime substrate — content-addressed scratch, sealed archives, semantic cache, span trace, budget ledger, sandbox runner",
+  "description": "Implement the six leaf services the interpreter will inject into every NodeContext, all as plain files under .bober/ with no database and no daemon. ScratchStore content-addresses bulk payloads so a 5 MB diff never reaches state. ArchiveWriter writes a per-node-run directory with snapshot, stdout and outputs and seals it so nothing downstream can rewrite it. SemanticCache is keyed on the exact six mandated components with a per-entry expiry driven by an injectable clock. TraceWriter appends one span per node execution to a JSONL file that is the source of truth for debugging. BudgetLedger accumulates replay-idempotent per-node cost with an enforceable ceiling. SandboxRunner executes generated code and generated tests under a command allowlist, cwd confinement and a wall-clock bound — entirely net-new, since no allowlist exists in the shipped tool layer today.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-5"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "ScratchStore.put writes .bober/scratch/<runId>/<sha256>.<ext> and returns a ScratchRef carrying uri, sha256, bytes and kind; a 5 MB payload round-trips through put and get byte-identically and putting identical content twice yields one file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "A test writes a 5 MB diff through the offload path and asserts the serialized state carrying only its ScratchRef stays under 4 KB, and that a second consumer reading the referenced path receives byte-identical content.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "ArchiveWriter.open creates .bober/archive/<runId>/<nodeId>[.<branchKey>]/ containing snapshot.json, stdout.log and outputs.json, and after seal() every one of writeSnapshot, appendStdout and writeOutputs rejects with ArchiveImmutableError naming the directory.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "seal() writes a .sealed sidecar under the default marker mode and sets file mode 0o444 only under the opt-in chmod mode; prune restores writable mode before unlink under both settings so worktree cleanup and git clean still succeed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "SemanticCache.key hashes exactly systemPrompt, userPrompt, contextFilesHash, model, temperature and toolsMask; an identical call yields one provider invocation and one hit, and six further assertions each vary exactly one component and assert a miss.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "With an injected fake clock, a cache entry hits inside its ttlSeconds and misses after expiry, prune removes expired entries and returns the count removed, and a call made with no declared policy never writes a cache file at all.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-7",
+      "description": "TraceWriter appends one JSONL span per node execution to .bober/traces/<runId>.jsonl carrying nodeId, parentSpanId, superstep, startedAt, endedAt, inputHash, outputHash, tokens, costUsd, cache status, toolOutputRef, route, status and errorClass; a test reconstructs the spans into a tree and asserts the tree is well formed with exactly one root.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-8",
+      "description": "BudgetLedger.charge keyed by nodeId, attempt and callIndex REPLACES rather than adds, so charging the same key twice leaves per-node sums equal to run totals for calls, tokens and USD; assertWithinCeiling throws a typed BudgetExceededError when a configured ceiling is passed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-9",
+      "description": "SandboxRunner returns status 'denied' naming the binary when a command outside the allowlist is invoked, status 'timeout' when a non-terminating command exceeds timeoutMs rather than hanging the test, and status 'output-truncated' beyond maxOutputBytes; all three are recorded as spans and none of them throws.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-10",
+      "description": ".gitignore gains .bober/scratch/, .bober/traces/, .bober/cache/, .bober/archive/ and .bober/logs/ in the same change that creates them, asserted by a test that reads .gitignore and checks each entry is present.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-11",
+      "description": "Every store takes projectRoot as a required constructor argument and no module in src/pge/runtime/ exports a module-level singleton instance; a worktree-style test with two roots asserts zero writes under the root that was not passed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-12",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the interpreter, the commit boundary or the state-size guard that rejects oversized channel values — sprint 7 enforces offloading; this sprint only makes offloading possible.",
+    "Do not wire SandboxRunner into src/orchestrator/tools/handlers.ts or change the behaviour of the existing unguarded execa call; retrofitting the shipped tool layer is separate work and would change live agent behaviour.",
+    "Do not claim or implement container, seccomp, namespace or network-namespace isolation. Document explicitly that a generated test can still read within cwd.",
+    "Do not add a database, an index or a daemon for the cache or the scratch store; content-addressed files only, with better-sqlite3 named as the sanctioned escalation if measured lookup cost ever dominates.",
+    "Do not export traces anywhere off the machine; the OTLP exporter is sprint 13 and is off by default.",
+    "Do not implement the digest, handoff or compression logic that consumes archives — sprint 10 owns the Engram layer."
+  ],
+  "stopConditions": [
+    "All six services are constructed per invocation with an explicit projectRoot and none holds module-level state.",
+    "The archive immutability guarantee holds under the default marker mode without relying on filesystem permissions.",
+    "The sandbox denial and timeout paths return a typed outcome rather than throwing or hanging.",
+    "A store would need a network daemon or a native module to meet a criterion."
+  ],
+  "definitionOfDone": "ScratchStore, ArchiveWriter, SemanticCache, TraceWriter, BudgetLedger and SandboxRunner exist under src/pge/runtime/ with paired tests, all six write only plain files under .bober/, all six take projectRoot explicitly, and the directories they create are ignored by git in this same change. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path calls any of them yet.",
+  "assumptions": [
+    "Archive sealing defaults to sealMode 'marker' because chmod 0o444 breaks rm -rf, git clean and the worktree cleanup at worktree.ts:152-160, which may hold the only copy of a run's work. Immutability is therefore a platform-uniform API guarantee rather than a filesystem permission.",
+    "Retention pruning reuses the bounded-size mechanism already applied to .bober/memory/ rather than inventing a second policy engine.",
+    "SandboxRunner's allowlist is the containment mechanism; the denylist exists for defence in depth. redis-cli at environment.ts:38 is a PATH probe inside CANDIDATE_TOOLS, not an existing guard, so nothing in the repo can be reused here."
+  ],
+  "outOfScope": [
+    "Replacing the existing telemetry emit path in src/telemetry/emit.ts; spans are a new stream, not a replacement.",
+    "Trace replay and the OTLP exporter — sprint 13."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Keep each service in its own module under src/pge/runtime/: scratch.ts, archive.ts, cache.ts, trace.ts, ledger.ts, sandbox.ts. The cache file name is the sha256 of the six-part key and the file body carries the value plus expiresAt plus the key parts for debugging; TTL is compared against an injected now rather than Date.now(). The ledger's replace-by-key semantics are what make per-node sums equal run totals across crash-resume and retried supersteps — an additive ledger silently double-charges on replay, so do not 'simplify' charge() into an accumulator. For the sandbox use execa with an explicit argv array and never a shell string, set cwd from the policy, pass an explicit env allowlist, and use the abort/kill path with a timer rather than relying on the child exiting. Spans are append-only JSONL written through a stream that is flushed on close(); do not buffer the whole trace in memory.",
+  "evaluatorNotes": "The sandbox timeout test must genuinely spawn a non-terminating process and assert the runner kills it, not simulate a timeout with a fake clock — a simulated timeout proves nothing about the kill path. Verify the denial check happens before spawn, not after. Verify the cache miss assertions vary exactly one key component each and that temperature and toolsMask are genuinely part of the hash. Verify the ledger replace semantics with a test that charges the same (nodeId, attempt, callIndex) twice and asserts the total did not double. Verify the sealed archive rejects writes even when the process holds an open handle from before seal(). Confirm the .gitignore entries were added in this diff.",
+  "estimatedFiles": [
+    "src/pge/runtime/scratch.ts",
+    "src/pge/runtime/scratch.test.ts",
+    "src/pge/runtime/archive.ts",
+    "src/pge/runtime/archive.test.ts",
+    "src/pge/runtime/cache.ts",
+    "src/pge/runtime/cache.test.ts",
+    "src/pge/runtime/trace.ts",
+    "src/pge/runtime/trace.test.ts",
+    "src/pge/runtime/ledger.ts",
+    "src/pge/runtime/ledger.test.ts",
+    "src/pge/runtime/sandbox.ts",
+    "src/pge/runtime/sandbox.test.ts",
+    ".gitignore"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

@@ -1,0 +1,422 @@
+{
+  "formatVersion": 1,
+  "graphId": "fixture",
+  "graphVersion": "1.0.0",
+  "description": "Structural fixture graph for the PGE topology validator.",
+  "provenance": "authored",
+  "entry": "gate_in",
+  "defaults": {
+    "supervisorNodeId": "supervisor",
+    "modelTier": "light",
+    "concurrency": 1,
+    "durability": "superstep",
+    "maxInlineBytes": 4096
+  },
+  "channels": [
+    {
+      "id": "messages",
+      "reducerRef": "appendById",
+      "schemaRef": "GraphMessage",
+      "scope": "public",
+      "maxInlineBytes": 4096
+    },
+    {
+      "id": "counters",
+      "reducerRef": "maxNumber",
+      "schemaRef": "Counters",
+      "scope": "public",
+      "maxInlineBytes": 4096
+    },
+    {
+      "id": "spec",
+      "reducerRef": "replaceIfNewer",
+      "schemaRef": "PlanSpec",
+      "scope": "public",
+      "maxInlineBytes": 4096
+    },
+    {
+      "id": "branchStatus",
+      "reducerRef": "lastWriteWinsByKey",
+      "schemaRef": "BranchStatus",
+      "scope": "private",
+      "maxInlineBytes": 4096
+    }
+  ],
+  "nodes": [
+    {
+      "subgraph": null,
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "key": "out",
+          "schemaRef": "FeatureRequest",
+          "required": true
+        }
+      ],
+      "reads": [],
+      "writes": [],
+      "effects": [],
+      "id": "gate_in",
+      "kind": "gate",
+      "title": "Input gate",
+      "doc": "Admits the feature request into the graph.",
+      "gate": {
+        "check": "input-ready",
+        "onFail": "END"
+      }
+    },
+    {
+      "subgraph": null,
+      "role": "planner",
+      "inputPorts": [
+        {
+          "key": "in",
+          "schemaRef": "FeatureRequest",
+          "required": true
+        }
+      ],
+      "outputPorts": [
+        {
+          "key": "out",
+          "schemaRef": "PlanSpec",
+          "required": true
+        }
+      ],
+      "reads": [
+        "messages"
+      ],
+      "writes": [
+        "messages",
+        "spec"
+      ],
+      "effects": [],
+      "id": "plan_draft",
+      "kind": "llm",
+      "title": "Draft the plan",
+      "doc": "Produces a PlanSpec draft from the feature request.",
+      "modelTier": "frontier",
+      "promptRef": "planner/draft"
+    },
+    {
+      "subgraph": null,
+      "role": "router",
+      "inputPorts": [
+        {
+          "key": "in",
+          "schemaRef": "PlanSpec",
+          "required": true
+        }
+      ],
+      "outputPorts": [],
+      "reads": [
+        "counters"
+      ],
+      "writes": [
+        "counters"
+      ],
+      "effects": [],
+      "id": "plan_route",
+      "kind": "router",
+      "title": "Clarification check",
+      "doc": "Routes back to the drafter until the plan needs no clarification.",
+      "modelTier": "light",
+      "loop": {
+        "counterKey": "planAttempts",
+        "maxIterations": 3,
+        "onExhausted": "END"
+      },
+      "targets": [
+        {
+          "label": "retry",
+          "to": "plan_draft"
+        },
+        {
+          "label": "ok",
+          "to": "supervisor"
+        }
+      ]
+    },
+    {
+      "subgraph": null,
+      "role": "router",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [
+        "branchStatus"
+      ],
+      "writes": [],
+      "effects": [],
+      "id": "supervisor",
+      "kind": "router",
+      "title": "Supervisor",
+      "doc": "Dispatches phases and collects subgraph results.",
+      "modelTier": "light",
+      "loop": {
+        "counterKey": "supervisorRounds",
+        "maxIterations": 8,
+        "onExhausted": "END"
+      },
+      "targets": [
+        {
+          "label": "sprint",
+          "to": "sprint_body"
+        },
+        {
+          "label": "done",
+          "to": "hitl_commit"
+        }
+      ]
+    },
+    {
+      "subgraph": null,
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [],
+      "effects": [],
+      "id": "sprint_body",
+      "kind": "subgraph",
+      "title": "Sprint subgraph call site",
+      "doc": "Fans out one sprint branch per admitted contract.",
+      "subgraphRef": "sprint"
+    },
+    {
+      "subgraph": "sprint",
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [],
+      "effects": [],
+      "id": "gate_sprint_in",
+      "kind": "gate",
+      "title": "Sprint entry gate",
+      "doc": "Boundary gate admitting a branch into the sprint subgraph.",
+      "gate": {
+        "check": "contract-ready",
+        "onFail": "END"
+      }
+    },
+    {
+      "subgraph": "sprint",
+      "role": "generator",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [
+        "spec"
+      ],
+      "writes": [
+        "messages",
+        "branchStatus"
+      ],
+      "effects": [],
+      "id": "sprint_generate",
+      "kind": "llm",
+      "title": "Generate sprint code",
+      "doc": "Writes the sprint implementation for one contract.",
+      "modelTier": "frontier",
+      "promptRef": "generator/sprint"
+    },
+    {
+      "subgraph": "sprint",
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [
+        "branchStatus"
+      ],
+      "effects": [
+        "process-exec"
+      ],
+      "id": "sprint_test",
+      "kind": "tool",
+      "title": "Run the sprint test suite",
+      "doc": "Executes the project test command under the sandbox policy.",
+      "toolRef": "test.run"
+    },
+    {
+      "subgraph": "sprint",
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [],
+      "effects": [],
+      "id": "gate_sprint_out",
+      "kind": "gate",
+      "title": "Sprint exit gate",
+      "doc": "Boundary gate returning a branch verdict to the supervisor.",
+      "gate": {
+        "check": "sprint-verdict",
+        "onFail": "END"
+      }
+    },
+    {
+      "subgraph": null,
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [],
+      "effects": [],
+      "id": "hitl_commit",
+      "kind": "gate",
+      "title": "Commit approval",
+      "doc": "Human-in-the-loop approval gate guarding the git commit.",
+      "gate": {
+        "check": "human-approval",
+        "onFail": "END"
+      },
+      "hitl": {
+        "checkpointId": "hitl_commit",
+        "onReject": "END"
+      }
+    },
+    {
+      "subgraph": null,
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [],
+      "writes": [],
+      "effects": [
+        "git"
+      ],
+      "id": "commit",
+      "kind": "tool",
+      "title": "Commit the working tree",
+      "doc": "Creates the sprint commit; reachable only behind the approval gate.",
+      "toolRef": "git.commit"
+    },
+    {
+      "subgraph": null,
+      "role": "utility",
+      "inputPorts": [],
+      "outputPorts": [],
+      "reads": [
+        "messages"
+      ],
+      "writes": [],
+      "effects": [
+        "fs-write"
+      ],
+      "id": "finalize",
+      "kind": "tool",
+      "title": "Finalize the run",
+      "doc": "Emits the terminal artifacts and the completion marker.",
+      "toolRef": "run.finalize"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "gate_in",
+      "to": "plan_draft",
+      "kind": "normal",
+      "ports": {
+        "from": "out",
+        "to": "in"
+      }
+    },
+    {
+      "id": "e2",
+      "from": "plan_draft",
+      "to": "plan_route",
+      "kind": "normal",
+      "ports": {
+        "from": "out",
+        "to": "in"
+      }
+    },
+    {
+      "id": "e3",
+      "from": "plan_route",
+      "to": "plan_draft",
+      "kind": "conditional",
+      "label": "retry"
+    },
+    {
+      "id": "e4",
+      "from": "plan_route",
+      "to": "supervisor",
+      "kind": "conditional",
+      "label": "ok"
+    },
+    {
+      "id": "e5",
+      "from": "supervisor",
+      "to": "sprint_body",
+      "kind": "conditional",
+      "label": "sprint"
+    },
+    {
+      "id": "e6",
+      "from": "supervisor",
+      "to": "hitl_commit",
+      "kind": "conditional",
+      "label": "done"
+    },
+    {
+      "id": "e7",
+      "from": "sprint_body",
+      "to": "gate_sprint_in",
+      "kind": "fanout"
+    },
+    {
+      "id": "e8",
+      "from": "gate_sprint_in",
+      "to": "sprint_generate",
+      "kind": "normal"
+    },
+    {
+      "id": "e9",
+      "from": "sprint_generate",
+      "to": "sprint_test",
+      "kind": "normal"
+    },
+    {
+      "id": "e10",
+      "from": "sprint_test",
+      "to": "gate_sprint_out",
+      "kind": "normal"
+    },
+    {
+      "id": "e11",
+      "from": "gate_sprint_out",
+      "to": "finalize",
+      "kind": "normal"
+    },
+    {
+      "id": "e12",
+      "from": "hitl_commit",
+      "to": "commit",
+      "kind": "normal"
+    },
+    {
+      "id": "e13",
+      "from": "commit",
+      "to": "finalize",
+      "kind": "normal"
+    },
+    {
+      "id": "e14",
+      "from": "finalize",
+      "to": "END",
+      "kind": "normal"
+    }
+  ],
+  "checksum": "sha256:59cae3eafe346dfe2049c521e8a2d46c966fa9d3b8e02562119f6a219d4e9e39",
+  "subgraphs": [
+    {
+      "id": "sprint",
+      "graphId": "fixture.sprint",
+      "depth": 1,
+      "entryGate": "gate_sprint_in",
+      "exitGate": "gate_sprint_out",
+      "persistence": "inherit"
+    }
+  ]
+}

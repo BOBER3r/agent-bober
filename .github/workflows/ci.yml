@@ -24,6 +24,87 @@ jobs:
       # Runtime <5min (11 e2e tests complete in ~800ms; full suite in ~5s).
       - run: npm run test
 
+  # ── PGE graph gate ────────────────────────────────────────────────
+  #
+  # BLOCKING BY DESIGN. There is deliberately NO `continue-on-error` anywhere in this
+  # job, at job level or step level, and this is not a matter of taste: the whole point
+  # of a serialized topology artifact is that a stale artifact, an undocumented node or
+  # an unversioned structural change cannot merge regardless of review attention. An
+  # informational structural gate is decorative — it reads as coverage while granting
+  # none — so `kpi-gate` below is a precedent this job must NOT follow
+  # (spec-20260805-pge-graph-engineering sprint 14, nonGoal 1).
+  #
+  # `src/pge/topology/ci-gate.test.ts` PARSES THIS FILE and fails if the key appears in
+  # this job, if a check goes missing, or if the workflow stops triggering on
+  # pull_request. Editing this block without editing that test does not work.
+  pge-graph-gate:
+    name: PGE graph gate (blocking)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `pge diff` resolves the base artifact with `git show <base>:…`, which needs
+          # the base commit in the local object store. actions/checkout defaults to
+          # fetch-depth: 1, which does not have it — and reading the base over the API
+          # would break the gate on forks and offline runners.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: pge dump --check (the committed artifact is not stale)
+        run: node dist/cli/index.js pge dump --check
+      - name: pge validate --mode full (the committed artifact is valid)
+        run: node dist/cli/index.js pge validate --mode full
+      - name: pge docs --check (every declared node is documented)
+        run: node dist/cli/index.js pge docs --check
+      - name: pge diff --require-version-bump (a structural change carries a version bump)
+        env:
+          # Interpolated through the environment rather than into the script body, so a
+          # branch name can never be spliced into the shell.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_REF:-}" ]; then
+            BASE="origin/${BASE_REF}"
+          else
+            BASE="HEAD^"
+          fi
+          if ! git rev-parse --verify "${BASE}^{commit}" > /dev/null 2>&1; then
+            echo "Base ref ${BASE} is not in the local object store — the checkout step must use fetch-depth: 0." >&2
+            exit 1
+          fi
+          git show "${BASE}:.bober/topology/coding.json" > "${RUNNER_TEMP}/base-coding.json"
+          node dist/cli/index.js pge diff "${RUNNER_TEMP}/base-coding.json" .bober/topology/coding.json --require-version-bump
+      - name: pge audit-state + git diff --cached --exit-code (the state audit is committed and deterministic)
+        run: |
+          set -euo pipefail
+          node dist/cli/index.js pge audit-state
+          git add -A
+          git diff --cached --exit-code
+      # BOTH halves are enforced here.
+      #
+      # Dataset integrity, for every committed case: it parses, the directory holds 20-50
+      # of them, the dataset keeps its floor of executable cases, and every node id and
+      # effect name a case pins still exists in the committed artifact — so renaming a
+      # node fails this step.
+      #
+      # The pass rate, for every case that declares enforcement "replay": each is EXECUTED
+      # against the shipped PgeEngine over the committed artifact in a throwaway root,
+      # with every outward call answered from that case's own pinned responses, and the
+      # artifacts the run leaves behind are compared with the committed expectation. The
+      # executor is dist/pge/golden/executor.js and the gate builds it itself — there is
+      # no spelling of these options that runs the dataset half alone, because a wiring
+      # that can be forgotten is a wiring that will be. src/pge/golden/executor.test.ts
+      # drives the same path and asserts a non-zero exit when a case stops reproducing.
+      - name: Golden graph regression suite (dataset integrity + engine pass rate)
+        env:
+          GOLDEN_PASS_THRESHOLD: "80"
+        run: node scripts/run-golden-regression.mjs
+
   kpi-gate:
     name: KPI Gate (informational — see TODO)
     runs-on: ubuntu-latest

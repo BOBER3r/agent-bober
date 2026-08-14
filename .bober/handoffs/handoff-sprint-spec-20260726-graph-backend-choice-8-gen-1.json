@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-8-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-8",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 8 (FINAL): document the pluggable graph backend + do a final byte-identical/selectable verification. All code is done (Sprints 1-7): full GraphBackend abstraction, auto-detect selection, complete cr-graph adapter (read+query), command parity, graph status readout. This sprint is DOCS (README + docs/graph-backends.md) + fixing a pre-existing broken link + recording follow-ups. Keep code changes to at most cosmetic status strings.",
+    "completedSprints": "Sprints 1-7 all passed (commits ae1bde7, 129d841, 77bb53c, 6fc5a00, ed7d9cf, 2ebe2af, 4b837ff, d190d7b). Suite at 5083 passed / 2 skipped / 0 failures. tokensave path proven byte-identical throughout.",
+    "currentBranch": "bober/graph-backend-choice",
+    "parityTableData_DERIVE_FROM_CODE": "Build the parity table by READING src/graph/backends/tokensave-backend.ts + code-review-graph-backend.ts (don't trust this list blindly — verify). Expected mapping (GraphClient op -> tokensave tool | cr-graph tool): search -> tokensave_search | semantic_search_nodes_tool; reviewContext -> tokensave_context | get_review_context_tool; overview -> tokensave_module_api | get_architecture_overview_tool; impact -> tokensave_impact | get_impact_radius_tool; changes -> tokensave_changelog | detect_changes_tool; callers_of -> tokensave_callers | query_graph_tool(pattern=callers_of); callees_of -> tokensave_callees | query_graph_tool(pattern=callees_of); imports_of -> tokensave_file_dependents | query_graph_tool(pattern=importers_of); tests_for -> tokensave_test_map | query_graph_tool(pattern=tests_for). CLI map: init -> tokensave init | code-review-graph build; sync -> tokensave sync <paths> | code-review-graph update <paths>; status -> tokensave status --json | code-review-graph status --json.",
+    "installCommands": "tokensave (keep VERBATIM): brew install aovestdipaperino/tap/tokensave (macOS) / scoop bucket add tokensave https://github.com/aovestdipaperino/scoop-bucket && scoop install tokensave (Windows) / cargo install tokensave (Linux). code-review-graph: `pip install code-review-graph` (Python 3.10+).",
+    "brokenLinkToFix": "README.md line ~239 links to `.bober/architecture/arch-20260524-port-code-review-graph-architecture.md` which DOES NOT EXIST. Fix it: point to the new docs/graph-backends.md (or the docs/sprints/ records), or remove the dead link. Do not invent the missing arch doc.",
+    "followupsToDocument": [
+      "Live cr-graph smoke run (manual, deferred from CI): install code-review-graph, build a graph, set graph.backend='code-review-graph', run `agent-bober onboard`, confirm 5 artifacts. IMPORTANT capture caveat (from Sprint 4): cr-graph's isolated `python -I` parser probe can't see a --user-installed tree_sitter_language_pack, so a plain `code-review-graph build` yields 0 nodes — a venv+.pth workaround is needed to build a graph WITH nodes (see docs/sprints/sprint-spec-20260726-graph-backend-choice-4.md). CI relies on the committed real fixtures under tests/graph/fixtures/cr-graph/ (NOT provisional — real live captures).",
+      "cr-graph `update` is git-diff-base driven, not positional-path like tokensave `sync <paths>`; the generic CliMap shape is preserved with a bober: ceiling comment; reconciliation deferred.",
+      "Residual: a config setting BOTH graph.tokensavePath AND graph.backend='code-review-graph' still prefers tokensavePath at the transport layer (documented bober: comment in registry.ts; deferred).",
+      "cr-graph prereqSpec.isCompatible is accept-any (version range is a TODO; tested against 2.3.7).",
+      "Minor test-coverage follow-ups: isTestRow() is_test===true branch untested (no fixture row has it); no dedicated tokensave onboard version-line test.",
+      "code-review-graph-backend.ts is 327 lines (>300 soft threshold) — consider extracting the queryPlan pattern map if it grows."
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-8.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "Conventional commits (docs: for doc-only). Never main. Keep tokensave install-hint strings VERBATIM. Do NOT claim live cr-graph verification unless you actually run it. Final full-suite baseline: 5083 passed / 2 skipped / 0 failures. Commit BEFORE final response.",
+  "evaluatorFeedback": null
+}

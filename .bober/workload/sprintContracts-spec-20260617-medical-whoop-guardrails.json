@@ -1,0 +1,319 @@
+{
+  "entryId": "sprintContracts-spec-20260617-medical-whoop-guardrails",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-1.json",
+      ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-2.json",
+      ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-3.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+      "specId": "spec-20260617-medical-whoop-guardrails",
+      "sprintNumber": 1,
+      "title": "Code-enforced non-emergency refusal layer",
+      "description": "Close the production-grade guardrail gap: the {kind:'refuse'} verdict already exists in GuardrailVerdict (src/medical/types.ts:14) and the 'refuse' AuditEvent exists (src/medical/types.ts:69), but MedicalGuardrails.evaluate (src/medical/guardrails.ts:80-98) never emits refuse — prescription/dosing/treatment-plan prompts fall through to {kind:'allow'} and are only refused prompt-only by the LLM. Add a deterministic, pure, synchronous RefusalDetector (sibling to RedFlagDetector, src/medical/red-flag.ts) that classifies a prompt into prescription | specific-dosing | individualized-treatment-plan | none. Wire MedicalGuardrails.evaluate to run RedFlagDetector FIRST (short-circuit wins), then RefusalDetector, returning {kind:'refuse', rule, reason} with FIXED never-model-generated reason text (mirror the canned escalation strings at guardrails.ts:30-39). Add a refuse-dispatch branch in MedicalSopEngine.run mirroring the existing consent-refuse path (engine.ts:217-248): return a MedicalAnswer carrying the canned reason with shortCircuit:true, append an audit entry event:'refuse' with ruleId/rulesetVersion/patternsetVersion (IDs/enums only), and reach ZERO downstream numerics/retrieval/LLM. GuardrailContext stays empty (ADR-3). This sprint is self-contained, has no network, and does not touch WHOOP.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The full test suite passes with zero failures including new collocated src/medical/refusal*.test.ts (npm run test); no regression in the pre-existing suite.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "RefusalDetector.detect(prompt) returns category 'prescription' for prescription requests, 'specific-dosing' for specific dose requests, 'individualized-treatment-plan' for personalized treatment/care-plan requests, and 'none' otherwise; it is pure and synchronous (no async/fs/network/LLM) and exposes a patternsetVersion. A unit test covers each category plus benign 'none' cases.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "MedicalGuardrails.evaluate returns {kind:'refuse', rule, reason} for each refuse category with FIXED reason text (asserted byte-equal to a constant, proving it is not model-generated), and still returns {kind:'allow'} for benign prompts.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "When a prompt matches BOTH a red-flag and a refuse pattern, evaluate returns the red-flag {kind:'short-circuit'} (emergency precedence), not refuse. A unit test constructs such a prompt and asserts short-circuit wins.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "MedicalSopEngine.run on a refuse-category prompt returns a MedicalAnswer with body===the canned reason, shortCircuit:true, abstained:false, citations:[], and appends exactly one audit entry with event:'refuse' carrying ruleId/rulesetVersion/patternsetVersion and NO prompt text or health values.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "On a refuse-category prompt, an injected spy LLMClient is invoked 0 times and NumericsQueryLayer / FactStore / LiteratureRetriever are never reached (0 LLM, 0 egress) — asserted with a spy that fails if called, mirroring the red-flag spy assertion at engine.ts:53-56.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "No network/LLM import is added under src/medical for this sprint and the scoped ESLint medical boundary still passes (npm run lint); RefusalDetector and the guardrails change introduce no @anthropic-ai/sdk, openai, or node:net/http imports.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add WHOOP, any egress axis, or any network code (Sprints 2-3).",
+        "Do not add fields to GuardrailContext — it stays the empty placeholder (ADR-3).",
+        "Do not use an LLM or in-line model filter for refusal classification — deterministic patterns only (research REFUTED the LLM policy filter).",
+        "Do not change RedFlagDetector behavior or the existing short-circuit/consent/allow paths beyond inserting the refuse branch.",
+        "Do not alter the MedicalSopEngine.run signature or the zero-arg constructor."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "A refuse-category prompt yields a code-enforced refusal + 'refuse' audit entry with 0 LLM calls, red-flag still wins over refuse, benign prompts still allow, and the build/typecheck/test/lint gates are green with no regression"
+      ],
+      "definitionOfDone": "src/medical/refusal.ts exports a pure synchronous RefusalDetector { detect(prompt): RefusalMatch; readonly patternsetVersion } with category union prescription|specific-dosing|individualized-treatment-plan|none and fixed canned reason strings. src/medical/guardrails.ts evaluate() runs RedFlagDetector then RefusalDetector and returns {kind:'refuse', rule, reason} on a match. src/medical/engine.ts adds a refuse-dispatch branch after the short-circuit branch, mirroring the consent-refuse path, returning the canned MedicalAnswer and appending an event:'refuse' audit entry (IDs/enums only). GuardrailContext unchanged. Collocated tests cover detection, fixed-text, red-flag precedence, engine dispatch + audit, and the spy-LLM-never-called assertion. Build, typecheck, test, and lint pass with no regression.",
+      "assumptions": [
+        "RefusalDetector mirrors RedFlagDetector's shape (src/medical/red-flag.ts:195-212): a pure detect(prompt) returning { category, ruleId? } plus a versioned patternsetVersion, no constructor dependencies.",
+        "MedicalGuardrails.evaluate keeps its signature evaluate(prompt, ctx): GuardrailVerdict (src/medical/types.ts:25-28); the empty-prompt throw at guardrails.ts:81-83 is retained.",
+        "The refuse audit entry uses the existing AuditEntry shape (src/medical/types.ts:77-87) with event:'refuse'; the engine already has an AuditLog instance and a now/runId injection seam (engine.ts opts).",
+        "The canned refuse reason text is a decline + see-a-licensed-clinician message (distinct from the 911/988 emergency escalations), fixed per category and never passed through an LLM."
+      ],
+      "outOfScope": [
+        "WHOOP / device-connection / egress axis (Sprint 2)",
+        "WHOOP sync adapter + CLI (Sprint 3)",
+        "GuardrailContext field additions",
+        "Any change to existing engine/guardrail public behavior beyond the refuse branch"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Read FIRST: src/medical/red-flag.ts (full — copy its pure-detector structure, versioned patternset, and category-switch idiom), src/medical/guardrails.ts:1-104 (where evaluate lives and where the placeholder comment at :94-95 says refusals land), src/medical/engine.ts:191-289 (gate ordering; the consent-refuse path at :217-248 is the exact template for the refuse branch; the red-flag short-circuit branch at :255-289 and the spy assertion at :53-56), src/medical/types.ts (GuardrailVerdict :11-14, AuditEvent :64-71, AuditEntry :77-87, GuardrailContext :18-22).\n\nNew file src/medical/refusal.ts: export type RefusalCategory = 'prescription'|'specific-dosing'|'individualized-treatment-plan'|'none'; export const REFUSAL_PATTERNSET_VERSION = 'refusal-2026.06.17'; export class RefusalDetector { detect(prompt: string): RefusalMatch; get patternsetVersion() }. Use conservative case-insensitive phrase/keyword matching (e.g. 'prescribe', 'what dose', 'how many mg', 'should I take ... mg', 'treatment plan for me', 'what should I do to treat my'). Keep the patternset small, reviewable, and versioned — accept false-negatives (fall through to 'none'), NEVER false-positive into medical advice. Define fixed canned reason strings per category as module constants (mirror ESCALATION_911/988 at guardrails.ts:30-39).\n\nguardrails.ts: instantiate a readonly RefusalDetector alongside the existing RedFlagDetector; in evaluate(), after the red-flag match check (which returns short-circuit), add: const r = this.refusal.detect(prompt); if (r.category !== 'none') return { kind:'refuse', rule: r.ruleId ?? r.category, reason: REASON[r.category] }; then the existing return { kind:'allow' }. Expose the refusal patternsetVersion if the engine needs it for the audit (add a getter like the existing patternsetVersion at guardrails.ts:101-103).\n\nengine.ts: after the short-circuit dispatch branch, add `if (verdict.kind === 'refuse') { await auditLog.append({ tIso: now, event:'refuse', ruleId: verdict.rule, rulesetVersion: guardrails.rulesetVersion, patternsetVersion: <refusal patternset> }); return <MedicalAnswer {body: verdict.reason, abstained:false, citations:[], disclaimerFooter: disclaimer.footer(), shortCircuit:true}> wrapped into a PipelineResult exactly as the consent-refuse path does }. Confirm zero calls to numerics/factstore/retriever/llm on this path.\n\nTests: refusal.test.ts (each category + 'none'); guardrails.test.ts additions (refuse verdict + fixed text + red-flag precedence + allow); engine.test.ts additions (refuse MedicalAnswer shape + single 'refuse' audit entry with no prompt text + spy LLMClient never invoked using the existing spy pattern). Pure/no-network; follow ESM/.js import extensions and unicode section headers.",
+      "evaluatorNotes": "sc-1-3: call RefusalDetector.detect on representative prompts for each category and on benign questions; confirm purity (no async signature, no imports of fs/net/providers in refusal.ts via grep).\nsc-1-4: assert the returned reason is byte-equal to the exported constant (proves fixed/not model-generated); assert allow on a benign prompt.\nsc-1-5: craft a prompt containing both an emergency red-flag trigger and a refuse trigger; assert evaluate returns kind==='short-circuit' (red-flag wins).\nsc-1-6/sc-1-7: drive MedicalSopEngine.run with a refuse-category prompt and a spy LLMClient that throws if called; assert MedicalAnswer.body===canned reason, shortCircuit===true, abstained===false, citations===[]; read the audit jsonl and assert exactly one event:'refuse' entry containing ruleId/rulesetVersion/patternsetVersion and NO prompt substring or health value; assert the spy recorded 0 calls.\nsc-1-8: npm run lint clean; grep src/medical/refusal.ts and the guardrails diff for '@anthropic-ai/sdk', 'openai', 'node:net', 'node:http', 'fetch' — expect none.\nBuild + typecheck clean; run the FULL suite to confirm no regression in the existing medical and non-medical tests.",
+      "estimatedFiles": [
+        "src/medical/refusal.ts",
+        "src/medical/refusal.test.ts",
+        "src/medical/guardrails.ts",
+        "src/medical/guardrails.test.ts",
+        "src/medical/engine.ts",
+        "src/medical/engine.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-17T14:32:38Z",
+      "updatedAt": "2026-06-17T14:32:38Z",
+      "completedAt": "2026-06-17T15:30:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+      "specId": "spec-20260617-medical-whoop-guardrails",
+      "sprintNumber": 2,
+      "title": "WHOOP egress axis + authenticated transport",
+      "description": "Establish authenticated, egress-gated access to WHOOP without yet persisting data. Add a third EgressAxis value 'device-connection' to src/medical/egress.ts:5 (default false), widen EgressGuard.isAllowed/assertAllowed to handle all three axes exhaustively (compile-time never check) and EgressGuard.fromConfig to read medical.egress.deviceConnection; add medical.egress.deviceConnection: z.boolean().default(false) to the medical config schema (src/config/schema.ts). The axis-independence invariant MUST hold: enabling any one axis never enables another. Add WhoopTokenStore (src/medical/whoop/whoop-token.ts): clientCredentials() reads WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET from process.env (mirroring src/providers/factory.ts:96-136) and throws clearly if unset; readRefreshToken()/writeTokens() persist {accessToken, refreshToken, expiresAtIso} at .bober/medical/whoop-token.json with mode 0600 (mirror audit.ts 0600). Add WhoopClient (src/medical/whoop/whoop-client.ts) as the SECOND ESLint-excepted network file (sibling to retrieval/medline-source.ts): ensureAccessToken() does the offline-scope refresh_token grant; fetchPage(collection, window, cursor?) fetches one v2 page (recovery=/v2/recovery, sleep=/v2/activity/sleep, cycle=/v2/cycle, workout=/v2/activity/workout), follows the cursor for pagination, refreshes+retries ONCE on 401, and awaits the Reset-header seconds on 429. WhoopClient calls EgressGuard.assertAllowed('device-connection') BEFORE any HTTP. Transport is an injectable FetchLike (mirror medline-source.ts FetchLike) so tests use fixtures, never the real network. Add the new file to the eslint.config.js network-exception allow-list. No sync/persistence/CLI this sprint (Sprint 3).",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck), including the widened EgressAxis exhaustive switch with the compile-time never guard intact.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "EgressAxis === 'cloud-inference' | 'literature-retrieval' | 'device-connection'; EgressGuard.fromConfig reads medical.egress.deviceConnection (default false) and the config schema parses a config with deviceConnection true/false/absent. A unit test asserts the TS union and Zod enum/flags agree and that absent => false.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "Axis independence: a guard built with only device-connection enabled returns isAllowed('device-connection')===true and isAllowed('cloud-inference')===isAllowed('literature-retrieval')===false; and enabling only one of the original two leaves device-connection false. A unit test asserts all independence combinations.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "WhoopClient.ensureAccessToken and fetchPage call EgressGuard.assertAllowed('device-connection') before any HTTP; with the axis off, both throw (Egress axis 'device-connection' not enabled) and the injected FetchLike is never called. A unit test asserts the throw and zero fetch calls.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "All WHOOP network access lives only in src/medical/whoop/whoop-client.ts; that file is on the eslint.config.js network-exception allow-list and npm run lint passes; grep confirms no network import (node:http(s)/net/fetch/undici) elsewhere under src/medical including whoop-token.ts and the sync adapter scaffolding.",
+          "verificationMethod": "lint",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "WhoopTokenStore.clientCredentials() throws a clear 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' error when either env var is unset; writeTokens() writes .bober/medical/whoop-token.json with file mode 0600; readRefreshToken() returns undefined when the file is absent and the parsed refresh token when present. A unit test (temp dir, env stubbed) asserts each.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "With the axis enabled and an injected FetchLike serving fixtures, WhoopClient.fetchPage paginates via cursor across multiple pages, refreshes the access token + retries exactly once on a 401 then succeeds, and on a 429 awaits the Reset-header seconds (injected/fake clock or zero-delay) before retrying — asserted with no real network access.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement WhoopSyncAdapter, record->HealthObservation mapping, persistence, or the CLI (Sprint 3).",
+        "Do not add OS keychain storage — env vars + 0600 sidecar only (ADR-2).",
+        "Do not implement webhooks or any inbound listener.",
+        "Do not change the existing two egress axes' behavior or the literature-retrieval/cloud-inference call sites.",
+        "Do not add a persisted sync cursor (Open Question; idempotent re-run lands in Sprint 3)."
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "The third device-connection axis exists (default false, independent), WhoopTokenStore loads env creds + persists a 0600 token, WhoopClient performs egress-gated paginated v2 fetch with 401-refresh-retry-once and 429-Reset handling against an injected FetchLike, network code is confined to the one ESLint-excepted file, and build/typecheck/test/lint are green"
+      ],
+      "definitionOfDone": "src/medical/egress.ts EgressAxis gains 'device-connection' with isAllowed/assertAllowed exhaustive over all three (never guard) and fromConfig reading medical.egress.deviceConnection. src/config/schema.ts medical.egress gains deviceConnection: z.boolean().default(false). src/medical/whoop/whoop-token.ts exports WhoopTokenStore (env creds + 0600 sidecar). src/medical/whoop/whoop-client.ts exports WhoopClient { ensureAccessToken(): Promise<string>; fetchPage(collection, window, cursor?): Promise<WhoopPage> } with an injectable FetchLike, assertAllowed before HTTP, v2 endpoints, cursor pagination, 401->refresh+retry-once, 429->await Reset header; it is the only src/medical network file and is added to eslint.config.js exceptions. Collocated fixture-driven tests cover axis flags/independence, the assert-before-HTTP throw, token store env/0600/read, and pagination/401/429. Build, typecheck, test, and lint pass; the existing two axes and their call sites are byte-identical.",
+      "assumptions": [
+        "src/medical/egress.ts currently defines EgressAxis as a 2-value union with an isAllowed/assertAllowed switch and a fromConfig static (per ADR-6 of the base architecture); the third value is purely additive and the never-guard default stays intact.",
+        "The medical config lives under a medical/egress section in src/config/schema.ts; deviceConnection is added as a sibling boolean to the existing cloud-inference/literature-retrieval flags with default false.",
+        "eslint.config.js has a scoped no-restricted-imports/no-restricted-globals block over src/medical/** with a single file exception for src/medical/retrieval/medline-source.ts; src/medical/whoop/whoop-client.ts is added to that exception list and nothing else under src/medical gains network access.",
+        "WHOOP token endpoint and api.prod.whoop.com base URLs are module constants in whoop-client.ts (like MEDLINEPLUS_BASE in medline-source.ts); the offline-scope refresh_token grant returns a new access token (and possibly a rotated refresh token, which is persisted via writeTokens).",
+        "The 429 Reset header is expressed in seconds; tests inject a no-op/zero-delay waiter (or fake clock) so they do not actually sleep, and timestamps/now are injected parameters (never Date.now) consistent with the base architecture."
+      ],
+      "outOfScope": [
+        "Sync adapter + record mapping + persistence + CLI (Sprint 3)",
+        "Keychain credential storage",
+        "Webhooks / inbound endpoints",
+        "Changes to existing egress axes' call sites"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/medical/egress.ts (full — the EgressAxis union, isAllowed/assertAllowed switch + never guard, fromConfig), src/medical/retrieval/medline-source.ts (full — THE template: ESLint-excepted network file, FetchLike type, module-constant base URL, how it calls assertAllowed before fetch, fixture-driven tests in medline-source.test.ts), src/medical/audit.ts (0600 write pattern, ensureDir, .bober/medical path), src/providers/factory.ts:96-136 (process.env credential reads), src/config/schema.ts (the medical/egress section), eslint.config.js:74-106 (the scoped medical network boundary + the single existing exception).\n\negress.ts: add 'device-connection' to EgressAxis; extend the switch arms in isAllowed/assertAllowed; ensure the exhaustive never-check default still compiles; fromConfig reads config.medical?.egress?.deviceConnection ?? false. Keep the existing two arms byte-identical.\n\nschema.ts: add deviceConnection: z.boolean().default(false) to the medical egress object schema next to the existing two flags.\n\nwhoop-token.ts (NO network — must stay outside the ESLint exception): WhoopTokenStore { clientCredentials(): {clientId, clientSecret} (throws if env unset); readRefreshToken(): Promise<string|undefined>; writeTokens({accessToken, refreshToken, expiresAtIso}): Promise<void> }. Use node:fs/promises with mode 0600 and ensureDir for .bober/medical (mirror audit.ts). Resolve the token path under projectRoot/.bober/medical/whoop-token.json.\n\nwhoop-client.ts (the SECOND ESLint exception — add it to eslint.config.js): constructor(egress: EgressGuard, tokenStore: WhoopTokenStore, fetchImpl?: FetchLike). type WhoopCollection='recovery'|'sleep'|'cycle'|'workout'; map to /v2/recovery, /v2/activity/sleep, /v2/cycle, /v2/activity/workout; base const WHOOP_API_BASE='https://api.prod.whoop.com'; WHOOP_TOKEN_URL for the OAuth token endpoint. ensureAccessToken(): assertAllowed('device-connection'); if cached access token unexpired return it, else POST refresh_token grant (client creds + stored refresh token + scope offline) via fetchImpl, persist rotated tokens, return access token; on 401/invalid_grant throw a clear 're-authorize' error. fetchPage(collection, window, cursor?): assertAllowed; GET the v2 endpoint with start/end from window + cursor query param + Bearer token; on 401 call ensureAccessToken (force refresh) and retry ONCE; on 429 read the Reset header seconds, await an injectable waiter, retry; parse JSON into { records: WhoopRecord[], nextCursor? }. FetchLike mirrors medline-source.ts so tests inject fixtures.\n\nTests: egress.test.ts additions (three-axis flags, independence matrix, fromConfig default false); whoop-token.test.ts (env-unset throw, 0600 mode via fs.stat, read absent=>undefined / present=>token, temp dir); whoop-client.test.ts (assert-before-HTTP throw with axis off + zero fetch calls; multi-page pagination via injected FetchLike; 401->refresh+retry-once->success; 429->reads Reset, awaits injected waiter, retries). NEVER hit the real network. ESM/.js extensions, unicode section headers.",
+      "evaluatorNotes": "sc-2-2/sc-2-3: build an EgressGuard from configs with each single axis enabled and assert the independence matrix; parse a config with medical.egress.deviceConnection absent and assert it defaults false.\nsc-2-4: instantiate WhoopClient with axis off and a FetchLike spy; call ensureAccessToken and fetchPage; assert both throw the 'not enabled' error and the spy recorded 0 calls.\nsc-2-5: npm run lint clean WITH the new exception; grep -rE 'node:http|node:https|node:net|undici|(^|[^.])fetch\\(' src/medical --include=*.ts excluding whoop-client.ts and *.test.ts — expect no production network usage outside whoop-client.ts; confirm eslint.config.js lists src/medical/whoop/whoop-client.ts.\nsc-2-6: stub process.env (unset => clientCredentials throws clear message); writeTokens then fs.stat the file and assert (mode & 0o777)===0o600; readRefreshToken on absent file===undefined, on present file===the token.\nsc-2-7: with axis on and an injected FetchLike returning a 2-page fixture, assert fetchPage walks nextCursor to completion; a fixture that returns 401 once then 200 triggers exactly one refresh (assert ensureAccessToken/refresh fetch called once) then success; a fixture returning 429 with a Reset header asserts the injected waiter is invoked with the header seconds and the request is retried. Confirm no real sleeping and no real network.\nBuild/typecheck/test/lint all green; existing egress tests and call sites unchanged.",
+      "estimatedFiles": [
+        "src/medical/egress.ts",
+        "src/medical/egress.test.ts",
+        "src/config/schema.ts",
+        "src/medical/whoop/whoop-token.ts",
+        "src/medical/whoop/whoop-token.test.ts",
+        "src/medical/whoop/whoop-client.ts",
+        "src/medical/whoop/whoop-client.test.ts",
+        "eslint.config.js"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [],
+      "createdAt": "2026-06-17T14:32:38Z",
+      "updatedAt": "2026-06-17T14:32:38Z",
+      "completedAt": "2026-06-17T16:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260617-medical-whoop-guardrails-3",
+      "specId": "spec-20260617-medical-whoop-guardrails",
+      "sprintNumber": 3,
+      "title": "WHOOP sync adapter + CLI",
+      "description": "The end-to-end visible slice: pull WHOOP data and persist it. Add WhoopSyncAdapter (src/medical/whoop/whoop-sync.ts) with sync(window, sink): Promise<IngestionResult>. It does NOT implement IngestionAdapter (that contract is file-path-shaped, ADR-1) — its entry point is a network sync(window). For each collection in [recovery, sleep, cycle, workout] it loops WhoopClient.fetchPage following the cursor, maps each WhoopRecord to HealthObservation[] (source='whoop', a fixed metric name + fixed unit per collection field; tStart from the record's start ISO; id left to the store's content-derived SHA-256), and writes via the EXISTING ObservationSink.writeBatch in bounded batches (reuse StoreObservationSink + HealthDataStore.upsertObservations unchanged). Resume is idempotent: re-running over an overlapping window inserts only genuinely-new rows via INSERT OR IGNORE; a mid-pagination failure aborts with committed batches intact and never partially corrupts the store (fail-closed, never fail-open). Add the CLI: `bober medical whoop sync [--since <iso>]` in src/cli/commands/medical.ts mirroring the existing `medical import` command (src/cli/commands/medical.ts:30-72): build EgressGuard.fromConfig + WhoopTokenStore + WhoopClient + WhoopSyncAdapter + StoreObservationSink + HealthDataStore, call egress.assertAllowed('device-connection') (surfacing a clear 'not enabled' message), run the sync over the window (default last 7 days or --since), print the IngestionResult {recordsParsed, newRows}, store.close() in finally, set process.exitCode on error and NEVER throw.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260617-medical-whoop-guardrails-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "WhoopSyncAdapter.sync(window, sink) pulls all four collections via WhoopClient (injected, fixture-backed), maps records to HealthObservation rows with source='whoop' and a fixed metric+unit per mapped field, writes them through ObservationSink.writeBatch in bounded batches, and returns IngestionResult {recordsParsed, newRows}. A unit test with a fixture WhoopClient and an in-temp-dir HealthDataStore asserts rows land with source='whoop' and the counts are correct.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "Idempotent resume: running sync twice over the same/overlapping window yields newRows>0 on the first run and newRows===0 on the second (INSERT OR IGNORE on the content-derived SHA-256 dedup key), with no duplicate observations in the store. A unit test asserts the second run adds zero rows.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "Partial-failure safety: when the fixture WhoopClient throws mid-pagination (after >=1 committed batch), sync rejects/aborts, the already-committed batch rows remain valid in the store, no partial/corrupt row is written, and a subsequent successful re-run reaches the same end-state. A unit test asserts committed rows survive and a re-run completes.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "`bober medical whoop sync` with the device-connection axis OFF prints a clear 'device-connection egress not enabled' message and exits with process.exitCode 1 without throwing and without constructing a WhoopClient that performs HTTP. A test invoking the command action asserts the message and exit code.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "With the axis on but WHOOP_CLIENT_ID/SECRET unset, or with no stored refresh token, the command prints a clear 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' or 'authorize first' message and exits with process.exitCode 1 (never throws). A test asserts each branch.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "The full test suite passes (npm run test) with no regression and the scoped ESLint medical boundary still passes (npm run lint) — whoop-sync.ts and the CLI contain no network imports (all HTTP remains in whoop-client.ts).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "On a successful sync the command prints recordsParsed and newRows and calls HealthDataStore.close() in a finally block (no leaked DB handle); ingestion writes an audit entry event:'ingest' (IDs/enums only) consistent with the existing import path. A test asserts the printed result and the audit entry.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add a persisted sync cursor / checkpoint (Open Question; rely on idempotent re-run, ADR-4).",
+        "Do not add UUID-keyed upsert or in-place-mutation handling (Open Question; content-derived dedup only).",
+        "Do not add new numerics primitives for WHOOP metrics — reuse the existing closed whitelist.",
+        "Do not modify the IngestionAdapter interface, ObservationSink, or the health_observations schema.",
+        "Do not add webhooks; sync is on-demand only."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "`bober medical whoop sync` persists WHOOP observations end-to-end with deterministic idempotent dedup, fails closed on partial errors, surfaces clear axis-off/credential errors with exit code 1 and never throws, all HTTP stays in whoop-client.ts, and build/typecheck/test/lint are green with no regression"
+      ],
+      "definitionOfDone": "src/medical/whoop/whoop-sync.ts exports WhoopSyncAdapter { readonly source:'whoop'; sync(window, sink): Promise<IngestionResult> } that pages WhoopClient across the four collections, maps records to HealthObservation[] (source='whoop'), writes via the existing ObservationSink in bounded batches, is idempotent on re-run, and aborts cleanly without partial corruption on error. src/cli/commands/medical.ts gains a `whoop` subcommand with a `sync [--since <iso>]` action mirroring `medical import`: assertAllowed('device-connection'), wire the pieces, print IngestionResult, store.close() in finally, set process.exitCode on error and never throw. Collocated tests (fixture WhoopClient + temp-dir store) cover mapping/counts, idempotent resume, partial-failure safety, and the CLI axis-off/credential-missing/success branches. Build, typecheck, test, lint pass with no regression; no network import outside whoop-client.ts.",
+      "assumptions": [
+        "StoreObservationSink and HealthDataStore.upsertObservations exist and are reused unchanged (src/medical/ingestion.ts:16-32, src/medical/health-store.ts:155-175); WhoopSyncAdapter depends on the ObservationSink interface, not a concrete store.",
+        "IngestionResult is the existing {recordsParsed, newRows} shape (src/medical/types.ts:191-194); recordsParsed counts mapped observations seen, newRows the count returned by upsertObservations.",
+        "The CLI command tree exposes registerMedicalCommand (src/cli/commands/medical.ts) where a `.command(\"whoop\").command(\"sync\")` is added mirroring `medical import`; the import action's error/exitCode/finally pattern (medical.ts:69-73) is the template.",
+        "A default sync window of the last 7 days is used when --since is omitted; the window start/end are computed from an injected now (or Date in the CLI boundary only) and passed as ISO strings to sync — the store and adapter never read the clock.",
+        "Each WHOOP collection maps to one or more fixed (metric, unit) pairs decided in code (e.g. recovery score, resting heart rate, HRV, sleep duration); the mapping is a small reviewable table, and unmapped fields are skipped rather than guessed."
+      ],
+      "outOfScope": [
+        "Persisted sync cursor / checkpoint",
+        "UUID-keyed upsert / in-place mutation",
+        "New numerics primitives",
+        "IngestionAdapter / ObservationSink / schema changes",
+        "Webhooks"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/medical/whoop/whoop-client.ts + whoop-token.ts (from Sprint 2 — the sync depends on these), src/medical/ingestion.ts (IngestionNormalizer, ObservationSink, StoreObservationSink, bounded-batch backpressure pattern), src/medical/health-store.ts:32-42,155-175 (content-derived SHA-256 id + upsertObservations INSERT OR IGNORE returning new-row count), src/medical/adapters/apple-health.ts:13,96-99 (bounded ~1000-row batch + writeBatch backpressure precedent), src/cli/commands/medical.ts:30-72 (the `medical import` command shape: action, print, store.close() in finally, process.exitCode on error, never throw), src/medical/types.ts (IngestionResult :191-194, HealthObservation :96-107, AuditEvent 'ingest').\n\nwhoop-sync.ts (NO network import — it depends on WhoopClient, which owns HTTP): class WhoopSyncAdapter { readonly source='whoop'; constructor(private client: WhoopClient) {} async sync(window: SyncWindow, sink: ObservationSink): Promise<IngestionResult> }. For each collection in ['recovery','sleep','cycle','workout']: cursor=undefined; do { page = await client.fetchPage(collection, window, cursor); const obs = mapWhoopRecords(collection, page.records); accumulate recordsParsed += obs.length; await sink.writeBatch(obs, []); cursor = page.nextCursor } while (cursor). Sum newRows from the sink/store path. mapWhoopRecords: a small fixed table mapping known WHOOP fields to (metric, unit) with source='whoop', tStart=record.tStartIso, value=number; skip fields not in the table. Let the store derive id (content-derived) — do NOT set id from the WHOOP UUID. On any fetch/throw, let it propagate (committed batches already persisted via per-batch transaction) — do NOT catch-and-continue (fail-closed).\n\nCLI: in registerMedicalCommand add medicalCmd.command('whoop').command('sync').option('--since <iso>') with an action that: loads config, builds EgressGuard.fromConfig(config); wrap the body in try/catch; call egress.assertAllowed('device-connection') (catch -> print 'device-connection egress not enabled — set medical.egress.deviceConnection' and set process.exitCode=1, return); build WhoopTokenStore (clientCredentials may throw 'set WHOOP_CLIENT_ID/SECRET' -> catch, message, exit 1); if readRefreshToken() is undefined -> print 'authorize first', exit 1; build WhoopClient + WhoopSyncAdapter + HealthDataStore + StoreObservationSink; compute window (--since or now-7d) as ISO; result = await adapter.sync(window, sink); print recordsParsed/newRows; in finally store.close(). Mirror the exact error/exitCode discipline of `medical import` (medical.ts:69-73) — never throw out of the action. Append an 'ingest' audit entry consistent with the existing import path if that path does so.\n\nTests: whoop-sync.test.ts with a fake WhoopClient returning fixture pages + a real HealthDataStore in a temp dir: assert rows land with source='whoop' and counts; run twice -> second newRows===0; a fake client that throws on page 2 -> assert page-1 rows persisted, sync rejects, re-run completes. CLI test: invoke the action with axis off (assert message + exitCode 1, no HTTP), with env unset (assert message + exit 1), with axis on + fixture client (assert printed recordsParsed/newRows + store closed + 'ingest' audit entry). Inject FetchLike/now so no real network or clock. ESM/.js extensions, unicode section headers, small single-purpose files.",
+      "evaluatorNotes": "sc-3-2: fixture WhoopClient returns known records across the four collections; after sync, query HealthDataStore for source='whoop' rows and assert metric/unit/tStart mapping + recordsParsed/newRows.\nsc-3-3: run sync twice over the same window; assert first newRows>0, second newRows===0, and the row count in the store is unchanged after the second run (no duplicates).\nsc-3-4: fixture client commits page 1 then throws on page 2; assert sync rejects, page-1 rows are present and well-formed (no half-written row), then a clean re-run reaches full expected state.\nsc-3-5: invoke the CLI action with deviceConnection false; assert the printed 'not enabled' message, process.exitCode===1, no throw, and that no fetch/HTTP occurred (spy FetchLike never constructed/called).\nsc-3-6: axis on, env unset -> assert 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' + exit 1; axis on, creds set, no refresh token -> assert 'authorize first' + exit 1.\nsc-3-7: npm run lint clean; grep whoop-sync.ts and the CLI diff for network imports/fetch -> expect none (all HTTP in whoop-client.ts); run the FULL suite for no regression.\nsc-3-8: on a successful fixture sync assert stdout contains recordsParsed and newRows, store.close() was called (no open-handle warning / spy on close), and an event:'ingest' audit entry (IDs/enums only) was appended.\nBuild/typecheck/test/lint all green.",
+      "estimatedFiles": [
+        "src/medical/whoop/whoop-sync.ts",
+        "src/medical/whoop/whoop-sync.test.ts",
+        "src/cli/commands/medical.ts",
+        "src/cli/commands/medical.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-17T14:32:38Z",
+      "updatedAt": "2026-06-17T14:32:38Z",
+      "completedAt": "2026-06-17T16:13:00Z"
+    }
+  ]
+}

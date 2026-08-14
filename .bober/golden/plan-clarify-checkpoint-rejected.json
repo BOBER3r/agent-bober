@@ -1,0 +1,115 @@
+{
+  "formatVersion": 1,
+  "caseId": "plan-clarify-checkpoint-rejected",
+  "title": "The post-plan checkpoint is rejected",
+  "intent": "Pin plan_clarify's onReject target: a rejected checkpoint routes to graceful_failure and no contract is ever written.",
+  "tags": [
+    "plan",
+    "hitl:post-plan",
+    "refusal",
+    "artifacts:audits"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Rewrite the config layer end to end.",
+    "entryNodeId": "plan_draft",
+    "config": {
+      "autopilot": false
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Rewrite the config layer end to end.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "ambiguityScore": 9,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-1",
+              "category": "scope",
+              "question": "Which behaviours must stay bug-compatible?",
+              "recommendation": "Enumerate them before planning a rewrite."
+            }
+          ],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "needs-clarification",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Rewrite the config layer",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "the post-plan checkpoint was rejected",
+          "node": "plan_clarify",
+          "runId": "golden-run",
+          "detail": "The run stopped at plan_clarify: the post-plan checkpoint was rejected."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "post-plan",
+          "iteration": 1,
+          "mechanism": "cli",
+          "outcome": "rejected"
+        }
+      ]
+    },
+    "notes": "contracts and specs are absent, not empty-by-accident: a rejected plan that still materialised its spec would be a fail-open, and this expectation is where that would surface."
+  }
+}

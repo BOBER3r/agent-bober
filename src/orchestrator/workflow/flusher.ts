@@ -17,8 +17,10 @@ import { updateContractStatus } from "../../contracts/sprint-contract.js";
 import { updateContract, loadContract, listContracts } from "../../state/sprint-state.js";
 import { appendHistory, updateProgress } from "../../state/history.js";
 import { ensureBoberDir, saveSpec } from "../../state/index.js";
+import { finalizePipelineRun } from "../finalize.js";
 import type { WorkflowRunResult } from "./types.js";
 import type { PipelineResult } from "../pipeline.js";
+import type { RunOptions } from "./engine.js";
 
 export class RunResultFlusher {
   /**
@@ -29,14 +31,24 @@ export class RunResultFlusher {
    *   2. updateProgress after each contract (cumulative list, crash-safe).
    *   3. After all contracts: appendHistory for each pendingHistory entry (stamped).
    *   4. Save the spec.
-   *   5. Return PipelineResult.
+   *   5. finalizePipelineRun — the SHARED terminal side-effect owner: emits the
+   *      .completed.json marker, then the pipeline-complete history event, then
+   *      the end-of-pipeline checkpoint (that order is load-bearing — see the
+   *      header of ../finalize.ts). Before Sprint 4 (PGE) this path emitted NONE
+   *      of them, so a workflow-engine run was invisible to
+   *      src/chat/completion-tailer.ts.
+   *   6. Return PipelineResult.
    */
   async flush(
     projectRoot: string,
-    _config: BoberConfig,
+    config: BoberConfig,
     result: WorkflowRunResult,
+    opts?: RunOptions,
   ): Promise<PipelineResult> {
     const startTime = Date.now();
+    // Same id shape runTsPipeline uses (pipeline.ts) so both engines produce
+    // markers that .bober/runs/ consumers cannot tell apart by name.
+    const runId = opts?.runId ?? `run-${Date.now()}`;
 
     await ensureBoberDir(projectRoot);
 
@@ -48,7 +60,7 @@ export class RunResultFlusher {
     for (const sprint of result.perSprint) {
       const contractStatus =
         sprint.outcome === "passed"
-          ? "passed"
+          ? "completed"
           : sprint.outcome === "needs-rework"
             ? "needs-rework"
             : "failed";
@@ -61,7 +73,7 @@ export class RunResultFlusher {
 
       // Accumulate before updateProgress so the progress file always reflects
       // all contracts flushed so far
-      if (contractStatus === "passed") {
+      if (contractStatus === "completed") {
         completedSprints.push(stamped);
       } else {
         failedSprints.push(stamped);
@@ -91,14 +103,25 @@ export class RunResultFlusher {
 
     await saveSpec(projectRoot, result.spec);
 
-    // ── Return PipelineResult (pipeline.ts:809-810 success formula) ─────
+    // ── Terminal side effects + PipelineResult (single owner) ───────────
+    //
+    // success/duration are derived inside finalizePipelineRun from the SAME
+    // formula the TS engine uses, so the two engines cannot disagree.
+    // needsClarification is workflow-only and is layered on afterwards; it was
+    // never part of the TS engine's terminal result.
 
-    return {
-      success: failedSprints.length === 0 && completedSprints.length > 0,
+    const finalized = await finalizePipelineRun({
+      projectRoot,
+      runId,
+      config,
       spec: result.spec,
       completedSprints,
       failedSprints,
-      duration: Date.now() - startTime,
+      startedAtMs: startTime,
+    });
+
+    return {
+      ...finalized,
       needsClarification: result.needsClarification,
     };
   }

@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-3",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "sprintNumber": 3,
+  "title": "A monotone version the rank-aware join can read, stable under replay",
+  "description": "versionRank already ranks by a `version` number before falling back to updatedAt and canonical JSON. Give SprintContract that field and write it at sprint_exit \u2014 replay-stably, because a fixed clock makes updatedAt useless as a tiebreak and a wall-clock-derived version would make every golden case irreproducible.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260812-terminal-vocabulary-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "SprintContractSchema declares version?: number, optional so all 250 committed contracts stay valid without migration.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "sprint_exit writes a monotone version on the settled contract.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "The written version is REPLAY-STABLE: two runs over the same input produce the same value, and a captured golden case replays byte-identically. Proven by execution, not argument.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A test asserts the settled copy outranks the seeded one under versionRank AND that the ordering does not depend on updatedAt \u2014 construct both copies with an identical updatedAt, as the fixed clock produces, and confirm the version still decides.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "A round-trip test proves the version survives saveContract followed by loadContract. This is the asymmetry that ruled out riding as an unknown key: loadContract parses through a non-strict schema that strips them.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green; golden gate still passes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing mergeEntries \u2014 that is sprint 4. This sprint only supplies the field it will read.",
+    "Making version required.",
+    "Deriving the version from wall-clock time, run order, or anything else a replay cannot reproduce."
+  ],
+  "stopConditions": [
+    "No replay-stable monotone source is available at sprint_exit \u2014 stop and report what is, rather than shipping something a replay cannot reproduce."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "versionRank is at src/pge/registry/reducers.ts:348-359 and reads value.version (finite number) then value.updatedAt then canonicalJson. You are supplying the first. The replay-stability constraint is the hard part: the golden harness runs on a fixed clock, so anything time-derived collapses. Look at what sprint_exit already has in hand that is monotone and reproducible \u2014 attempt counts and branch status are candidates; verify whichever you choose actually increases across the seeded-to-settled transition. sc-3-4 is the criterion that proves you did not accidentally rely on updatedAt.",
+  "evaluatorNotes": "sc-3-3 is the one to hammer. Run the same input twice and diff the version. Then capture and replay a golden case and confirm byte-identical. If the generator derived the version from anything time-like or order-like, this is where it shows. For sc-3-4, build both copies with the SAME updatedAt yourself and confirm the ordering still holds \u2014 a test that passes only because updatedAt happened to differ proves nothing.",
+  "estimatedFiles": [
+    "src/contracts/sprint-contract.ts",
+    "src/pge/nodes/sprint-review.ts",
+    "src/pge/nodes/sprint-evaluate.test.ts",
+    "src/state/sprint-state.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T17:15:28Z",
+  "completedAt": "2026-08-12T17:15:28Z"
+}

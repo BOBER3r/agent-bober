@@ -1,34 +1,50 @@
 import { execa } from "execa";
 import type { GraphArtifactStore } from "./artifact-store.js";
+import type { GraphBackend } from "./backends/types.js";
+import { TokensaveBackend } from "./backends/tokensave-backend.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
-export interface SyncResult {
-  indexed: number;
-}
-
-export interface StatusResult {
-  ready: boolean;
-  indexedFileCount: number;
-  tokensaveVersion: string;
-}
+// Back-compat re-export — SyncResult/StatusResult now live in ./types.js
+// (shared with the GraphBackend CliMap). No importer outside this file
+// used these directly before this move (verified).
+export type { SyncResult, StatusResult } from "./types.js";
+import type { StatusResult, SyncResult } from "./types.js";
 
 // ── TokensaveCli ───────────────────────────────────────────────────
 
 /**
- * Short-lived execa wrapper for `tokensave init/sync/status`.
+ * Short-lived execa wrapper for `<engine> init/sync/status`.
  *
  * Each method spawns a child process and waits for it to exit.
  * Use `TokensaveMcpClient` for long-lived JSON-RPC calls.
  *
  * Constructor pattern mirrors `TokensavePrereqCheck` (src/graph/prereq.ts:7-8).
+ * Argv + output parsing are driven by the RESOLVED GraphBackend's CliMap
+ * (injected via the 4th constructor param, defaulting to `TokensaveBackend`
+ * for back-compat); the transport-level guards (idempotent init, timeout,
+ * empty-stdout, throw-on-null-exit) stay here since they are not parsing
+ * concerns.
+ *
+ * `backend.cliMap()` is resolved LAZILY inside init()/sync()/status() — NOT
+ * in the constructor — so constructing this class for a stub backend (e.g.
+ * `CodeReviewGraphBackend`, whose `cliMap()` throws a NOT_IMPL error) never
+ * throws at construction time. Only an actual init/sync/status call surfaces
+ * the stub's error, which is the correct "honored but not yet implemented"
+ * behavior for an unimplemented engine (sc-3-6).
  */
 export class TokensaveCli {
   constructor(
     private readonly cwd: string,
     private readonly store: GraphArtifactStore | null = null,
-    private readonly binary: string = "tokensave",
+    private readonly binaryOverride?: string,
+    private readonly backend: GraphBackend = new TokensaveBackend(),
   ) {}
+
+  /** Binary to invoke — an explicit override wins, else the backend's own default. */
+  private get binary(): string {
+    return this.binaryOverride ?? this.backend.processSpec().binary;
+  }
 
   /**
    * Run `tokensave init` (full index of the project at `cwd`).
@@ -39,10 +55,13 @@ export class TokensaveCli {
    * Resolves on exit code 0; throws a structured Error on non-zero.
    */
   async init(opts: { cwd?: string; languageTier?: string }): Promise<void> {
+    // Resolve the backend's CliMap lazily (not in the constructor) — this is
+    // where a stub backend's NOT_IMPL error surfaces, before any process spawn.
+    const cliMap = this.backend.cliMap();
     const effectiveCwd = opts.cwd ?? this.cwd;
     const result = await execa(
       this.binary,
-      ["init"],
+      cliMap.initArgs(opts),
       {
         cwd: effectiveCwd,
         reject: false,
@@ -73,7 +92,10 @@ export class TokensaveCli {
    * pendingFiles (evaluator note #10).
    */
   async sync(paths: string[], timeoutMs: number): Promise<SyncResult> {
-    const result = await execa(this.binary, ["sync", ...paths], {
+    // Resolve the backend's CliMap lazily (not in the constructor) — this is
+    // where a stub backend's NOT_IMPL error surfaces, before any process spawn.
+    const cliMap = this.backend.cliMap();
+    const result = await execa(this.binary, cliMap.syncArgs(paths), {
       cwd: this.cwd,
       timeout: timeoutMs,
       reject: false,
@@ -97,7 +119,7 @@ export class TokensaveCli {
     // tokensave prints its summary ("N added, M modified, K removed") to
     // stderr, so parse the combined `all` stream rather than stdout alone.
     const combined = result.all ?? result.stdout ?? "";
-    const indexed = parseSyncOutput(combined);
+    const indexed = cliMap.parseSync(combined);
 
     // Update manifest via store if injected
     if (this.store) {
@@ -126,7 +148,10 @@ export class TokensaveCli {
    * Throws only on binary execution failure (ENOENT etc.).
    */
   async status(): Promise<StatusResult> {
-    const result = await execa(this.binary, ["status", "--json"], {
+    // Resolve the backend's CliMap lazily (not in the constructor) — this is
+    // where a stub backend's NOT_IMPL error surfaces, before any process spawn.
+    const cliMap = this.backend.cliMap();
+    const result = await execa(this.binary, cliMap.statusArgs, {
       cwd: this.cwd,
       reject: false,
       all: true,
@@ -146,75 +171,10 @@ export class TokensaveCli {
     }
 
     try {
-      const parsed = JSON.parse(stdout) as Record<string, unknown>;
-      // tokensave `status --json` returns {node_count, edge_count, file_count,
-      // nodes_by_kind, ...}. There is no `ready`/`indexedFileCount` field and no
-      // version, so derive `ready` from the presence of an index (file_count).
-      // Tolerate the legacy {ready, indexedFileCount, tokensaveVersion} shape too.
-      const fileCount =
-        typeof parsed.file_count === "number"
-          ? parsed.file_count
-          : typeof parsed.indexedFileCount === "number"
-            ? parsed.indexedFileCount
-            : 0;
-      const ready =
-        parsed.ready === true ||
-        typeof parsed.file_count === "number" ||
-        typeof parsed.node_count === "number";
-      return {
-        ready,
-        indexedFileCount: fileCount,
-        tokensaveVersion:
-          typeof parsed.tokensaveVersion === "string" ? parsed.tokensaveVersion : "",
-      };
+      return cliMap.parseStatus(stdout);
     } catch {
       // Unparseable output → treat as not-ready, not an error
       return { ready: false, indexedFileCount: 0, tokensaveVersion: "" };
     }
   }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────
-
-/**
- * Parse the number of indexed files from tokensave sync output.
- *
- * tokensave 6.x prints a human summary like
- *   "✔ sync done — 3 added, 1 modified, 0 removed in 41ms"
- * (with ANSI colour codes), so we sum added + modified. Legacy JSON
- * (`{"indexed": N}`) and `indexed: N` key-value forms are still accepted.
- */
-function parseSyncOutput(output: string): number {
-  // Strip ANSI escape sequences before matching.
-  // eslint-disable-next-line no-control-regex
-  const trimmed = output.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "").trim();
-  if (!trimmed) return 0;
-
-  // Try direct JSON parse (legacy shape)
-  try {
-    const obj = JSON.parse(trimmed) as Record<string, unknown>;
-    if (typeof obj.indexed === "number") return obj.indexed;
-  } catch {
-    // Fall through
-  }
-
-  // Incremental sync summary: "N added, M modified, K removed"
-  const added = /(\d+)\s+added/.exec(trimmed);
-  const modified = /(\d+)\s+modified/.exec(trimmed);
-  if (added || modified) {
-    return (
-      (added ? parseInt(added[1], 10) : 0) +
-      (modified ? parseInt(modified[1], 10) : 0)
-    );
-  }
-
-  // Full re-index summary (--force): "indexing done — N files, ... nodes"
-  const files = /(\d+)\s+files\b/.exec(trimmed);
-  if (files) return parseInt(files[1], 10);
-
-  // Legacy key-value pattern like "indexed: 42"
-  const match = /indexed["\s:]+(\d+)/.exec(trimmed);
-  if (match) return parseInt(match[1], 10);
-
-  return 0;
 }

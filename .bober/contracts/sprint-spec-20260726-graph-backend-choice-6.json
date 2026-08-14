@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260726-graph-backend-choice-6",
+  "specId": "spec-20260726-graph-backend-choice",
+  "sprintNumber": 6,
+  "title": "code-review-graph query sub-patterns (full parity): callers_of, callees_of, imports_of, tests_for",
+  "description": "Complete full-parity by mapping GraphClient's four query sub-patterns to code-review-graph tools. callers_of and callees_of map to a graph traversal (traverse_graph_tool, edge direction distinguishing inbound callers vs outbound callees); imports_of and tests_for map to query_graph_tool (file dependents / test coverage) or the closest cr-graph equivalent. Each pattern's narrow produces NodeRef[] exactly as the tokensave query() does, validated against Sprint-4 fixtures with explicit edge-direction assertions.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-5"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "Build + typecheck pass with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "callers_of and callees_of map to cr-graph traversal tools (e.g. traverse_graph_tool) with the correct edge direction, and their narrows produce NodeRef[]. A fixture-driven unit test asserts callers_of returns the INBOUND neighbors and callees_of the OUTBOUND neighbors of the same target (they must not be identical for a node with distinct in/out edges).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "imports_of maps to a cr-graph tool (query_graph_tool file-dependents or equivalent) and narrows to NodeRef[] of dependent files/modules. Unit-tested against a fixture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "tests_for maps to a cr-graph tool (test-coverage/query) and narrows to NodeRef[] of test files (falling back to uncovered symbols only if that matches cr-graph's shape). Unit-tested against a fixture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "End-to-end: GraphClient.query(pattern, target) with the cr-graph backend + mocked transport returns GraphResult.ok=true NodeRef[] for all four patterns, with sandbox filtering applied. If cr-graph genuinely cannot express one pattern, the adapter returns a typed GraphResult.ok=false (GRAPH_UNAVAILABLE) with a clear detail rather than wrong data — but the target is a real mapping for all four (full parity).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "With both backends exercised, GraphClient.query behaves consistently: same NodeRef shape, same sandbox behavior, only the underlying tool differs. Full suite green (no NEW failures); tokensave query path unchanged; lint clean.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT change the read adapters from Sprint 5 or the tokensave query mapping.",
+    "Do NOT invent traversal semantics — capture/confirm the real traverse_graph_tool + query_graph_tool argument+output shapes (extend Sprint-4 fixtures if a needed one is missing, via live capture, not guessing).",
+    "Do NOT change GraphClient.query's public signature or the QueryPattern union.",
+    "Do NOT add onboard/CLI/doc changes (Sprints 7-8)."
+  ],
+  "stopConditions": [
+    "All required success criteria pass",
+    "All four query sub-patterns map to real cr-graph tools with correct edge direction and produce NodeRef[]; end-to-end through GraphClient works; suite + lint green"
+  ],
+  "definitionOfDone": "CodeReviewGraphBackend.queryPlan handles callers_of/callees_of/imports_of/tests_for via cr-graph tools with correct edge direction, validated against fixtures and end-to-end through GraphClient; full parity achieved (or a documented, typed GRAPH_UNAVAILABLE for any pattern cr-graph cannot express); tokensave query path unchanged; suite + lint green.",
+  "assumptions": [
+    "tokensave query() maps callers_of->tokensave_callers, callees_of->tokensave_callees, imports_of->tokensave_file_dependents, tests_for->tokensave_test_map (client.ts QUERY_TOOL 40-45), each narrowing to NodeRef[] (client.ts:188-245). The cr-graph equivalents come from its traverse_graph_tool (neighbor traversal with direction) and query_graph_tool (structured queries incl. dependents/coverage), confirmed by the Sprint-4 fixtures.",
+    "Edge direction is the key correctness risk: callers = nodes that call the target (inbound call edges); callees = nodes the target calls (outbound). traverse_graph_tool almost certainly takes a direction/edge-kind argument — capture both directions as fixtures and assert they differ.",
+    "imports_of in tokensave takes a FILE and returns dependent file paths as module NodeRefs (client.ts:200-217). tests_for takes a FILE and returns test_files as module NodeRefs, falling back to uncovered symbol rows (218-241). Map cr-graph's equivalents to the same NodeRef output; if cr-graph keys on symbol rather than file, adapt params accordingly and note it.",
+    "The original 6ed3f77~1 client.ts mapped query -> 'query_graph' (a single tool with a pattern arg). Current cr-graph splits into query_graph_tool + traverse_graph_tool; pick per pattern based on the captured tool schemas.",
+    "If a pattern has no faithful cr-graph mapping, returning GRAPH_UNAVAILABLE with a specific detail is acceptable ONLY as a documented last resort — the user asked for full parity, so exhaust traverse_graph_tool/query_graph_tool options first."
+  ],
+  "outOfScope": [
+    "onboard / CLI parity (Sprint 7)",
+    "Docs (Sprint 8)",
+    "tokensave query mapping changes"
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Read FIRST: client.ts query() (188-245) + QUERY_TOOL (the tokensave template), the Sprint-4 cr-graph fixtures (esp. traverse_graph_tool + query_graph_tool), and `git show 6ed3f77~1:src/graph/client.ts` (original query->'query_graph' shape).\n\nIF the Sprint-4 capture lacks a directional traverse fixture or a dependents/coverage query fixture, CAPTURE them now from the live `code-review-graph serve` (initialize + tools/call with the right arguments): a callers-direction traversal, a callees-direction traversal, a file-dependents query, and a test-coverage query — commit as new tests/graph/fixtures/cr-graph/ files. Do NOT guess these shapes.\n\nIMPLEMENT queryPlan(pattern, target) on CodeReviewGraphBackend returning {tool, params, narrow} per pattern: callers_of -> traverse_graph_tool with inbound direction; callees_of -> traverse_graph_tool with outbound direction; imports_of -> the dependents query on target.file; tests_for -> the coverage query on target.file. narrow each raw payload -> NodeRef[] (reuse the toNodeRef helper; module-style NodeRefs for file paths as tokensave does).\n\nADD fixture-driven unit tests per pattern, INCLUDING an explicit assertion that callers_of and callees_of yield different neighbor sets for a node with distinct in/out edges (edge-direction correctness). ADD an end-to-end GraphClient.query test with the cr-graph backend + mocked transport for all four patterns.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-6): code-review-graph query sub-patterns (callers/callees/imports/tests) — full parity`.",
+  "evaluatorNotes": "Edge direction is where this sprint fails silently if rushed. sc-6-2: verify callers_of uses an INBOUND traversal and callees_of an OUTBOUND one (read the params), and the test proves they differ for a real node — reject if both call the same tool with the same args (that would make callers==callees, a classic bug). sc-6-3/6-4: confirm imports_of/tests_for key on the right entity (file) and produce module NodeRefs like the tokensave path. sc-6-5: if any pattern returns GRAPH_UNAVAILABLE, confirm it's a documented genuine limitation, not a shortcut — the ask was full parity. Check that any newly-added fixtures are real captures (structurally cr-graph, not invented). sc-6-6: tokensave query path + full suite unaffected. Reject on callers/callees direction confusion or guessed traversal shapes.",
+  "estimatedFiles": [
+    "src/graph/backends/code-review-graph-backend.ts",
+    "tests/graph/fixtures/cr-graph/",
+    "tests/graph/backends/code-review-graph-backend.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
+}

@@ -227,3 +227,77 @@ describe("mapBounded", () => {
     expect(await mapBounded([], 4, (n: number) => Promise.resolve(n))).toEqual([]);
   });
 });
+
+// ── Scheduler.settle ────────────────────────────────────────────────
+
+/**
+ * `settle` is the barrier-shaped sibling of `parallel`. Its whole reason to exist is that
+ * `parallel` is backed by `Promise.all`, so ONE rejecting thunk discards the results of
+ * every thunk that succeeded — which is wrong at a superstep barrier, where the graph
+ * runtime must see the failures ALONGSIDE the branches that committed before it can decide
+ * what to route.
+ */
+describe("Scheduler.settle", () => {
+  it("returns one index-aligned outcome per thunk", async () => {
+    const scheduler = new Scheduler({ maxConcurrent: 4 });
+    const outcomes = await scheduler.settle([
+      () => Promise.resolve("a"),
+      () => Promise.resolve("b"),
+      () => Promise.resolve("c"),
+    ]);
+    expect(outcomes).toEqual([
+      { status: "fulfilled", value: "a" },
+      { status: "fulfilled", value: "b" },
+      { status: "fulfilled", value: "c" },
+    ]);
+  });
+
+  it("keeps every successful result when a sibling rejects — the reason parallel cannot", async () => {
+    const scheduler = new Scheduler({ maxConcurrent: 4 });
+    const boom = new Error("branch 2 failed");
+    const thunks = [
+      () => Promise.resolve(1),
+      () => Promise.reject(boom),
+      () => Promise.resolve(3),
+    ];
+
+    const outcomes = await scheduler.settle(thunks);
+    expect(outcomes[0]).toEqual({ status: "fulfilled", value: 1 });
+    expect(outcomes[1]).toEqual({ status: "rejected", reason: boom });
+    expect(outcomes[2]).toEqual({ status: "fulfilled", value: 3 });
+
+    // The same batch through `parallel` loses both survivors.
+    await expect(new Scheduler({ maxConcurrent: 4 }).parallel(thunks)).rejects.toBe(boom);
+  });
+
+  it("still bounds concurrency at the cap", async () => {
+    const tracker = concurrencyTracker();
+    const scheduler = new Scheduler({ maxConcurrent: 2 });
+    await scheduler.settle([1, 2, 3, 4, 5].map((n) => () => tracker.run(n)));
+    expect(tracker.peak).toBe(2);
+  });
+
+  it("counts every execution against the lifetime agent cap", async () => {
+    const scheduler = new Scheduler({ maxConcurrent: 4, maxAgents: 3 });
+    const outcomes = await scheduler.settle([
+      () => Promise.resolve(1),
+      () => Promise.resolve(2),
+      () => Promise.resolve(3),
+      () => Promise.resolve(4),
+    ]);
+    expect(scheduler.agentsRun).toBe(3);
+    expect(outcomes.slice(0, 3).map((o) => o.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+      "fulfilled",
+    ]);
+    // The runaway guard is REPORTED, not propagated: at a barrier the caller must see it
+    // beside the branches that did complete.
+    expect(outcomes[3].status).toBe("rejected");
+    expect(outcomes[3].status === "rejected" && outcomes[3].reason).toBeInstanceOf(AgentCapError);
+  });
+
+  it("returns an empty array for an empty batch", async () => {
+    expect(await new Scheduler({ maxConcurrent: 2 }).settle([])).toEqual([]);
+  });
+});

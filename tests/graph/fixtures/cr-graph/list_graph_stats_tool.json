@@ -1,0 +1,30 @@
+{
+  "status": "ok",
+  "summary": "Graph statistics for repo:\n  Files: 2\n  Total nodes: 9\n  Total edges: 17\n  Languages: python\n  Last updated: 2026-07-27T03:49:05\n\nNodes by kind:\n  Class: 1\n  File: 2\n  Function: 6\n\nEdges by kind:\n  CALLS: 9\n  CONTAINS: 7\n  IMPORTS_FROM: 1\n\nEmbeddings: 0 nodes embedded\n  (install sentence-transformers for semantic search)",
+  "total_nodes": 9,
+  "total_edges": 17,
+  "nodes_by_kind": {
+    "Class": 1,
+    "File": 2,
+    "Function": 6
+  },
+  "edges_by_kind": {
+    "CALLS": 9,
+    "CONTAINS": 7,
+    "IMPORTS_FROM": 1
+  },
+  "languages": [
+    "python"
+  ],
+  "files_count": 2,
+  "last_updated": "2026-07-27T03:49:05",
+  "embeddings_count": 0,
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}

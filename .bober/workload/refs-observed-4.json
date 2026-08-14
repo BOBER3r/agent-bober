@@ -1,0 +1,16 @@
+{
+  "entryId": "refs-observed-4",
+  "channel": "refs",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"sprint_curate_explain\" writing \"refs\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "sprint-test-explanations:sprint-spec-20260805-pge-conformance-01": {
+      "uri": "scratch://run-workload-observe/1fd5c8db67b497778be35b117353f6180b79121ceb6ff0af83342f27fe299faa.md",
+      "sha256": "1fd5c8db67b497778be35b117353f6180b79121ceb6ff0af83342f27fe299faa",
+      "bytes": 204,
+      "kind": "document"
+    }
+  }
+}

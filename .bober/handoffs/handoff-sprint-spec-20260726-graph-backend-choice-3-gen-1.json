@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-3",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober pluggable graph backend, Sprint 3. Sprints 1-2 (ae1bde7, 129d841) built the full GraphBackend abstraction: id + searchPlan/queryPlan/impactPlan/reviewContextPlan/overviewPlan/changesPlan (tool/params/narrow) + processSpec/prereqSpec/cliMap. The transport, prereq check, and CLI wrapper all take an injected backend; construction sites currently hardcode `new TokensaveBackend()`. Sprint 3 makes selection dynamic: add optional config `graph.backend` + `resolveGraphBackend()` that auto-detects the installed binary (tokensave preferred), wire all 5 construction sites, register a CodeReviewGraphBackend STUB (specs only, adapters throw/TODO), and evolve the manifest additively (backend + backendVersion).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-1", "title": "GraphBackend interface + TokensaveBackend", "summary": "seam extracted, GraphClient delegates. ae1bde7." },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-2", "title": "process/prereq/CLI specs + transport param", "summary": "GraphBackend gained processSpec/prereqSpec/cliMap; transport/prereq/cli driven by backend. 129d841." }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/graph/backends/types.ts",
+      "src/graph/backends/tokensave-backend.ts",
+      "src/graph/prereq.ts",
+      "src/graph/types.ts",
+      "src/graph/artifact-store.ts",
+      "src/graph/pipeline-lifecycle.ts",
+      "src/mcp/server.ts",
+      "src/cli/commands/impact.ts",
+      "src/cli/commands/graph.ts",
+      "src/cli/commands/onboard.ts"
+    ],
+    "keyNotes": [
+      "Add `graph.backend: z.enum(['tokensave','code-review-graph']).optional()` and `codeReviewGraphPath: z.string().optional()` to GraphSectionSchema (~394-417). Optional => a config without them must validate identically (there is a dogfood golden config snapshot in the repo — if a snapshot test compares default output, update it ONLY if genuinely needed; backend is optional so default output should be unchanged).",
+      "resolveGraphBackend(config, {probe?}) — explicit graph.backend wins (no probe of the other); else probe each backend's prereqSpec.versionArgs via an INJECTABLE probe(binary,args)->{ok,version}; tokensave wins when both installed; combined install hint (both engines) when neither. Keep probe injectable so unit tests need no real binary.",
+      "CodeReviewGraphBackend STUB: real id 'code-review-graph', processSpec {binary:'code-review-graph', serveArgs:['serve']}, prereqSpec {versionArgs:['--version'], isCompatible: accept-any (documented TODO), installHint:'pip install code-review-graph'}, cliMap TODO; the *Plan adapter methods THROW or return a TODO marker (filled Sprints 4-6). It only needs to be selectable + prereq-checkable now.",
+      "Wire ALL FIVE construction sites (pipeline-lifecycle.ts, mcp/server.ts, cli/impact.ts, cli/graph.ts, cli/onboard.ts) to `resolveGraphBackend(config,...)` then pass the backend down. With graph.backend unset + tokensave installed, byte-identical to today.",
+      "Manifest additive: GraphManifest + GraphArtifactStore gain backend + backendVersion; reading a legacy manifest (no backend) defaults backend='tokensave', backendVersion=tokensaveVersion. Keep writing tokensaveVersion.",
+      "The pipeline-lifecycle stub GraphSection (~230-248) hardcodes config — ensure it doesn't override the resolved backend (backend is a separate injected dep from GraphSection config)."
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-3.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run", "testScoped": "npx vitest run tests/graph/ tests/config/" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, zero type errors. ESM .js imports, `import type`, no `any`, no sync fs, unicode section headers, Zod for config, conventional commits `bober(sprint-N): ...`. Never main. Full-suite baseline entering this sprint: 4994 passed / 1 skipped / 0 failures.",
+  "evaluatorFeedback": null
+}

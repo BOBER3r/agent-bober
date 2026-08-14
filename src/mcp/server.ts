@@ -86,16 +86,22 @@ export async function createBoberMCPServer(
         const { IncidentLog } = await import("../graph/incidents.js");
         const { TokensaveMcpClient } = await import("../graph/mcp-client.js");
         const { GraphClient } = await import("../graph/client.js");
+        const { resolveGraphBackend, processSpecForBackend } = await import(
+          "../graph/backends/registry.js"
+        );
         const { registerGraphTools } = await import("./tools/graph.js");
 
         const cfg = config.graph;
         const store = new GraphArtifactStore(projectRoot);
         const incidents = new IncidentLog(projectRoot);
+        const backend = await resolveGraphBackend(config);
+        // processSpecForBackend threads a per-backend binary override (e.g.
+        // graph.codeReviewGraphPath) into the serve subprocess.
         const mcpClient = new TokensaveMcpClient(
           projectRoot,
           cfg,
           incidents,
-          cfg.tokensavePath ?? "tokensave",
+          processSpecForBackend(backend, config),
         );
         const graphFallback = new GraphFallback("dual");
         const client = new GraphClient(
@@ -105,6 +111,7 @@ export async function createBoberMCPServer(
           graphFallback,
           incidents,
           cfg,
+          backend,
         );
         registerGraphTools({ client, fallback: graphFallback });
       }

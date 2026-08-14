@@ -1,0 +1,16 @@
+{
+  "entryId": "messages-sprint-spec-20260617-medical-whoop-guardrails-2-1",
+  "channel": "messages",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/handoffs/gen-report-sprint-spec-20260617-medical-whoop-guardrails-2-1.json"
+  },
+  "value": {
+    "id": "sprint-spec-20260617-medical-whoop-guardrails-2:generator:1",
+    "seq": 5,
+    "role": "assistant",
+    "nodeId": "sprint_generate",
+    "text": "All 7 criteria met. 2438->2473 (+35). 3rd EgressGuard ctor param OPTIONAL so 2-arg sites source-compatible. URLSearchParams not in ESLint globals -> manual query strings w/ encodeURIComponent (matches medline-source.ts). nowIso() injector defaults to () => new Date().toISOString() (no Date.now() inside impl). whoop-token.ts has NO network import; only whoop-client.ts is ESLint-excepted.",
+    "tokens": 389
+  }
+}

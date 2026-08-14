@@ -1,0 +1,91 @@
+{
+  "formatVersion": 1,
+  "caseId": "fanout-retries-exhausted-graceful-failure",
+  "title": "reduce_sprints exhausts fanoutRetries",
+  "intent": "Pin reduce_sprints' bound: after 2 retries of a failing branch the onExhausted target is graceful_failure.",
+  "tags": [
+    "fanout",
+    "loop:fanoutRetries",
+    "onExhausted"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "fanout_sprints"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_generate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": false,
+        "notes": "The worktree could not be created.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_generate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 1,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": false,
+        "notes": "The worktree could not be created.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "fanoutRetries exhausted for one branch",
+          "node": "reduce_sprints",
+          "runId": "golden-run",
+          "detail": "The run stopped at reduce_sprints: fanoutRetries exhausted for one branch."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": "Two attempts and then the failure writer. A third generator call would mean the bound did not bite; a missing failure artifact would mean the run ended without recording why."
+  }
+}

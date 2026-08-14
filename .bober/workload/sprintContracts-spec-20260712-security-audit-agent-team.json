@@ -1,0 +1,674 @@
+{
+  "entryId": "sprintContracts-spec-20260712-security-audit-agent-team",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-1.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-2.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-3.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-4.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-5.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-6.json",
+      ".bober/contracts/sprint-spec-20260712-security-audit-agent-team-7.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 1,
+      "title": "Add security config section, audit result types, and .bober/security store",
+      "description": "Lay the typed foundation for the security auditor: an opt-in default-off SecuritySectionSchema wired as an OPTIONAL key on BoberConfigSchema (existing configs byte-identical), the SecurityAuditResult/SecurityFinding/VulnClass types wrapping the LOCKED ReviewResult/ReviewFinding shapes, a pure verdict-derivation function, and a security-audit-state store persisting human-readable markdown to .bober/security/ (separate from .bober/reviews/ per ADR-3).",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "SecuritySectionSchema exists in src/config/schema.ts with fields enabled (default false), failClosed (default true), timeoutMs (default 300000), model (default 'opus'), maxTurns (default 20), provider?/endpoint?/providerConfig?, budget? (reusing BudgetSectionSchema), scanners (z.array(EvalStrategySchema) default []), standaloneBlockOn (enum 'critical'|'important' default 'critical'), hub (boolean default true); it is wired as security: SecuritySectionSchema.optional() on BoberConfigSchema.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "Every existing config fixture and the repo's own bober.config.json parse to output deep-equal to the pre-change parse (no security key injected, no defaults materialized when the section is absent); all pre-existing config tests pass unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "src/orchestrator/security-audit-types.ts exports SecurityFinding (extends ReviewFinding with optional vulnClass), the VulnClass union ('injection'|'authn-authz'|'secret-handling'|'input-validation'|'path-traversal'|'privilege-escalation'), SecurityAuditResult {review, stack, scannerRan, parsed, verdict}, and a pure deriveVerdict(review) returning 'blocked' iff review.critical.length > 0 — importing ReviewResult/ReviewFinding type-only from code-reviewer-agent.ts, never redefining them.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "src/state/security-audit-state.ts exports saveSecurityAudit/readSecurityAudit/listSecurityAudits over .bober/security/<contractId>-security-audit.md: save renders via the existing review markdown renderer applied to result.review, read of a missing id returns null without throwing, list returns saved contract ids; round-trip verified in a temp directory.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "npm run build and npm run typecheck pass; ESLint reports zero errors on new and modified files.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement runSecurityAudit, the gate, the CLI, scanners, or hub emission (sprints 2-6).",
+        "Do not modify ReviewResult/ReviewFinding, review-state.ts, or any code-reviewer behavior (locked).",
+        "Do not add security config to createDefaultConfig or any preset — the section is opt-in only.",
+        "Do not touch bober.config.json in this sprint (dogfooding is sprint 7)."
+      ],
+      "stopConditions": [
+        "All five success criteria verified; full existing suite green with zero regressions.",
+        "Config byte-identity proven by deep-equal parse tests, not by assertion of absence alone."
+      ],
+      "definitionOfDone": "The security config section, wrapper types, verdict derivation, and .bober/security/ store exist, fully tested, with every existing config parsing byte-identically and the full suite green.",
+      "assumptions": [
+        "BudgetSectionSchema, EvalStrategySchema, and ModelChoiceSchema are exported (or exportable) from src/config/schema.ts as cited at schema.ts:48-51 and :74-88 in the architecture; if ModelChoiceSchema has a different name, reuse whatever enum the reviewer/evaluator sections use for their model field.",
+        "The review markdown renderer (renderReviewMarkdown or equivalent) is exported from code-reviewer-agent.ts or its render module; if it is module-private, export it additively rather than duplicating it.",
+        "review-state.ts (src/state/review-state.ts:12-15) is the store pattern to mirror: async fs/promises only, ensureDir before write."
+      ],
+      "outOfScope": [
+        "Audit execution, gate wiring, CLI, scanner pre-filter, hub emission, skill, dogfooding (later sprints)."
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) src/config/schema.ts: find the existing default-off section precedents (evaluator panel {enabled:false}, reviewer section, medical egress axes) and follow their exact style; place SecuritySectionSchema near the other role sections and wire `security: SecuritySectionSchema.optional()` onto BoberConfigSchema — CRITICAL: .optional() on the section, no top-level default, so absent stays absent. Include standaloneBlockOn (z.enum(['critical','important']).default('critical')) and hub (z.boolean().default(true)) — these are consumed by sprints 4 and 6 but belong to the schema now to avoid three schema-touch sprints. (2) src/orchestrator/security-audit-types.ts: import type { ReviewResult, ReviewFinding } from './code-reviewer-agent.js' (verify the actual export names at code-reviewer-agent.ts:17-37). deriveVerdict must be pure and exported for reuse by the core, gate, and CLI. (3) src/state/security-audit-state.ts: mirror review-state.ts structurally (same helper usage, ensureDir, node:fs/promises); filename pattern `${contractId}-security-audit.md`. (4) Tests collocated (*.test.ts): config deep-equal paired-parse test, verdict derivation table test, store round-trip in a temp dir (repo convention: real fs in temp dirs, no fs mocks). Use unicode box section comments per principles.md.",
+      "evaluatorNotes": "For sc-1-2: run the FULL config test file plus parse the repo's real bober.config.json before/after (checkout the schema module's behavior with the section absent) and deep-equal the outputs — do not accept a test that only checks 'security' in result. For sc-1-3: verify vulnClass is optional and that ReviewFinding/ReviewResult are imported type-only (grep for 'import type'); table-test deriveVerdict with critical empty/non-empty including important-only findings → 'pass'. For sc-1-4: exercise read-of-missing → null (not throw) explicitly. Confirm no sync fs calls (grep readFileSync/writeFileSync in new files). Run build + typecheck + lint + full suite.",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/config/schema.test.ts",
+        "src/orchestrator/security-audit-types.ts",
+        "src/orchestrator/security-audit-types.test.ts",
+        "src/state/security-audit-state.ts",
+        "src/state/security-audit-state.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-1-1",
+          "timestamp": "2026-07-12T10:38:29.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-1-1",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T10:38:29.000Z",
+      "completedAt": "2026-07-12T10:38:29.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 2,
+      "title": "Implement bober-security-auditor agent, runSecurityAudit core, and stack knowledge injection",
+      "description": "The audit engine: an agents/bober-security-auditor.md definition, a provider-agnostic runSecurityAudit(contract, evaluation|null, projectRoot, config) core in src/orchestrator/security-auditor-agent.ts mirroring runCodeReviewer's structure (prompt build → runAgenticLoop with read-only tools → parse → persist), and a StackKnowledgeInjector mapping config.project.stack to the matching stack skill checklist plus the security-lens vulnerability taxonomy. Parsing is fail-closed: unparseable auditor output yields parsed:false, never a silent empty-critical pass.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "runSecurityAudit with a mocked/fake client returning a well-formed audit containing a critical finding resolves to SecurityAuditResult with that finding in review.critical, parsed:true, verdict 'blocked', the resolved stack label, and the artifact persisted via saveSecurityAudit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "When the fake client returns unparseable output (garbage text, truncated JSON), runSecurityAudit resolves with parsed:false and does NOT return a verdict of 'pass' derived from an empty fallback — the result is distinguishable from a genuine clean audit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "The stack knowledge resolver maps stack solidity→'bober.solidity', anchor→'bober.anchor', react→'bober.react' (reading each skill's security checklist content into promptFragment when the skill file exists) and unknown/absent stack → {skillName:null} with the generic VulnClass taxonomy sourced from the security fragment in src/orchestrator/eval-lenses.ts; the resolved promptFragment appears verbatim in the prompt sent to the client.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "agents/bober-security-auditor.md exists with frontmatter (name, description, read-only tools list, model) following the structure of agents/bober-code-reviewer.md, instructing the auditor to emit findings in the ReviewResult JSON shape organised by VulnClass, cited with path+line+snippet+severity, and to never write or edit files.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "runSecurityAudit accepts evaluation as EvaluationRunResult | null and omits the evaluation-context section of the prompt when null (standalone mode); a provider/client error rejects (throws) rather than resolving to a clean result.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "All LLM interaction goes through the existing provider-agnostic client path honoring config.security.model/provider/endpoint/providerConfig/maxTurns and optional budget; grep confirms no provider SDK import outside src/providers/.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; full existing suite green.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not wire the gate into pipeline.ts (sprint 3) — this sprint only exports the callable core.",
+        "Do not add the CLI command (sprint 4), scanner pre-filter (sprint 5 — accept an optional priors parameter or leave the seam documented), or hub emission (sprint 6).",
+        "Do not modify runCodeReviewer or its parse fallback — the fail-closed parse is NEW code for the security path only.",
+        "Do not give the auditor subagent write/edit/bash tools."
+      ],
+      "stopConditions": [
+        "All seven criteria verified; the fail-closed parse behavior (sc-2-2) is demonstrated by test, not asserted in prose.",
+        "Full suite green with zero regressions."
+      ],
+      "definitionOfDone": "A callable, fully tested runSecurityAudit core exists that any provider can serve, with stack-aware prompting, fail-closed parsing, and persistence — ready for the gate (sprint 3) and CLI (sprint 4) to consume.",
+      "assumptions": [
+        "runCodeReviewer (src/orchestrator/code-reviewer-agent.ts:54 area) is the structural template: it builds a prompt from contract+diff, drives runAgenticLoop with read-only tools, parses JSON from the final text, and its parse fallback at :325-337 returns empty findings — the security parse must NOT reuse that fallback.",
+        "The agentic loop and client factory (createClient) support per-role model/provider/endpoint/providerConfig/maxTurns/budget config as established for other roles (reviewer/evaluator sections); the security section mirrors those fields.",
+        "Stack values come from StackSchema (src/config/schema.ts:8-16); the skill files live at skills/bober.solidity/SKILL.md, skills/bober.anchor/SKILL.md, skills/bober.react/SKILL.md — the solidity one carries a security checklist near SKILL.md:401.",
+        "eval-lenses.ts:7-8 exports (or contains greppable) the security lens fragment text listing the vulnerability classes; the VulnClass taxonomy from sprint 1 mirrors it."
+      ],
+      "outOfScope": [
+        "Pipeline gate, CLI entry, scanner execution, hub Findings, skill wrapper, dogfooding."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) READ code-reviewer-agent.ts fully first; mirror its deps-object/injection style so tests can pass a fake client (check how its tests fake the LLM — follow that exact pattern). (2) src/orchestrator/security-auditor-agent.ts: export runSecurityAudit plus a parseSecurityAuditResult that returns {result, parsed} — on any JSON.parse/shape failure return parsed:false with an empty review, and make deriveVerdict-based verdict computation happen only when parsed:true (the gate in sprint 3 treats parsed:false as audit-error). Accept an optional `priors?: SecurityFinding[]` parameter now (default []) so sprint 5 plugs in without signature churn; when non-empty, render priors into a 'Deterministic scanner findings (ground truth priors)' prompt section. (3) src/orchestrator/stack-knowledge.ts: export resolveStackSecurityContext(stack) — read the skill file's security-checklist section (bounded excerpt, not the whole 400-line skill) with graceful fallback to generic taxonomy when the file is missing (fs error → generic, never throw). (4) agents/bober-security-auditor.md: follow bober-code-reviewer.md frontmatter + body structure; specify the exact output JSON contract (ReviewResult shape + optional vulnClass per finding) and severity bucket definitions (critical = exploitable vulnerability endangering funds/data; important = weakness needing attention). (5) Read-only tools: reuse whatever tool set runCodeReviewer passes to its loop. (6) Tests: fake-client scripted responses per existing agentic-loop test convention; include a prompt-content assertion for the stack fragment and priors section.",
+      "evaluatorNotes": "sc-2-2 is the DOMINANT criterion — construct at least two malformed outputs (plain prose, truncated JSON) and assert parsed:false on both, and additionally assert that a genuinely-clean well-formed audit (empty critical, parsed:true, verdict 'pass') is distinguishable from the malformed case. For sc-2-3: temp-dir test with a fake skills root for the missing-skill fallback; assert promptFragment lands in the outgoing prompt by capturing the fake client's received messages. For sc-2-4: read the agent file; verify tools are read-only and the output contract includes the ReviewResult field names actually parsed by parseSecurityAuditResult (cross-check they match — a drifted field name here is a real bug). For sc-2-5: assert rejection propagates (await expect(...).rejects) on client throw. For sc-2-6: grep '@anthropic-ai/sdk' and 'openai' imports outside src/providers/. Run full suite.",
+      "estimatedFiles": [
+        "agents/bober-security-auditor.md",
+        "src/orchestrator/security-auditor-agent.ts",
+        "src/orchestrator/security-auditor-agent.test.ts",
+        "src/orchestrator/stack-knowledge.ts",
+        "src/orchestrator/stack-knowledge.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "fail",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-2-1",
+          "timestamp": "2026-07-12T11:04:49.000Z",
+          "reason": "nonGoal violation: auditor granted bash tool"
+        },
+        {
+          "iteration": 2,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-2-2",
+          "timestamp": "2026-07-12T11:17:14.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-2-2",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T11:17:14.000Z",
+      "completedAt": "2026-07-12T11:17:14.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 3,
+      "title": "Wire the fail-closed SecurityAuditGate into the pipeline",
+      "description": "The veto: a SecurityAuditGate that wraps runSecurityAudit in a Promise.race time-box and blocks the sprint-passed commit on any critical finding, timeout, audit error, or parse failure (ADR-2). Attached between the evaluation.passed check and the sprint-passed history event — before the advisory code-reviewer's post-pass slot. On block: security-audit-blocked history event, findings rendered into the generator's retry feedback (ADR-5), deferral to the existing retry/maxIterations tail, documenter skipped (ADR-6). When config.security is absent the pipeline is byte-identical.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "src/orchestrator/security-gate.ts exports evaluateSecurityGate returning SecurityGateVerdict {blocked, reason: 'critical-finding'|'timeout'|'audit-error'|'clean'|'disabled', result?}: it NEVER throws — audit rejection → audit-error block, Promise.race timeout (config.security.timeoutMs) → timeout block, result.parsed===false → audit-error block, config.security absent or enabled!==true → {blocked:false, reason:'disabled'} without invoking the audit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "In a pipeline run with security enabled and a fake audit returning a critical finding, the sprint is NOT marked passed, no sprint-passed history event is appended, a security-audit-blocked event (with reason, critical count, and per-finding path/line/vulnClass) IS appended, and the run defers to the existing retry path (retry when iterations remain, needs-rework at maxIterations).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "On a blocked round, the next generator iteration's feedback parts contain the rendered security findings (e.g. '[CRITICAL] <vulnClass>: <description> at path:line') via the same channel evaluator feedback uses; renderSecurityFeedback is a pure exported function.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "With config.security absent, a paired pipeline run (same fake inputs) produces deep-equal results and an identical history event sequence to the pre-change pipeline — the gate contributes no statement, no event, and no timing dependency.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "On a CLEAN enabled round, a security-audit-clean history event is appended and the pipeline proceeds to sprint-passed, code-review, and documenter exactly as before; on a BLOCKED round the documenter and code-reviewer stages do not run (control never reaches the passed block).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "A store persistence failure (saveSecurityAudit throwing) is caught and logged inside the gate and does NOT change the already-computed verdict in either direction.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; FULL existing suite green (pipeline tests especially).",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not modify the advisory code-reviewer stage, its time-box, or its post-pass position (locked).",
+        "Do not auto-revert the generator's auto-commit on block (architecture risk decision: retry regenerates; never fight the commit).",
+        "Do not block on important-bucket findings (ADR-2 scopes the veto to critical only).",
+        "Do not add CLI/scanners/hub/skill (sprints 4-7)."
+      ],
+      "stopConditions": [
+        "All seven criteria verified, with sc-3-4 proven by deep-equal paired-run test (the repo's byte-identity convention), not by absence assertions.",
+        "Full suite green — any pipeline test regression is a hard stop."
+      ],
+      "definitionOfDone": "A critical security finding, a timeout, or an unparseable audit measurably prevents sprint-passed and routes actionable findings into the generator retry, while an unconfigured pipeline is provably byte-identical. Build, typecheck, lint, and the full suite are green.",
+      "assumptions": [
+        "The attachment point is inside the evaluation.passed branch BEFORE status='passed'/sprint-passed history append (architecture cites pipeline.ts:434-437 for the pass path, :444 sprint-passed, :465 code-review, :513 documenter, :588-597 the eval-failed retry tail, :250-274 evalFeedbackParts) — anchors may have drifted; re-locate by pattern.",
+        "The contract carries an evaluatorFeedback (or equivalent) field the retry loop reads into evalFeedbackParts; if the field is named differently, use whatever the evaluation-failed path uses and mirror it exactly.",
+        "History events are appended via appendHistory with free-form event kinds (z.record-style payloads), so 'security-audit-clean'/'security-audit-blocked' need no schema migration; verify against src/state/history usage.",
+        "The Promise.race timeout leaves the underlying LLM call running in background (same accepted behavior as the code-reviewer race at pipeline.ts:476-482); cost is bounded by security.budget.maxUsd when configured."
+      ],
+      "outOfScope": [
+        "Standalone CLI, scanner pre-filter, hub Findings, skill wrapper, dogfooding (sprints 4-7)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "This is the only sprint that edits pipeline.ts — keep the diff surgical. Anchors may have drifted; re-locate by pattern. (1) READ pipeline.ts's evaluation.passed branch AND the evaluation-failed tail first; the blocked path must MIRROR the failed tail (same iteration/maxIterations handling, same retry event emission) rather than invent a new loop — extract-and-reuse if a small helper makes that clean, but do not restructure unrelated flow. (2) src/orchestrator/security-gate.ts: gate owns the Promise.race (reuse the code-reviewer's race/timeout helper pattern at pipeline.ts:476-482), the try/catch converting rejection→audit-error, the parsed:false→audit-error elevation, and the store try/catch (sc-3-6). Construct NOTHING when disabled: the pipeline call site must be `if (config.security?.enabled === true) { ... }` so the disabled path adds zero statements executed. (3) renderSecurityFeedback(verdict): pure, phrased for a FIXER ('[CRITICAL] injection: ... at src/x.ts:42 — remediate by...' style from finding fields), exported from security-gate.ts or the auditor module. (4) History: follow existing appendHistory call style; blocked payload {reason, critical: N, findings: [{path,line,vulnClass}]} — findings capped to a sane count (e.g. 20) to bound event size. (5) Paired-run test: follow the repo's established byte-identity convention (see parallelReadOnlyTools and Phase-B blackboard tests for prior art) — run the same scripted pipeline with and without the change/config and deep-equal results + history sequences. Use fake timers for the timeout test.",
+      "evaluatorNotes": "Trace the blocked path END-TO-END in the test: assert (a) no sprint-passed event, (b) security-audit-blocked event present with correct payload, (c) contract feedback populated, (d) retry occurred (or needs-rework at maxIterations), (e) documenter/code-reviewer spawn functions NOT called on the blocked round (spy/stub them). For sc-3-1: table-test all five reasons including the disabled short-circuit (audit function must not be invoked — assert the stub has zero calls). For sc-3-4: insist on deep-equal of BOTH the returned result object and the full history event array; reject a test that only checks a few fields. For sc-3-6: make saveSecurityAudit throw in both a clean and a blocked scenario; verdict unchanged in both. Verify the timeout test uses fake timers and asserts reason 'timeout' (not 'audit-error'). Run the FULL suite; pipeline.ts changes make regressions likely — scrutinize any newly-skipped or modified pre-existing test.",
+      "estimatedFiles": [
+        "src/orchestrator/security-gate.ts",
+        "src/orchestrator/security-gate.test.ts",
+        "src/orchestrator/pipeline.ts",
+        "src/orchestrator/pipeline.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-3-1",
+          "timestamp": "2026-07-12T11:45:30.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-3-1",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T11:45:30.000Z",
+      "completedAt": "2026-07-12T11:45:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-4",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 4,
+      "title": "Add the standalone `bober security-audit` CLI with configurable blocking threshold",
+      "description": "The on-demand profound audit: a Commander command `bober security-audit [target]` that synthesizes a lightweight contract descriptor from the target path (or working tree), runs runSecurityAudit with evaluation=null, persists the artifact, prints a findings summary, and exits with a CI-friendly code driven by security.standaloneBlockOn ('critical' default, or 'important' to also fail on important-bucket findings). The pipeline gate's critical-only veto is untouched.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-2"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "`bober security-audit [target]` is registered following the existing CLI command-module pattern; it runs runSecurityAudit(descriptor, null, projectRoot, config) where the descriptor is synthesized from the target path (or the working tree when omitted) with a timestamped descriptor id (never colliding with pipeline contractIds), and persists the artifact via saveSecurityAudit.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "Exit-code semantics: with default standaloneBlockOn 'critical', the process exit code is 2 iff review.critical is non-empty, else 0; with standaloneBlockOn 'important', exit 2 also when only important-bucket findings exist; an audit error / parsed:false exits 2 (fail-closed) with the error on stderr.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "The command prints a human-readable summary (verdict, counts per bucket, top findings with path:line, artifact path) and works when config.security is absent by falling back to the schema defaults for the audit run (standalone mode does not require enabled:true — the CLI invocation IS the opt-in).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "The pipeline gate's veto logic is unaffected: security-gate tests still pass unchanged, and no gate code path reads standaloneBlockOn.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green. The built dist CLI registers the command (help output lists security-audit).",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not require security.enabled=true for the standalone command (the explicit invocation is consent); do NOT let this looseness leak into the gate.",
+        "Do not implement scanners or hub emission here (sprints 5-6) — but do not preclude them: the command calls the same core.",
+        "Do not audit remote URLs — target is a local path only.",
+        "Do not add a skill wrapper yet (sprint 7)."
+      ],
+      "stopConditions": [
+        "All five criteria verified; exit codes proven by test at the command-action level (injected exit/process boundary per repo CLI test convention).",
+        "Full suite green."
+      ],
+      "definitionOfDone": "An operator can run `bober security-audit` (optionally scoped to a target path) against any local codebase under any configured provider, get a cited findings summary plus a persisted .bober/security/ artifact, and wire the exit code into CI with a configurable severity threshold.",
+      "assumptions": [
+        "The CLI uses Commander with per-command registration modules (precedent: src/cli/commands/research.ts registered in src/cli/index.ts) and keeps clock/process.exit at the .action boundary so core logic stays testable.",
+        "standaloneBlockOn and the full SecuritySectionSchema already exist from sprint 1; when config.security is absent the CLI constructs the section via SecuritySectionSchema.parse({}) to obtain defaults for the run.",
+        "A 'descriptor' is whatever minimal SprintContract-shaped object runSecurityAudit needs for its prompt (id/title/description/scope hint from the target path) — sprint 2's core signature accepts it; if the core needs a narrower input type, tighten the core's parameter type rather than fabricating fake contract fields.",
+        "Auditing the working tree means the auditor's read-only tools explore projectRoot (or the target subpath) — no git-diff scoping is required for the first cut."
+      ],
+      "outOfScope": [
+        "Scanner pre-filter execution (sprint 5 — flows in automatically once the core gains priors), hub emission (sprint 6), skill wrapper and docs (sprint 7)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) Mirror src/cli/commands/research.ts: a registerSecurityAuditCommand(program) exporting from src/cli/commands/security-audit.ts, wired in src/cli/index.ts next to the other registrations; .action stays thin — parse config, build descriptor, call an exported runStandaloneSecurityAudit(deps) that returns {result, exitCode} so tests never spawn a process. (2) Descriptor id: `security-audit-<ISO-ish timestamp slug>` — timestamp taken at the .action boundary (repo convention: no Date.now() in core, inject the clock). (3) Exit codes: 0 pass, 2 blocked-by-threshold or fail-closed error — reserve 1 for Commander's own usage errors; set process.exitCode rather than calling process.exit() mid-flow if that matches existing commands. (4) Threshold: pure exported thresholdVerdict(review, standaloneBlockOn) → boolean; keep it in the CLI module (NOT the gate) so sc-4-4 is structural. (5) Summary printing: follow the logger/chalk style of existing commands; include the .bober/security/ artifact path. (6) Tests: fake runSecurityAudit via dependency injection; table-test the threshold matrix (critical-only config × {critical, important-only, clean, parse-fail} results).",
+      "evaluatorNotes": "For sc-4-2: demand the full threshold matrix as tests — {standaloneBlockOn: critical|important} × {critical findings, important-only, clean, parsed:false, core throws} = assert exit code for all ten cells. For sc-4-3: run with a config object lacking the security key and assert the audit still executes with defaults (spy on the injected core to inspect the section it received). For sc-4-4: grep standaloneBlockOn usages — must appear only in CLI module + schema + tests, never in security-gate.ts or pipeline.ts. For sc-4-5: after npm run build, execute `node dist/cli/index.js security-audit --help` (built-dist smoke, the lesson from the medical sax bug) and confirm it prints usage without crashing. Full suite green.",
+      "estimatedFiles": [
+        "src/cli/commands/security-audit.ts",
+        "src/cli/commands/security-audit.test.ts",
+        "src/cli/index.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-4-1",
+          "timestamp": "2026-07-12T12:02:25.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-4-1",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T12:02:25.000Z",
+      "completedAt": "2026-07-12T12:02:25.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-5",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 5,
+      "title": "Implement the scanner pre-filter with slither and semgrep parsers",
+      "description": "Deterministic ground truth for the LLM auditor: a SecurityScannerPreFilter that runs config.security.scanners commands under the shared audit AbortSignal with per-scanner isolation (missing binary → [], hang → SIGKILL), dedicated parsers mapping slither JSON and semgrep JSON output to SecurityFinding[] (fixture-tested, binaries NOT required in CI), a raw-text fallback for unknown scanners, and wiring of the resulting priors into runSecurityAudit's prompt (ADR-4: absent scanners config = pure LLM pass, zero child processes).",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-2"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "The slither parser maps a committed slither --json output fixture to the expected SecurityFinding[] (path, line, severity bucket, vulnClass, description) and the semgrep parser does the same for a committed semgrep --json fixture; both are pure functions with malformed-input tests returning [] (never throwing).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "runScannerPreFilter executes each configured scanner command via execa with per-scanner isolation: a missing binary (ENOENT) or nonzero exit yields [] for that scanner while other scanners still run and contribute; the function never rejects.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "When the shared AbortSignal fires mid-scan, scanner child processes are killed (SIGKILL/forceKill semantics) and the pre-filter resolves with the findings gathered so far (partial results, no hang).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "Parser selection is name/command-based (slither→slither parser, semgrep→semgrep parser, anything else→raw-text-excerpt fallback finding priors), and scanner priors appear in the auditor prompt under a deterministic-ground-truth section with scannerRan:true on the result; with scanners:[] no child process is spawned, scannerRan is false, and the prompt has no priors section (byte-identical to sprint 2 behavior).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green — and no test requires slither or semgrep binaries to be installed (fixtures only).",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add parsers beyond slither and semgrep (raw-text fallback covers the rest).",
+        "Do not let scanner findings bypass the LLM auditor or directly drive the verdict — they are priors; the audit's review buckets remain the verdict source.",
+        "Do not install or vendor scanner binaries; do not add npm dependencies (execa already exists).",
+        "Do not change the gate or CLI (they inherit priors through the core)."
+      ],
+      "stopConditions": [
+        "All five criteria verified; CI-offline property confirmed (suite passes on a machine without slither/semgrep).",
+        "Full suite green."
+      ],
+      "definitionOfDone": "Operators can configure scanner commands per project; slither/semgrep output arrives as typed, fixture-verified SecurityFinding priors in the auditor prompt under the shared time-box, unknown scanners degrade to raw-text priors, and unconfigured audits remain pure LLM passes with zero child processes.",
+      "assumptions": [
+        "Scanner entries reuse the EvalStrategy shape's command field (config.security.scanners: EvalStrategySchema[] from sprint 1, per ADR-4); the scanner 'name' for parser selection derives from the strategy's name/command string (e.g. command starts with or contains 'slither'/'semgrep').",
+        "execa (already a dependency) supports signal-based cancellation/forceKill for sc-5-3; child stdout is bounded (maxBuffer or truncation) so a pathological scanner cannot exhaust memory.",
+        "Slither fixture shape: results.detectors[] with elements[].source_mapping (filename_relative, lines[]), impact (High/Medium/Low), check id, description. Semgrep fixture shape: results[] with path, start.line, extra.severity (ERROR/WARNING), check_id, extra.message. Severity mapping: slither High-impact and semgrep ERROR → critical bucket priors; lower severities → important. The generator verifies these shapes against real tool docs/output when writing fixtures and documents the mapping in code.",
+        "Priors are prompt-side only: sprint 2's runSecurityAudit already accepts priors?: SecurityFinding[] (or gains it now with a default that keeps existing tests green)."
+      ],
+      "outOfScope": [
+        "Hub emission (sprint 6), skill/dogfood/docs (sprint 7), any additional scanner parsers, dependency-vulnerability audit wiring (npm audit etc.)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) src/orchestrator/security-scanners.ts: export runScannerPreFilter({scanners, projectRoot, signal}) plus pure parseSlitherOutput(json: unknown) and parseSemgrepOutput(json: unknown) — parse with defensive narrowing (unknown → shape checks), NEVER trust fixture shape at runtime; malformed → []. Map vulnClass heuristically from check ids (e.g. slither 'reentrancy-*' → leave vulnClass undefined unless a clean mapping exists — vulnClass is optional; do not force wrong classes). (2) execa usage: follow existing execa call sites (fleet spawner, eval strategies) for options style; pass {reject:false} or try/catch per scanner; wire signal via execa's cancelSignal/signal option and forceKillAfterDelay for sc-5-3. Cap stdout (maxBuffer) and truncate raw-text fallback priors to a bounded excerpt (~2000 chars). (3) Fixtures: commit realistic minimal slither/semgrep JSON files under a __fixtures__ dir next to the tests (grep for how medical MedlinePlus fixtures are laid out and follow that convention). (4) Wire into runSecurityAudit: when config.security.scanners is non-empty, call the pre-filter INSIDE the audit path (so the gate's existing Promise.race time-box covers it) before building the prompt; pass an AbortSignal derived from the same timeout — check how sprint 3's gate structured the race and thread the signal (if the gate races an un-abortable promise today, create the AbortController in runSecurityAudit keyed to security.timeoutMs and pass its signal to the pre-filter). (5) For the abort test: use a fake long-running command (node -e with a sleep) rather than a real scanner — keep it fast with a short signal fire.",
+      "evaluatorNotes": "For sc-5-1: verify fixtures look like REAL tool output (spot-check field names against slither/semgrep documentation — a fixture invented to match the parser is circular); malformed-input tests must include truncated JSON and a valid-JSON-wrong-shape case. For sc-5-2: three-scanner test where the middle one is a nonexistent binary — assert the other two contribute and no rejection. For sc-5-3: fire the AbortSignal after the first scanner completes and assert partial findings + child killed (process no longer running) within a bounded time. For sc-5-4: capture the fake client's prompt with and without scanners configured; assert the priors section is present/absent respectively and scannerRan flag matches; assert zero execa calls with scanners:[] (spy or injected runner). For sc-5-5: grep the new tests for any invocation of real 'slither'/'semgrep' binaries — none allowed. Full suite green.",
+      "estimatedFiles": [
+        "src/orchestrator/security-scanners.ts",
+        "src/orchestrator/security-scanners.test.ts",
+        "src/orchestrator/security-scanners-fixtures (slither/semgrep JSON fixture files)",
+        "src/orchestrator/security-auditor-agent.ts",
+        "src/orchestrator/security-auditor-agent.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-5-1",
+          "timestamp": "2026-07-12T12:27:08.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-5-1",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T12:27:08.000Z",
+      "completedAt": "2026-07-12T12:27:08.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 6,
+      "title": "Emit security audit findings into the priority hub",
+      "description": "Make audit results visible in the unified priority surface: after an audit completes (pipeline gate or standalone CLI), critical and important findings are mapped to the canonical hub Finding shape (FindingSchema imported from src/hub/finding.ts, never redefined) and ingested via the existing finding-store path, gated by security.hub (default true within the opt-in security section). Duplicate emission across retries is absorbed by the hub's existing content-hash dedup.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-2"
+      ],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "A pure exported mapping function converts a SecurityAuditResult into hub Finding objects (one per critical/important finding) that validate against the canonical FindingSchema imported from src/hub/finding.ts, with a severity mapping documented in code (critical bucket → the hub's highest applicable severity; important → a mid severity) and title/body carrying vulnClass, path:line, and description.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "When an audit completes with findings and security.hub is true (default), the Findings are ingested via the existing finding-store ingest function through an injected sink (research-runner precedent); with security.hub:false, zero hub writes occur for an otherwise identical audit; a hub ingest failure is caught and logged and never alters the audit verdict or blocks the pipeline/CLI.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "Emitting the same audit result twice produces no duplicate hub entries (the hub's existing content-hash dedup absorbs it), demonstrated with the real finding-store in a temp directory.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "FindingSchema and the ingest path are imported from src/hub/ — grep confirms no redefinition of the Finding shape and no schema drift; clean audits (no critical/important findings) emit nothing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green — existing hub tests unchanged.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not surface findings in Telegram (out of scope per spec).",
+        "Do not modify src/hub/ (FindingSchema, finding-store, priority logic) — consume only.",
+        "Do not emit info/minor buckets or scanner-only priors that the LLM auditor did not confirm into the review buckets.",
+        "Do not make hub emission affect the gate verdict, exit codes, or timing (fire-and-forget with caught errors, after the verdict is computed)."
+      ],
+      "stopConditions": [
+        "All five criteria verified with the dedup test running against the REAL finding-store in a temp dir.",
+        "Full suite green."
+      ],
+      "definitionOfDone": "Security findings from any audit appear as canonical Findings in the priority hub (deduped, severity-mapped, source-attributed), silenced by security.hub:false, and a hub failure can never change an audit outcome.",
+      "assumptions": [
+        "src/hub/finding.ts owns the canonical Zod FindingSchema and src/hub/ exposes an ingest function (research runner binds findingSink→ingestFinding at finding-store.ts:140 per progress notes); the exact severity enum and required fields are read from the actual schema at implementation time — the mapping documented in code must use REAL enum values, not invented ones.",
+        "The hub dedup key is content-derived (sha256 over domain|title|kind per prior art), so stable titles per finding (vulnClass + path:line) give retry-idempotent emission.",
+        "A 'security' (or closest existing) domain/kind tag is representable in FindingSchema; if the schema has a closed domain enum without a fitting value, use the closest existing value and record the limitation in code comments and the sprint handoff rather than editing the hub schema.",
+        "Emission call sites are the audit completion points in runSecurityAudit or its two callers — one shared helper, invoked after verdict computation."
+      ],
+      "outOfScope": [
+        "Telegram surfaces, hub schema changes, digest/priority re-ranking, skill/dogfood/docs (sprint 7)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) READ src/hub/finding.ts and src/hub/finding-store.ts first; mirror how src/research/runner.ts imports FindingSchema/Finding type and takes an INJECTED findingSink dependency (so tests pass a spy and the CLI/pipeline bind ingestFinding at the boundary) — do not import finding-store deep into the auditor core if the research precedent injects instead. (2) New src/orchestrator/security-hub.ts (or a section in security-auditor-agent.ts if tiny): export mapAuditToFindings(result: SecurityAuditResult): Finding[] (pure) and emitSecurityFindings(result, sink, logger) (try/catch, logs failures, returns void). (3) Wire emission after verdict computation in the shared core path so gate and CLI both get it; gate/CLI must not await-fail on it — catch inside emitSecurityFindings. (4) Respect config.security.hub with the ?? true default semantics from the schema; when config.security is absent entirely (standalone CLI default-parse case) the parsed section carries hub:true — fine, the CLI explicitly opted in by running. (5) Dedup test: use the real ingest in a temp .bober; emit twice; count stored findings.",
+      "evaluatorNotes": "For sc-6-1: validate every mapped object with the REAL FindingSchema.parse (not a hand-rolled check); verify severity mapping uses actual enum members by reading src/hub/finding.ts yourself and cross-checking the code's mapping table. For sc-6-2: three tests — hub:true ingests N findings; hub:false ingests zero; sink that throws → verdict/exit unchanged and a logged warning. For sc-6-3: real finding-store in temp dir, emit twice, assert store count equals first-emission count. For sc-6-4: grep 'z.object' in the new files for any Finding-shaped redefinition; grep imports to confirm they point at src/hub/. Confirm clean-audit no-op (sink zero calls). Full suite green including hub tests.",
+      "estimatedFiles": [
+        "src/orchestrator/security-hub.ts",
+        "src/orchestrator/security-hub.test.ts",
+        "src/orchestrator/security-auditor-agent.ts",
+        "src/cli/commands/security-audit.ts",
+        "src/orchestrator/security-gate.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "fail",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-1",
+          "timestamp": "2026-07-12T13:10:31.000Z",
+          "reason": "sc-6-2: unguarded default-sink store setup rejects on fs failure, flips clean audit to blocked"
+        },
+        {
+          "iteration": 2,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-2",
+          "timestamp": "2026-07-12T13:21:11.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-2",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T13:21:11.000Z",
+      "completedAt": "2026-07-12T13:21:11.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260712-security-audit-agent-team-7",
+      "specId": "spec-20260712-security-audit-agent-team",
+      "sprintNumber": 7,
+      "title": "Add the bober.security-audit skill, enable dogfooding, and write docs",
+      "description": "Ship the operator surface: a skills/bober.security-audit/SKILL.md orchestration document mirroring skills/bober.code-review (spawn the bober-security-auditor subagent / invoke the CLI for standalone deep audits), enable dogfooding by setting security.enabled=true (LLM-only, scanners:[]) in agent-bober's own bober.config.json so every future sprint of this repo runs the fail-closed gate, and write docs/security-audit.md covering the config reference, gate semantics, CLI usage, and hub emission.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260712-security-audit-agent-team-3",
+        "sprint-spec-20260712-security-audit-agent-team-4"
+      ],
+      "features": [
+        "feat-7"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "skills/bober.security-audit/SKILL.md exists with valid frontmatter (name, description with trigger guidance) and a body that orchestrates the standalone audit following the bober.code-review shape: read config, spawn the bober-security-auditor subagent (or direct the CLI path), present severity-ranked findings, point to the persisted .bober/security/ artifact; it never instructs writing code fixes.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "agent-bober's own bober.config.json gains security: { enabled: true, scanners: [] } (LLM-only dogfooding), parses cleanly under the extended schema, and a test asserts the repo config file remains schema-valid.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "docs/security-audit.md documents: every SecuritySectionSchema field with its default, the fail-closed gate semantics (what blocks, what happens on block — retry with findings, no documenter, history events), CLI usage with exit codes and standaloneBlockOn, scanner configuration with slither/semgrep examples, hub emission behavior, and the byte-identical-when-unconfigured guarantee.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "The skill is discoverable per repo distribution conventions (listed alongside sibling skills; the update-all sync path picks it up structurally — same layout as bober.code-review including any .claude/commands twin if siblings have one).",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green with the dogfood config in place.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not run `npm run update-all` inside the sprint (post-merge follow-up; note it in the handoff).",
+        "Do not configure scanners in the dogfood config (slither/semgrep not guaranteed on dev machines; LLM-only per approved assumption 5).",
+        "Do not add application code — this sprint is skill markdown, config, docs, and a config-validity test only.",
+        "Do not write a Telegram or hub UI surface."
+      ],
+      "stopConditions": [
+        "All five criteria verified; the dogfood config change is proven schema-valid by test, not by assertion.",
+        "Full suite green — if the enabled gate makes any existing pipeline test spawn a real audit, those tests must be examined: unit tests must not depend on the repo's own bober.config.json for their pipeline configs (flag as regression if they do)."
+      ],
+      "definitionOfDone": "Claude Code users can invoke the security audit as a skill, agent-bober itself runs the fail-closed gate on every future sprint (LLM-only), and an operator can learn the entire feature — config, semantics, CLI, exit codes, hub behavior — from docs/security-audit.md.",
+      "assumptions": [
+        "skills/bober.code-review/ is the structural template (SKILL.md frontmatter + orchestration body spawning a subagent); if sibling skills ship a .claude/commands/*.md twin in-repo, mirror that too — check how bober-code-review is laid out and copy the layout exactly.",
+        "Existing unit tests construct their own configs and do not load the repo's bober.config.json for pipeline behavior, so flipping the dogfood flag cannot make tests spawn real audits (if violated, this surfaces immediately in the suite and must be reported, not painted over).",
+        "docs/ is the documentation home (precedent: docs/teams.md, docs/chat-steer.md).",
+        "The dogfooding cost/latency/false-positive-block tradeoff was explicitly approved at the plan design gate (assumption 5)."
+      ],
+      "outOfScope": [
+        "npm run update-all execution, marketplace/plugin manifest changes beyond skill file placement, additional stack skills, Telegram surfaces."
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Anchors may have drifted — re-locate by pattern. (1) READ skills/bober.code-review/SKILL.md and its directory layout first; mirror frontmatter style, references/ subdir if present, and any .claude/commands twin convention used by in-repo skills. The skill body should: check config, offer target scoping, spawn bober-security-auditor (agents/bober-security-auditor.md from sprint 2) or invoke `bober security-audit`, present findings ranked by severity with path:line citations, and remind that the audit is advisory in skill mode (the CLI exit code / pipeline gate are the enforcement points). (2) bober.config.json: minimal diff — add the security key only (enabled:true, scanners:[]); do NOT materialize other defaults into the file. (3) The config-validity test: if a test already parses the repo's bober.config.json (sprint 1 touched this area), extend it; else add one next to the config tests. (4) docs/security-audit.md: structure — Overview, Quick start (CLI + skill), Pipeline gate (flows incl. blocked path), Configuration reference table (field/type/default/effect), Scanners (slither/semgrep config examples with the JSON output flags), Hub emission, Fail-closed guarantees, FAQ (what happens on timeout/budget exhaustion/false positive — cite the retry path). Use timeless language per repo doc conventions.",
+      "evaluatorNotes": "For sc-7-1: read the skill fully; verify the referenced agent name, CLI command, config keys, and artifact paths all actually exist in the codebase as named (stale references = fail). For sc-7-2: run the config test; also parse bober.config.json with the real schema in a scratch script if the test's coverage is indirect. For sc-7-3: cross-check EVERY documented field name and default against SecuritySectionSchema in src/config/schema.ts — any drift fails the criterion; verify the exit codes documented match the sprint-4 implementation. For sc-7-4: diff the directory layout against bober.code-review's (ls both) — same shape required. For sc-7-5: run the FULL suite with the dogfood config committed; investigate any test that newly touches the network or spawns subagents (would indicate a test reading the repo config — report as a finding, do not mask).",
+      "estimatedFiles": [
+        "skills/bober.security-audit/SKILL.md",
+        "bober.config.json",
+        "docs/security-audit.md",
+        "src/config/schema.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "result": "pass",
+          "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-7-1",
+          "timestamp": "2026-07-12T13:41:08.000Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-7-1",
+      "createdAt": "2026-07-12T09:30:00.000Z",
+      "updatedAt": "2026-07-12T13:41:08.000Z",
+      "completedAt": "2026-07-12T13:41:08.000Z"
+    }
+  ]
+}

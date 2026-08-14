@@ -238,3 +238,119 @@ describe("sc-1-5 — --approve-gates flag", () => {
     );
   });
 });
+
+// ── sc-6-1/sc-6-2/sc-6-4 — a refused run's `errors` array is surfaced ────────
+//
+// PipelineResult.errors is Option A (spec-20260812-pge-real-workload-errors
+// resolvedClarifications D3): a non-empty `errors` array is possible ALONGSIDE
+// `success: true`, so these tests set success:true throughout to prove the
+// new branch fires on `errors`, independently of the pre-existing `!result.success`
+// branch it sits next to.
+
+describe("sc-6 — bober run surfaces PipelineResult.errors", () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let originalExitCode: number | undefined;
+
+  beforeEach(() => {
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    originalExitCode = process.exitCode;
+    process.exitCode = undefined;
+  });
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore();
+    process.exitCode = originalExitCode;
+  });
+
+  const baseResult = {
+    duration: 0,
+    spec: { title: "t", features: [] },
+    completedSprints: [],
+    failedSprints: [],
+  };
+
+  const refusal = {
+    nodeId: "commit",
+    branchKey: null,
+    errorClass: "FailClosed",
+    message:
+      "FAIL_CLOSED: node 'commit' declares effects (git) and there is no recorded approval " +
+      "for checkpoint 'end-of-pipeline'.",
+  };
+
+  it("sc-6-1: sets a non-zero exit code when errors is non-empty, even though success stays true", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    (runPipeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...baseResult,
+      success: true,
+      errors: [refusal],
+    });
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("sc-6-2: prints the refused node's id and errorClass, not a generic failure line", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    (runPipeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...baseResult,
+      success: true,
+      errors: [refusal],
+    });
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    const output = consoleLogSpy.mock.calls.flat().join("\n");
+    expect(output).toContain("commit");
+    expect(output).toContain("FailClosed");
+  });
+
+  it("sc-6-4: an absent errors key leaves the exit code exactly as before (untouched)", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    (runPipeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...baseResult,
+      success: true,
+    });
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    expect(process.exitCode).toBeUndefined();
+    const output = consoleLogSpy.mock.calls.flat().join("\n");
+    expect(output).not.toContain("Refused:");
+  });
+
+  it("sc-6-4: an empty errors array leaves the exit code exactly as before (untouched)", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    (runPipeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...baseResult,
+      success: true,
+      errors: [],
+    });
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    expect(process.exitCode).toBeUndefined();
+    const output = consoleLogSpy.mock.calls.flat().join("\n");
+    expect(output).not.toContain("Refused:");
+  });
+
+  it("sc-6-4: !result.success still sets exit code 1 exactly as before, independent of the errors branch", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    (runPipeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...baseResult,
+      success: false,
+    });
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    expect(process.exitCode).toBe(1);
+    const output = consoleLogSpy.mock.calls.flat().join("\n");
+    expect(output).not.toContain("Refused:");
+  });
+});

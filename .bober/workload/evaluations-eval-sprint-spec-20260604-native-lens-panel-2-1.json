@@ -1,0 +1,18 @@
+{
+  "entryId": "evaluations-eval-sprint-spec-20260604-native-lens-panel-2-1",
+  "channel": "evaluations",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/eval-results/eval-sprint-spec-20260604-native-lens-panel-2-1.json"
+  },
+  "value": {
+    "id": "eval-sprint-spec-20260604-native-lens-panel-2-1",
+    "seq": 0,
+    "contractId": "sprint-spec-20260604-native-lens-panel-2",
+    "sprintNumber": 2,
+    "iteration": 1,
+    "verdict": "pass",
+    "summary": "All 5 criteria pass. Additive MODE section (full default/deterministic/lens) with zero deletions; agent copies byte-identical; sync gate green; tsc/build/lint exit 0; 1544 passed/3 skipped. Commit touches only the 3 expected files.",
+    "evalId": "eval-sprint-spec-20260604-native-lens-panel-2-1"
+  }
+}

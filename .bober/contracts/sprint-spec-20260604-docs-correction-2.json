@@ -3,7 +3,7 @@
   "specId": "spec-20260604-docs-correction",
   "sprintNumber": 2,
   "title": "README corrections",
-  "status": "pending",
+  "status": "completed",
   "description": "Document lens panels + workflow engine, expand the slash-command table to all 24 commands, and document auto-filter command filtering in the README.",
   "filesInScope": ["README.md"],
   "successCriteria": [

@@ -15,6 +15,14 @@ import { Buffer } from "node:buffer";
 import { HistoryEntrySchema } from "../state/history.js";
 import { historyActivePath } from "../state/history-rotation.js";
 import { fileExists } from "../utils/fs.js";
+// The producer (src/orchestrator/finalize.ts) and this consumer share ONE
+// definition of the event name and the marker suffix. Matching an inline string
+// literal here was the whole hazard: no type error and no test outside this
+// module would have caught a divergence from the emitter.
+import {
+  COMPLETION_MARKER_SUFFIX,
+  PIPELINE_COMPLETE_EVENT,
+} from "../orchestrator/finalize.js";
 import { CursorStore } from "./cursor-store.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -65,8 +73,8 @@ async function findUnseenMarkerRunId(
   }
 
   for (const entry of entries) {
-    if (!entry.endsWith(".completed.json")) continue;
-    const runId = entry.slice(0, -".completed.json".length);
+    if (!entry.endsWith(COMPLETION_MARKER_SUFFIX)) continue;
+    const runId = entry.slice(0, -COMPLETION_MARKER_SUFFIX.length);
     if (seenRunIds.has(runId)) continue;
 
     // Verify the file actually exists and contains a matching runId
@@ -178,7 +186,7 @@ export class CompletionTailer {
         if (!result.success) continue;
         const entry = result.data;
 
-        if (entry.event !== "pipeline-complete") continue;
+        if (entry.event !== PIPELINE_COMPLETE_EVENT) continue;
 
         const phase = entry.phase as "complete" | "failed";
         const details = entry.details as Record<string, unknown>;

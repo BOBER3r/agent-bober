@@ -1,0 +1,117 @@
+{
+  "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-2-1",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T05:08:44Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "typecheck:tests",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": "unrelated file"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "457 files passed/1 skipped; 6871 passed/2 skipped",
+      "details": "matches claimed 6860->6871. One transient ENOTEMPTY in list-active-runs.test.ts isolated and confirmed pre-existing flaky, not a regression."
+    },
+    {
+      "strategy": "custom",
+      "required": true,
+      "result": "pass",
+      "output": "pge docs --check ok (44 nodes); pge validate --mode full 0 diagnostics; pge audit-state unchanged (10 channels)",
+      "details": "all three blocking PGE gates green; audit-state 'unchanged' corroborates that no cap was raised"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "123 entries all committed at HEAD (git ls-tree count matches disk). Several spot-checked byte-for-byte against their source files. Evaluator independently re-parsed every spec and contract against the shipped schemas and got exactly 1/53 and 60/250 failures, matching the claim. The four observed channels carry provenance {kind:'observed', source} naming a real node id."
+    },
+    {
+      "criterionId": "sc-2-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "byteSize exported at commit.ts:257; workload.ts imports it; sprint 1's duplicate confirmed deleted in the diff. Evaluator independently reimplemented canonical-JSON + byteLength in a standalone script and confirmed byte-for-byte agreement, then ran maxBytesPerChannel via compiled dist and reproduced spec=48097, sprintContracts=135106, messages=1292. The generator's own test feeds the corpus's max messages payload to a REAL CommitBoundary and asserts rejected[0].bytes equals the corpus number."
+    },
+    {
+      "criterionId": "sc-2-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Committed measurement carries corpusHeadroom for messages (1292), evaluations (1067), refs (283), all under 4096 with wouldReject false, matching the evaluator's independently computed maxima. 4/4 tests pass."
+    },
+    {
+      "criterionId": "sc-2-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "All ten declared channels have >=1 entry, read from coding.json at test time. Evaluator wrote its OWN standalone mutation script \u2014 copied the corpus, deleted every refs entry, reloaded \u2014 and confirmed the completeness check reports refs missing."
+    },
+    {
+      "criterionId": "sc-2-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "git check-ignore reports not ignored; git ls-files count 123 matches disk. Documented in docs/pge-graph.md with location, provenance kinds, maxima table and skip counts. loadWorkloadCorpus reads via readdir at call time. .bober/golden/ confirmed to hold only .json cases \u2014 no leak."
+    },
+    {
+      "criterionId": "sc-2-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All five commands run directly by the evaluator; full suite twice."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/pge/golden/__fixtures__/workload-build.ts",
+      "description": "Not in estimatedFiles. Judged non-blocking: estimatedFiles is documented as implementation guidance, not a binding scope list, the file is required by the sprint's own criteria, and __fixtures__/ placement matches six existing precedents.",
+      "expected": "No action."
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/pge/golden/__fixtures__/workload-build.ts",
+      "description": "CARRY FORWARD: corpus regeneration samples messages/evaluations from the LIVE .bober/handoffs/ and .bober/eval-results/ directories via readdir, not from a pinned file set. The evaluator demonstrated this concretely \u2014 regenerating after this sprint's own gen-report/eval-result files accumulated dropped 2 committed messages entries and replaced them. Deterministic given a fixed listing, but the listing is not pinned to a commit, so two engineers regenerating at different points get different samples. Does not affect any criterion today (the committed corpus at HEAD is what tests check). Evaluator reverted its own regeneration.",
+      "expected": "Note in the module header or docs that a regeneration's messages/evaluations sample can shift with local directory contents, unlike spec/sprintContracts which are keyed to committed filenames."
+    }
+  ],
+  "summary": "All six criteria independently verified with evidence the evaluator gathered itself, including a from-scratch reimplementation of the byte metric, a full re-parse of the 303 spec/contract files, and its own channel-deletion mutation. All three blocking PGE gates green; coding.json byte-for-byte unchanged."
+}

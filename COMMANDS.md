@@ -104,6 +104,23 @@ questions and the resolution hint
 If no contract matches the active plan, the error points you at `plan` (to re-materialize
 contracts) or `run` (the full pipeline).
 
+The prior-sprint history the generator receives is every contract that **settled** — status
+`passed` **or** `completed`, decided by the single `isSettledContractStatus` predicate in
+`src/contracts/sprint-contract.ts`. Both words appear on disk because the imperative pipeline and
+the graph engine write different ones for the same outcome, so a filter that accepted only
+`passed` silently handed the generator an empty history against a corpus recorded with the other
+word.
+
+That history is read through `listContracts` (`src/state/sprint-state.ts:132-144`), which
+**silently skips** any contract file that fails `SprintContractSchema` — by design, so one bad file
+cannot break listing for the rest. The consequence is that a schema-invalid contract is invisible
+to the generator, the evaluator and `.bober/progress.md` alike, with no warning anywhere (in this
+repository's own corpus, 60 of 256 files are skipped this way on legacy shape). `loadContract`
+(`:96-101`) is the opposite: it is strict and **throws** with the Zod issues formatted, so load a
+contract by id when you want to know why it does not appear. The narrower rule that no contract
+may carry a status outside `ContractStatusSchema` is pinned against the real corpus by
+`src/contracts/sprint-contract.test.ts`.
+
 ---
 
 ### `bober eval`
@@ -114,7 +131,8 @@ Evaluate the current sprint output independently (without running the generator)
 bober eval
 ```
 
-Useful for re-evaluating after a manual fix.
+Useful for re-evaluating after a manual fix. It builds the evaluator's sprint history with the
+same settled-status rule as `bober sprint` above.
 
 ---
 
@@ -151,6 +169,22 @@ optional; this is how `bober chat`'s careful mode launches a gated run.
 
 `--mode` and `--checkpoint` flags override `bober.config.json` for the duration of the run.
 See [VISION.md](./VISION.md) for a full explanation of modes.
+
+**Exit code.** `bober run` exits `1` when the pipeline reports failure, when the pipeline
+throws, when `--approve-gates` is given an unknown gate name — and, additionally, when the
+run's `PipelineResult` carries a non-empty `errors` array, i.e. a node was **refused**. A
+refusal is printed as a `Refused:` block naming each refused node and its error class:
+
+```text
+Refused:
+  x commit (FailClosed)
+      FAIL_CLOSED: node "commit" declares effects (git) ...
+```
+
+That last case matters for CI: a refused run can still report `success: true` (only the
+graph engine populates `errors`, and its `success` is sprint-split based — see
+[docs/pge-graph.md](./docs/pge-graph.md)), so the exit code and the printed block are what
+tell you the run did not do everything it claims. Every other run keeps exit `0`.
 
 ---
 

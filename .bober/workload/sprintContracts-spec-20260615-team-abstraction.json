@@ -1,0 +1,409 @@
+{
+  "entryId": "sprintContracts-spec-20260615-team-abstraction",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260615-team-abstraction-1.json",
+      ".bober/contracts/sprint-spec-20260615-team-abstraction-2.json",
+      ".bober/contracts/sprint-spec-20260615-team-abstraction-3.json",
+      ".bober/contracts/sprint-spec-20260615-team-abstraction-4.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260615-team-abstraction-1",
+      "specId": "spec-20260615-team-abstraction",
+      "sprintNumber": 1,
+      "title": "Team data model + registry + programming team as instance #1",
+      "description": "Introduce a `Team` data type and a `loadTeam(config, teamId?)` resolver in a new src/teams/ module, with a built-in 'programming' team that reproduces today's behavior exactly. Add an optional `teams` record and `defaultTeam` field to BoberConfig (Zod). loadTeam(config) with no id returns the programming team whose providers deep-equal resolveRoleProviders(config), whose pipelineShape equals the resolved engine, and whose memoryNamespace maps to the current `.bober/memory/` path. Named teams are built from config entries (providers merged over resolved defaults). This sprint is purely additive resolution + schema: it does NOT yet namespace memory (Sprint 2) or change pipeline-shape selection at runtime (Sprint 3). Zero behavior change is a hard requirement.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "All tests pass with zero failures, including new collocated tests for src/teams (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "A Team type and loadTeam(config, teamId?) exist in src/teams/. A unit test asserts loadTeam(config) (no id) returns id 'programming', providers deep-equal resolveRoleProviders(config), pipelineShape equals resolveEngineName(config) (or config.pipeline.engine default 'ts'), and memoryNamespace is the value that maps to the current .bober/memory/ path (e.g. '' or 'programming' sentinel).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "BoberConfigSchema (src/config/schema.ts) parses an optional `teams` record (id -> { displayName?, memoryNamespace?, pipelineShape?, providers? (partial role->provider), roles?, guardrails? }) and an optional `defaultTeam` string. A unit test parses a config containing a `teams` entry + `defaultTeam` successfully, and a config WITHOUT either still parses (back-compat).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "loadTeam(config, '<id>') for a declared team returns a Team built from that entry: providers from the entry merged over the resolved defaults (resolveRoleProviders), memoryNamespace and pipelineShape from the entry. A unit test verifies a partial provider override (e.g. generator -> deepseek) is applied while unspecified roles keep the resolved default.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "loadTeam(config, 'does-not-exist') throws an Error whose message names the missing team id. Covered by a unit test asserting the throw and the id substring.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/teams (grep returns nothing); provider routing reuses resolveRoleProviders.",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not namespace the memory store yet — that is Sprint 2 (loadTeam may carry memoryNamespace, but memory.ts is untouched this sprint)",
+        "Do not change runtime pipeline-shape selection — that is Sprint 3 (the Team carries pipelineShape, but selectPipelineEngine/runPipeline are untouched this sprint)",
+        "Do not add CLI --team flags or a second example team — that is Sprint 4",
+        "Do not change the behavior of resolveRoleProviders, selectPipelineEngine, runPipeline, or the memory store",
+        "Do not build a .bober/teams/*.json file registry (Option A only)"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "loadTeam(config) reproduces today's resolved providers + engine + memory path for the programming team, and a config-declared team resolves with its overrides"
+      ],
+      "definitionOfDone": "A new src/teams/ module exposes a Team type ({ id, displayName, memoryNamespace, providers: RoleProviderMap, pipelineShape: PipelineEngineName, roles: Role[], guardrails?: unknown }) and loadTeam(config, teamId?): Team. A built-in 'programming' team is registered in code and is the default when no id (or 'programming') is passed; it reproduces resolveRoleProviders(config), the resolved engine, and the current .bober/memory/ path. BoberConfig gains an optional `teams` record + `defaultTeam`, validated by the existing Zod schema, with both absent still valid. Unknown team ids throw a clear error. No existing behavior changes; build, typecheck, and all tests pass; no SDK types leak into src/teams.",
+      "assumptions": [
+        "The memoryNamespace value for the programming/default team is a sentinel ('' or 'programming') that Sprint 2 will map to the existing .bober/memory/ path; this sprint only stores the value.",
+        "PipelineEngineName is the existing union from src/orchestrator/workflow/engine.ts ('ts'|'skill'|'workflow'); pipelineShape reuses it.",
+        "roles is descriptor metadata (name/displayName) for the 7 existing RoleName values; it does not drive execution in this sprint.",
+        "guardrails is a forward-compat optional field, unused and unenforced (medical is Phase 6)."
+      ],
+      "outOfScope": [
+        "Memory namespacing (Sprint 2)",
+        "Pipeline-shape selection at runtime (Sprint 3)",
+        "CLI wiring + example team + docs (Sprint 4)",
+        "Any change to existing public behavior"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Create src/teams/ with small single-purpose files (principle: small modules, unicode box-header section comments), e.g. src/teams/types.ts (Team, Role) and src/teams/registry.ts (builtin programming team + loadTeam). Collocate *.test.ts.\n\nVerified reuse signatures:\n- resolveRoleProviders(config: BoberConfig): RoleProviderMap — src/config/role-providers.ts:97. RoleName union ('planner'|'researcher'|'curator'|'generator'|'evaluator'|'codeReview'|'chat') at :10; ALL_ROLES order at :38. RoleProviderMap = Record<RoleName,string> at :19.\n- resolveEngineName(config): PipelineEngineName — src/orchestrator/workflow/selector.ts:22 (pure, returns the name without instantiating). PipelineEngineName/PipelineEngine — src/orchestrator/workflow/engine.ts. config.pipeline.engine defaults to 'ts' (createDefaultConfig in src/config/schema.ts).\n- BoberConfigSchema — src/config/schema.ts (full config object ~line 361). Add at the end: teams: z.record(z.string(), TeamConfigSchema).optional(), defaultTeam: z.string().optional(). Define TeamConfigSchema with all-optional fields: displayName?, memoryNamespace? (z.string().regex to safe segment), pipelineShape? (reuse the engine enum), providers? (z.record over RoleName -> string, partial), roles? , guardrails? (z.unknown()). Keep createDefaultConfig emitting NO teams (back-compat).\n\nloadTeam(config, teamId?):\n- If teamId is undefined or 'programming' (or === config.defaultTeam when that points to the builtin): return the builtin programming team: { id:'programming', displayName:'Programming team', memoryNamespace:'' (sentinel for current path), providers: resolveRoleProviders(config), pipelineShape: resolveEngineName(config), roles: the 7 roles as descriptors, guardrails: undefined }.\n- Else if config.teams?.[teamId] exists: build a Team from it. providers = { ...resolveRoleProviders(config), ...(entry.providers ?? {}) } so unspecified roles keep resolved defaults. memoryNamespace = entry.memoryNamespace ?? teamId. pipelineShape = entry.pipelineShape ?? resolveEngineName(config). roles = entry.roles ?? default descriptors. guardrails = entry.guardrails.\n- Else: throw new Error(`Unknown team '${teamId}'. Declare it under config.teams or use the built-in 'programming' team.`).\n\nDo NOT wire loadTeam into runPipeline/chat behavior this sprint beyond what is needed to keep things compiling — the goal is the data model + resolver + schema, fully unit-tested, with zero behavior change. If you add a thin call site, ensure the default path is exactly today's behavior.\n\nTests: construct a BoberConfig via createDefaultConfig (or a fixture) and assert loadTeam(config) deep-equals the expected programming team fields. For sc-1-6 declare a teams entry with providers:{generator:'deepseek'} and assert the merge. For sc-1-7 assert the throw. Use no network and no fs (pure functions).",
+      "evaluatorNotes": "sc-1-4: call loadTeam(config) (no id); assert id==='programming', deepEqual(team.providers, resolveRoleProviders(config)), team.pipelineShape===resolveEngineName(config), and team.memoryNamespace is the documented sentinel.\nsc-1-5: parse via BoberConfigSchema a config object with teams:{docs:{memoryNamespace:'docs',pipelineShape:'ts',providers:{generator:'deepseek'}}} and defaultTeam:'programming' — expect success; parse a config WITHOUT teams/defaultTeam — expect success.\nsc-1-6: loadTeam(config,'docs') -> providers.generator==='deepseek' AND providers.planner===resolveRoleProviders(config).planner (unspecified role unchanged); memoryNamespace==='docs'.\nsc-1-7: expect loadTeam(config,'nope') to throw with message containing 'nope'.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/teams — expect no matches.\nRegression: run the FULL suite (npm run test) and confirm nothing else changed (programming default behavior intact). Run npm run build and npm run typecheck.",
+      "estimatedFiles": [
+        "src/teams/types.ts",
+        "src/teams/registry.ts",
+        "src/teams/registry.test.ts",
+        "src/config/schema.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-15T00:00:00Z",
+      "updatedAt": "2026-06-15T00:00:00Z",
+      "completedAt": "2026-06-15T12:01:30.000Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-team-abstraction-2",
+      "specId": "spec-20260615-team-abstraction",
+      "sprintNumber": 2,
+      "title": "Per-team memory namespacing of the lessons store",
+      "description": "Thread an optional per-team namespace through the lessons memory store (src/state/memory.ts) and the retriever (src/orchestrator/memory/retrieve.ts), and update every caller to derive its namespace from the active team. The default/programming namespace resolves to the existing `.bober/memory/` path (no migration, pre-existing lessons stay visible); a named team's namespace resolves to `.bober/memory/<namespace>/`. After this sprint, two teams' lessons are fully isolated in both directions.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-team-abstraction-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "All tests pass with zero failures, including new collocated namespace tests and the existing memory tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "memory.ts path helpers and public functions (appendLesson, loadLessonIndex, loadLesson) accept an optional namespace; a named namespace resolves to .bober/memory/<namespace>/ and the default/empty namespace resolves to the existing .bober/memory/ path. A unit test asserts both resolved paths.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "Isolation: a unit test appends a lesson under namespace 'teamA', then loadLessonIndex for 'teamA' returns it while loadLessonIndex for the default namespace does NOT; and a lesson appended under the default namespace is NOT returned for 'teamA'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "Back-compat: calling the memory functions with no namespace reads/writes the existing .bober/memory/ path; a unit test writing a fixture lesson into .bober/memory/ (no namespace) is still loaded by the no-namespace loadLessonIndex.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "retrieveRelevantLessons accepts and honors the namespace, returning only that namespace's lessons. A unit test seeds two namespaces and asserts retrieval is scoped.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "The `bober memory` CLI and the chat memory distill (buildMemoryDistill) derive the namespace from the active team (loadTeam), defaulting to the programming/current path. A unit test exercises the CLI/distill namespace resolution (e.g. default team -> current path).",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not introduce the semantic_facts SQLite table — that is Phase 3 (only the .bober/memory/ lessons store is namespaced here)",
+        "Do not migrate existing lessons into a 'programming/' subdir — the default team keeps the current .bober/memory/ path",
+        "Do not change pipeline-shape selection — that is Sprint 3",
+        "Do not add CLI --team flags or the example team — that is Sprint 4",
+        "Do not add memory hygiene/decay or reconcile-on-write (Phase 3+)"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "Lessons are isolated per namespace in both directions and the default/programming path is unchanged with pre-existing lessons still visible"
+      ],
+      "definitionOfDone": "memory.ts and retrieve.ts accept an optional namespace; memoryDir(projectRoot, namespace?) returns .bober/memory/ for the default/empty namespace and .bober/memory/<namespace>/ otherwise. appendLesson, loadLessonIndex, loadLesson, and retrieveRelevantLessons thread the namespace. All callers (src/cli/commands/memory.ts, src/chat/chat-session.ts buildMemoryDistill, src/orchestrator/memory/distill.ts) derive the namespace from the active team via loadTeam, defaulting to programming (current path). Lessons are fully isolated across namespaces; the default path and pre-existing lessons are untouched. Build, typecheck, and all tests (new + existing memory tests) pass.",
+      "assumptions": [
+        "The programming/default team's memoryNamespace sentinel (from Sprint 1) maps to the existing .bober/memory/ path with no subdir, so no migration is needed.",
+        "Namespace values are constrained to safe path segments (alphanumeric/underscore/hyphen) — already enforced by the Sprint 1 schema regex — preventing path traversal.",
+        "The INDEX.md file is per-namespace (.bober/memory/<ns>/INDEX.md), so each team has its own bounded index."
+      ],
+      "outOfScope": [
+        "semantic_facts table and bi-temporal facts (Phase 3)",
+        "Memory hygiene/decay/reconcile-on-write (Phase 3+)",
+        "Pipeline-shape selection (Sprint 3) and CLI/example team (Sprint 4)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Thread namespace as an optional trailing parameter to preserve back-compat for any caller not yet updated.\n\nVerified touch points:\n- src/state/memory.ts: memoryDir(projectRoot) at :15, lessonPath at :19, indexPath at :23 — add optional namespace and, when present+non-empty, join MEMORY_DIR/<namespace>. appendLesson at :195, loadLessonIndex at :241, loadLesson — add optional namespace and pass through to the path helpers. Keep INDEX_FILE per-namespace.\n- src/orchestrator/memory/retrieve.ts: retrieveRelevantLessons(projectRoot, keywords, opts) at :79 — add namespace to opts (or a param) and pass through to loadLessonIndex/loadLesson.\n- Callers to update to derive namespace from the active team (loadTeam(config, teamId).memoryNamespace, default programming -> '' -> current path):\n  - src/cli/commands/memory.ts: appendLesson:68, loadLessonIndex:58 & :93, loadLesson:139. Add an optional --team (or --namespace) option that resolves via loadTeam; default keeps current path.\n  - src/chat/chat-session.ts: buildMemoryDistill at :41 (loadLessonIndex:43, loadLesson:49). The session already knows its config/team context; pass the active team's namespace.\n  - src/orchestrator/memory/distill.ts: appendLesson — write lessons under the active run's team namespace (default programming).\n\nBack-compat rule: namespace undefined OR '' OR 'programming' -> .bober/memory/ (current path, no subdir). Any other value -> .bober/memory/<value>/. Centralize this mapping in one helper so every path computation agrees.\n\nUse node:fs/promises (async) and ensureDir; no fs mocks — use real temp dirs in tests and clean up (project principle). Reuse LessonEntrySchema/serialization unchanged.\n\nTests: collocate in src/state/memory.test.ts (extend) and a new namespace test. Seed two namespaces in a temp projectRoot, assert isolation both directions, assert default path round-trips a pre-existing fixture, assert retrieveRelevantLessons is scoped.",
+      "evaluatorNotes": "sc-2-4: assert memoryDir(root) === <root>/.bober/memory and memoryDir(root,'teamA') === <root>/.bober/memory/teamA; same for lessonPath/indexPath.\nsc-2-5: appendLesson(root, lessonA, 'teamA'); loadLessonIndex(root,{...},'teamA') includes lessonA; loadLessonIndex(root,{...}) (default) excludes it. Then appendLesson(root, lessonB) (default); loadLessonIndex(root,{...},'teamA') excludes lessonB.\nsc-2-6: manually write a valid lesson .md + INDEX line into <root>/.bober/memory/ and assert no-namespace loadLessonIndex returns it (proves default path unchanged).\nsc-2-7: seed lessons in 'teamA' and 'teamB'; retrieveRelevantLessons(root, keywords, {namespace:'teamA'}) returns only teamA's.\nsc-2-8: invoke the memory CLI / buildMemoryDistill with the default team and assert it reads the current path; with a named team assert it reads the subdir.\nRun npm run build, npm run typecheck, npm run test (must include existing memory tests green).",
+      "estimatedFiles": [
+        "src/state/memory.ts",
+        "src/state/memory.test.ts",
+        "src/orchestrator/memory/retrieve.ts",
+        "src/cli/commands/memory.ts",
+        "src/chat/chat-session.ts",
+        "src/orchestrator/memory/distill.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-15T00:00:00Z",
+      "updatedAt": "2026-06-15T00:00:00Z",
+      "completedAt": "2026-06-15T12:35:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-team-abstraction-3",
+      "specId": "spec-20260615-team-abstraction",
+      "sprintNumber": 3,
+      "title": "Team-aware pipeline-shape selection",
+      "description": "Resolve the pipeline engine / encoded SOP from the active team's pipelineShape instead of solely from global config. The programming team continues to select exactly what selectPipelineEngine(config) selects today; a team declaring a different pipelineShape selects the corresponding engine. The existing eligibility and 'careful'-mode downgrade rules still apply. runPipeline resolves the active team and uses its shape; with no team specified it resolves to 'programming' and behaves identically to today.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-team-abstraction-1"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "All tests pass with zero failures, including new team-aware selection tests and the existing selector/eligibility/workflow-engine tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "For the programming team, the selected engine is identical to selectPipelineEngine(config) today. A unit test asserts the programming team with engine 'ts' selects a TsPipelineEngine (same instance type as the legacy path).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "A team declaring a different pipelineShape selects the corresponding engine. A unit test builds a team with pipelineShape 'workflow' (eligible config) and asserts a WorkflowEngine is selected, and that an ineligible/'careful' config still downgrades to TS (eligibility rules preserved).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "runPipeline resolves the active team (loadTeam) and uses its pipelineShape; called with no team it resolves to 'programming' and behaves as before. A unit/integration test (with a stubbed engine) asserts the team's shape drives engine selection and the no-team path is unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not implement a new pipeline engine or a medical SOP — only resolve the EXISTING engines ('ts'|'skill'|'workflow') from the team's shape",
+        "Do not change memory namespacing — that was Sprint 2",
+        "Do not add CLI --team flags or the example team — that is Sprint 4",
+        "Do not change eligibility or 'careful'-mode downgrade semantics"
+      ],
+      "stopConditions": [
+        "All six success criteria pass",
+        "Programming team selects today's engine; a team declaring a different shape selects the corresponding engine with eligibility rules intact"
+      ],
+      "definitionOfDone": "A team-aware shape resolver selects the PipelineEngine from the active team's pipelineShape, reusing resolveEngineName/selectPipelineEngine semantics (eligibility + careful downgrade preserved). runPipeline resolves the active team via loadTeam and uses its shape; the no-team/programming path is byte-for-byte today's behavior. Build, typecheck, and all tests (new + existing selector/eligibility/workflow tests) pass.",
+      "assumptions": [
+        "pipelineShape uses the existing PipelineEngineName union ('ts'|'skill'|'workflow'); 'skill' still falls through to TS as it does today.",
+        "Eligibility (isWorkflowEligible) and 'careful'-mode downgrade are evaluated against config as today; the team's shape only chooses the REQUESTED engine name, then the existing downgrade logic applies.",
+        "How the active team id reaches runPipeline (an opts field or config.defaultTeam) is a generator decision; the no-team default must be 'programming'."
+      ],
+      "outOfScope": [
+        "New engines / medical SOP (Phase 6)",
+        "Memory namespacing (Sprint 2)",
+        "CLI wiring + example team + docs (Sprint 4)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Reuse, do not rewrite, the selector.\n\nVerified touch points:\n- src/orchestrator/workflow/selector.ts: resolveEngineName(config):PipelineEngineName at :22 and selectPipelineEngine(config):PipelineEngine at :50. Add a team-aware variant — e.g. selectPipelineEngineForTeam(team, config) or extend resolveEngineName to take an optional requested-engine override from team.pipelineShape — that uses team.pipelineShape as the REQUESTED engine name, then applies the SAME downgrade pipeline (isWorkflowEligible + config.pipeline.mode==='careful' => 'ts'). Keep selectPipelineEngine(config) working for back-compat (it can delegate to the team-aware path with the programming team).\n- src/orchestrator/pipeline.ts: runPipeline at :970 calls selectPipelineEngine(config) at :977. Resolve the active team (loadTeam(config, teamId)) and pass team.pipelineShape into the team-aware selector. Determine teamId from opts (preferred, additive) or config.defaultTeam; default 'programming'.\n- src/orchestrator/workflow/engine.ts: PipelineEngine / PipelineEngineName.\n- Eligibility: src/orchestrator/workflow/eligibility.ts (isWorkflowEligible).\n\nProgramming team: team.pipelineShape === resolveEngineName(config) (set in Sprint 1), so the programming path is identical to today by construction. Verify this equivalence explicitly in a test.\n\nKeep the change minimal and additive; do not alter the downgrade log lines or eligibility semantics. Collocate tests in selector.test.ts (extend) and a runPipeline-level test using a stubbed/injected engine factory so no real LLM calls happen.",
+      "evaluatorNotes": "sc-3-4: build the programming team (loadTeam(config)); team-aware selector returns the same engine class as selectPipelineEngine(config) for engine 'ts' (TsPipelineEngine).\nsc-3-5: team with pipelineShape 'workflow' + an eligible config -> WorkflowEngine; same shape with an ineligible config OR mode 'careful' -> TsPipelineEngine (downgrade preserved, one log line as before).\nsc-3-6: with a stubbed engine factory, assert runPipeline picks the engine matching the active team's shape; no-team call uses programming and matches the legacy selection.\nRegression: run existing selector/eligibility/workflow-engine tests (must stay green). Run npm run build, npm run typecheck, npm run test.",
+      "estimatedFiles": [
+        "src/orchestrator/workflow/selector.ts",
+        "src/orchestrator/workflow/selector.test.ts",
+        "src/orchestrator/pipeline.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-15T00:00:00Z",
+      "updatedAt": "2026-06-15T00:00:00Z",
+      "completedAt": "2026-06-15T15:35:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260615-team-abstraction-4",
+      "specId": "spec-20260615-team-abstraction",
+      "sprintNumber": 4,
+      "title": "Second team as data + CLI wiring + docs (the platform proof)",
+      "description": "Prove the abstraction end-to-end: define a minimal NON-medical example team purely as data (a `teams` config entry, no new code path), wire team selection into `bober run` (--team <id>) and `bober chat` (team selection), and document how to add a team. Running the example team must route to its own memory namespace, pipeline shape, and provider routing; omitting the flag uses the programming team unchanged. This is the sprint that demonstrates 'adding a team is data, not code'.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260615-team-abstraction-2",
+        "sprint-spec-20260615-team-abstraction-3"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "All tests pass with zero failures, including new CLI/team-routing tests (npm run test).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "A minimal example team is defined purely as a `teams` config entry (a fixture/config, no new code branch). A unit test asserts loadTeam(config, 'example') returns its declared memoryNamespace, pipelineShape, and merged providers.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "`bober run --team <id>` is additive and threads the team id to runPipeline; existing `bober run` invocations without --team behave exactly as before (programming team). A unit test asserts the flag is parsed and propagated, and that its absence yields the programming default.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "`bober chat` selects a team (positional arg or --team) and routes the session's memory distill + spawned runs to that team; omitting it uses programming. A unit test asserts the chat session resolves the named team and its namespace.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "End-to-end routing: a lesson produced while the example team is active lands in the example team's .bober/memory/<namespace>/ (not the programming path). A unit/integration test asserts the lesson location by namespace.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-8",
+          "description": "Documentation explains 'adding a team is data, not code', including the `teams` config shape, the three axes (providers/memory namespace/pipeline shape), and the deferred file-registry path. A doc file (README section or a docs/ page) is added/updated.",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not build the medical team or any guardrail enforcement (Phase 6)",
+        "Do not add a .bober/teams/*.json file registry (Option A only; mention as deferred in docs)",
+        "Do not introduce semantic_facts or memory hygiene (Phase 3)",
+        "Do not add a second PRODUCTION team — the example team is a minimal validation fixture"
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "`bober run --team example` and `bober chat` with the example team route to its namespace + shape + providers; default (no flag) is the programming team unchanged; docs updated"
+      ],
+      "definitionOfDone": "A minimal non-medical example team exists purely as data. `bober run` gains an additive --team <id> flag threaded to runPipeline (default programming); `bober chat` selects a team (positional/--team) and routes its memory distill and spawned runs to that team. A lesson produced under the example team lands in its namespace. Documentation describes how to add a team (config shape, the three axes, deferred file-registry). Build, typecheck, and all tests pass; existing no-flag behavior is unchanged.",
+      "assumptions": [
+        "The example team is a small, harmless fixture (e.g. a 'docs'/'research-only' team) used to validate the abstraction; it does not need a bespoke pipeline engine — reusing 'ts' with a distinct namespace and a provider override is sufficient proof.",
+        "Phase 1's `bober chat <team>` argument was accepted but ignored (label-only); this sprint makes it actually select the team.",
+        "--team on `bober run` mirrors the additive pattern used for --run-id in Phase 1 (src/cli/commands/run.ts): absent = today's behavior."
+      ],
+      "outOfScope": [
+        "Medical team + guardrails (Phase 6)",
+        "File-registry team source (deferred)",
+        "semantic_facts / memory hygiene (Phase 3)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "This sprint wires together S1-S3 and proves the claim; it should add almost no new abstraction — only CLI flags, an example team fixture, routing, and docs.\n\nVerified touch points:\n- src/cli/commands/run.ts: runRunCommand (~:42). Add an additive `--team <id>` option; resolve via loadTeam(config, id) and thread the team id into runPipeline (the opts/teamId path added in Sprint 3). Absent flag => programming default (unchanged behavior).\n- src/cli/commands/chat.ts: resolveRoleProviders at :28 and the ChatSession construction. Accept a team (positional arg like `bober chat <team>` per Phase 1, or --team) and pass the active team's namespace/providers into ChatSession so buildMemoryDistill (Sprint 2) and RunSpawner route to that team. Default 'programming'.\n- Example team: declare it as a `teams` entry. For tests use a config fixture; optionally add a commented example to docs. Do NOT hardcode it as a code branch — it must flow through loadTeam (the whole point).\n- Docs: add a section (README.md and/or docs/) titled e.g. 'Teams: adding a team is data, not code' covering the `teams` config shape ({displayName, memoryNamespace, pipelineShape, providers}), the three differentiation axes (provider routing / memory namespace / pipeline shape), the built-in programming default, and the deferred .bober/teams/*.json file registry. Cross-reference the research doc Phase 4.\n\nKeep --team strictly additive (mirror Phase 1's --run-id). Tests: assert flag parse + propagation with an injected/stubbed runPipeline; assert chat resolves the named team; assert a lesson written during an active example-team session lands under .bober/memory/<example-namespace>/. Use temp dirs, no network.",
+      "evaluatorNotes": "sc-4-4: loadTeam(config,'example') returns the declared namespace/shape/providers (merged over resolved defaults).\nsc-4-5: parse `run --team example` and assert the team id reaches runPipeline (stub it); parse `run` with no --team and assert programming default reaches runPipeline.\nsc-4-6: construct the chat command with team 'example' and assert ChatSession uses the example namespace for buildMemoryDistill; with no team, programming/current path.\nsc-4-7: drive a memory write through the active example team and assert the file lands under .bober/memory/<example-namespace>/, not .bober/memory/.\nsc-4-8: confirm a docs file/section exists describing the teams config shape, the three axes, and the deferred file registry.\nRegression: `bober run` with no --team unchanged; full suite green. Run npm run build, npm run typecheck, npm run test.",
+      "estimatedFiles": [
+        "src/cli/commands/run.ts",
+        "src/cli/commands/chat.ts",
+        "src/cli/commands/run.test.ts",
+        "src/cli/commands/chat.test.ts",
+        "README.md",
+        "docs/teams.md"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "lastEvalId": null,
+      "createdAt": "2026-06-15T00:00:00Z",
+      "updatedAt": "2026-06-15T00:00:00Z",
+      "completedAt": "2026-06-15T12:55:00Z"
+    }
+  ]
+}

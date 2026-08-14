@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 
 import type { BoberConfig } from "../config/schema.js";
 import { runPipeline, type PipelineResult } from "./pipeline.js";
+import type { RunOptions } from "./workflow/engine.js";
 import { runManager } from "../mcp/run-manager.js";
 import { addWorktree, removeWorktree, isClean, getCurrentBranch } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
@@ -46,6 +47,7 @@ export interface RunInWorktreeOpts {
     task: string,
     projectRoot: string,
     config: BoberConfig,
+    opts?: RunOptions,
   ) => Promise<PipelineResult>;
 }
 

@@ -1,0 +1,151 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-pge-real-workload-errors-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-6",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T11:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+        "title": "Observe what a real 29 KB plan actually does to the graph engine",
+        "summary": "All 6 required criteria met on iteration 1. Harness drives a real PgeEngine over the committed coding.json (all 10 channels confirmed at 4096, not the golden-graph fixture's 8192/65536) and captures the interpreter's GraphRunResult through the interpreterFactory seam that PgeEngine.run discards. MEASURED: spec 29,214 canonical bytes and sprintContracts 135,106 both REJECTED at superstep 12 by plan_materialize against limit 4096; terminal node graceful_failure; status completed / verdict failed; commit.finalize throws FinalizeWithoutSpecError. sc-1-5 fired: spec assumptions[5] corrected 138,284 -> 135,106 (canonicalJson vs naive JSON.stringify); the measurement was committed unchanged. Suite 6856 -> 6860, zero regressions."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+        "title": "A committed workload corpus, and the measurement extended to every channel",
+        "summary": "All 6 required criteria met on iteration 1. Corpus of 123 entries at .bober/workload/ (tracked, nothing leaked into .bober/golden/). byteSize EXPORTED from commit.ts and imported by the corpus helper; sprint 1's duplicate deleted. MEASURED corpus maxima (canonical bytes): spec 48,097 | sprintContracts 135,106 | messages 1,292 | evaluations 1,067 | refs 283 | ledger 221 | testAnchors 114 | branchStatus 102 | counters 64 | verdict 8 \u2014 ONLY spec and sprintContracts exceed the 4,096 cap. 60/250 contracts and 1/53 specs fail schema and are skipped by safeParse, deliberately and visibly. refs/counters/branchStatus/ledger have no committed payload and were sourced by OBSERVING a real run through a RunContext.commit spy, provenance {kind:'observed'}. Suite 6860 -> 6871."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-3",
+        "title": "Size the caps to the corpus, regenerate the artifact, pin both directions",
+        "summary": "All 7 criteria met on iteration 2. spec 4,096 -> 131,072 and sprintContracts 4,096 -> 524,288; other eight unchanged. graphVersion 1.3.0 + changelog. Caps pinned as EQUALITY to capForCorpusMax = next power of two at or above 2x corpus max \u2014 proven non-tautological by the evaluator's own standalone mutation script in both directions for both channels. StateBloatError re-sized, not removed. 5 golden replay cases recaptured, diff verified as exactly graph.graphVersion and nothing else. In-flight specs excluded from the corpus (keyed on PlanSpecStatus) after the corpus was found to invalidate itself mid-run. Suite 6877/0 failed. MAJOR FINDING carried to sprint 4: with the caps raised the run now reaches the 14-contract fan-out and throws SuperstepLimitExceededError at DEFAULT_MAX_SUPERSTEPS=200 before any terminal node. The byte cap was masking a second wall; the two defects only looked like one symptom."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+        "title": "Diagnose why a real plan still does not terminate, and fix it only if the cause is a ceiling",
+        "summary": "8 of 9 criteria met, 1 skipped by its own mutually-exclusive trigger (sc-4-6 applies only to verdict b). VERDICT: (a) INSUFFICIENT CEILING, independently re-derived by the evaluator at FIVE contract counts \u2014 1:39, 4:84, 7:129, 10:174, 14:234 supersteps \u2014 exactly 15 supersteps marginal per contract at every interval. The evaluator also read the raw trace to confirm sprint_body's 1,272 spans are 14 status-ok executions plus 1,258 status-serialized deferral records under concurrency 1 on a real dependsOn DAG, falsifying non-convergence. Fix: PGE_ENGINE_MAX_SUPERSTEPS = supersepsForMeasuredCost(234) = 512, wired into PgeEngine.run's RunContext and pinned two-directionally (a hand-edited literal breaks it; lowering to 200 reproduces the original throw). The interpreter's own DEFAULT_MAX_SUPERSTEPS=200 and throw site were NOT touched. MILESTONE: PgeEngine now executes this repository's own real 29 KB PlanSpec and its 14 real contracts END TO END, terminating at graceful_failure \u2014 explicitly not finalize, because commit remains FAIL_CLOSED-refused under the autopilot noop mechanism. No topology change (pge diff empty, graphVersion still 1.3.0). Suite 6877 -> 6879."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-5",
+        "title": "PipelineResult gains an error channel, layered in the engine",
+        "summary": "All 9 criteria met on iteration 1. errors?: readonly PipelineFailure[] added to PipelineResult as a PURE TYPE and layered in PgeEngine.run via a CONDITIONAL spread after commit.finalize returns \u2014 finalize.ts and finalize.test.ts hash-verified byte-identical before and after. A clean run carries no errors KEY at all (proven with `in`, not an undefined check). success keeps deriveRunSuccess (Option A). All five replay cases re-captured: 52 insertions, ZERO deletions, every added key inside a new errors array and no superstep field \u2014 the 1:1-minus-superstep mapping visible in the data. Golden regression 0/5 -> 5/5. Conformance divergence set UNCHANGED at [audits,contracts,history,pipelineResult] with equivalent:false; oracle-retention unmodified. Topology checksum unmoved (sha256:e4909da6...45a5) despite the comment fixes. Suite 6879 -> 6883. NOTE: the curator predicted 4 of 5 cases affected; the fifth (replay-full-run-evaluation-fails) also gained errors, from three LoopExhausted TaskFailures rather than a FailClosed refusal \u2014 judged in scope because the layering is generic over any non-empty result.failures, not scoped to one errorClass."
+      }
+    ],
+    "currentBranch": "bober/pge-graph-engineering",
+    "relevantFiles": [
+      "src/cli/commands/run.ts",
+      "src/cli/commands/run.test.ts",
+      "src/mcp/run-manager.ts",
+      "src/mcp/run-manager.test.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/pge/engine/pge-engine.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-pge-real-workload-errors-6",
+    "specId": "spec-20260812-pge-real-workload-errors",
+    "sprintNumber": 6,
+    "title": "An operator can see the refusal",
+    "description": "An error channel nobody surfaces closes nothing. Make a non-empty errors array visible where a person or a CI job will actually encounter it: a non-zero exit from `bober run`, and a failed run state in the MCP run manager.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-pge-real-workload-errors-5"
+    ],
+    "features": [
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-6-1",
+        "description": "`bober run` sets a non-zero process exit code when the result's errors array is non-empty, even when success is true under the Option A formula.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-2",
+        "description": "`bober run` prints what was refused -- at minimum the nodeId and errorClass of each entry -- rather than a generic failure line.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-3",
+        "description": "The MCP run manager sets RunState.status to \"failed\" and populates RunState.error when errors is non-empty; neither field needs a schema change.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-4",
+        "description": "A run with an empty or absent errors array keeps today's exit code and today's run state exactly -- proven by a test, so the change is additive.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-5",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing the meaning of `success`.",
+      "Adding new fields to RunState -- status \"failed\" and error?: string already exist.",
+      "Reformatting unrelated CLI output."
+    ],
+    "stopConditions": [
+      "A CI wrapper in this repository depends on `bober run` exiting zero for a refused run -- stop and report it before changing the exit code."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+    "assumptions": [
+      "VERIFIED by the orchestrator: src/cli/commands/run.ts already sets process.exitCode = 1 at :241-242 when !result.success, and has other exit-code sites at :152 and :254. Add a branch; do not restructure the existing ones, and make sure the branches cannot fight.",
+      "VERIFIED: src/mcp/run-manager.ts already declares status \"running|completed|failed|aborted|input-required|paused\" at :39 and error?: string at :46, and assigns status at :209 (completed) and :233 (failed). No schema change is needed \u2014 follow the existing assignment sites.",
+      "VERIFIED by sprint 5: a refused run now returns errors:[{nodeId:'commit', errorClass:'FailClosed', branchKey:null, message:...}] while success stays true (Option A, spec D3). The whole point of this sprint is that success alone is no longer sufficient to decide what an operator is told.",
+      "VERIFIED by sprint 5: a clean run carries NO errors key at all (conditional spread), so consumers must test presence, not truthiness of an undefined."
+    ],
+    "outOfScope": [],
+    "ambiguityScore": 2,
+    "generatorNotes": "src/cli/commands/run.ts already sets process.exitCode = 1 at :241-242 when !result.success; add a branch rather than restructuring the existing one, and make sure the two do not fight. src/mcp/run-manager.ts already declares status 'failed' (:39) and error?: string (:46) and sets status at :209 and :233 -- follow the existing assignment sites. sc-6-4 is the important one: this must be strictly additive for runs that produced no errors, so write that test first.",
+    "evaluatorNotes": "Verify the additive claim in sc-6-4 by actually running a clean pipeline and confirming the exit code and run state are unchanged from before the sprint. Verify the exit code genuinely changes for a refused run by executing one end to end, not by unit-testing the branch in isolation. Check the printed output names the refused node -- a message that says 'run failed' without saying what was refused fails sc-6-2.",
+    "estimatedFiles": [
+      "src/cli/commands/run.ts",
+      "src/cli/commands/run.test.ts",
+      "src/mcp/run-manager.ts",
+      "src/mcp/run-manager.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T00:00:00Z",
+    "updatedAt": "2026-08-12T11:40:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    },
+    "packageScripts": {
+      "build": "tsc",
+      "dev": "tsc --watch",
+      "lint": "eslint src/",
+      "typecheck": "tsc --noEmit",
+      "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
+      "test": "vitest",
+      "update-all": "node scripts/update-all.mjs",
+      "update-all:check": "node scripts/update-all.mjs --check",
+      "prepublishOnly": "npm run build"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

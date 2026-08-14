@@ -23,6 +23,18 @@ describe("TokensavePrereqCheck", () => {
     if (r.ok) expect(r.version).toBe("6.0.0-beta.1");
   });
 
+  it("returns ok=true on tokensave 6.1.1 (real installed version)", async () => {
+    (execa as unknown as Mock).mockResolvedValue({
+      exitCode: 0,
+      stdout: "tokensave 6.1.1",
+      failed: false,
+    });
+    const { TokensavePrereqCheck } = await import("../../src/graph/prereq.js");
+    const r = await new TokensavePrereqCheck().check();
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.version).toBe("6.1.1");
+  });
+
   it("returns ok=false MISSING when execa throws", async () => {
     (execa as unknown as Mock).mockRejectedValue(new Error("ENOENT"));
     const { TokensavePrereqCheck } = await import("../../src/graph/prereq.js");

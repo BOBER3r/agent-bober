@@ -1,0 +1,281 @@
+{
+  "formatVersion": 1,
+  "caseId": "research-reflexions-exhausted-collects-anyway",
+  "title": "research_route exhausts its bound and still collects",
+  "intent": "Pin research_route's loop bound: after maxIterations 3 the onExhausted target is research_collect, not graceful_failure — the run keeps the best digest it has.",
+  "tags": [
+    "research",
+    "loop:researchReflexions",
+    "onExhausted",
+    "region:research"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "promptRef": "research/reflect",
+        "model": "light-model"
+      },
+      "response": {
+        "coreProblem": "Config parsing rejects the new block instead of validating it.",
+        "assumptions": [
+          "The block is optional and absent in every existing config."
+        ],
+        "unknowns": [
+          "Whether the block may appear more than once."
+        ],
+        "successLooksLike": "A malformed block yields a typed error naming the offending key."
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-exhaust-1",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [
+          "src/config/parse.ts",
+          "src/config/parse.test.ts",
+          "src/config/errors.ts"
+        ],
+        "questionsAnswered": 2
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 1,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": "Still unanswered: which tests cover the parser?",
+        "reflexionRound": 1
+      },
+      "response": {
+        "id": "research-20260805-exhaust-2",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [
+          "src/config/parse.ts",
+          "src/config/parse.test.ts",
+          "src/config/errors.ts"
+        ],
+        "questionsAnswered": 2
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 2,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": "Still unanswered: which tests cover the parser?",
+        "reflexionRound": 2
+      },
+      "response": {
+        "id": "research-20260805-exhaust-3",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [
+          "src/config/parse.ts",
+          "src/config/parse.test.ts",
+          "src/config/errors.ts"
+        ],
+        "questionsAnswered": 2
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-exhaust-1",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [
+          "Which tests cover the parser?"
+        ],
+        "findings": "Partial.",
+        "questionsAnswered": 2,
+        "reflexionRound": 0,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": "Still unanswered: which tests cover the parser?"
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 1,
+      "request": {
+        "researchId": "research-20260805-exhaust-2",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [
+          "Which tests cover the parser?"
+        ],
+        "findings": "Partial.",
+        "questionsAnswered": 2,
+        "reflexionRound": 1,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": "Still unanswered: which tests cover the parser?"
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 2,
+      "request": {
+        "researchId": "research-20260805-exhaust-3",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [
+          "Which tests cover the parser?"
+        ],
+        "findings": "Partial.",
+        "questionsAnswered": 2,
+        "reflexionRound": 2,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": "Still unanswered: which tests cover the parser?"
+      }
+    },
+    {
+      "nodeId": "research_collect",
+      "branchKey": null,
+      "effectName": "research.collect",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "doc": {
+          "id": "research-20260805-exhaust-3",
+          "timestamp": "2026-08-05T10:00:00.000Z",
+          "questions": [
+            "Where is the config parsed today?",
+            "What happens to an unknown block?",
+            "Which tests cover the parser?",
+            "Is there a typed error class already?"
+          ],
+          "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+          "sections": {
+            "architecture": "One parse entry point, called from the CLI and from the library surface.",
+            "patterns": "Zod schemas per block, composed at the top level.",
+            "conventions": "Typed errors extend ConfigError and carry the offending key.",
+            "risks": "Silently dropping unknown blocks means a typo is invisible today."
+          },
+          "filesExplored": [
+            "src/config/parse.ts",
+            "src/config/parse.test.ts",
+            "src/config/errors.ts"
+          ],
+          "questionsAnswered": 2
+        }
+      },
+      "response": {
+        "researchId": "research-20260805-exhaust-3",
+        "documentId": "research-20260805-exhaust-3"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "research_collect",
+    "artifacts": {},
+    "notes": "Three rejecting critiques exhaust researchReflexions (maxIterations 3). The bound routes to research_collect, so an exhausted research loop is a degraded success and not a failure."
+  }
+}

@@ -1,0 +1,292 @@
+{
+  "formatVersion": 1,
+  "caseId": "sprint-iterations-exhausted-exits-failed",
+  "title": "sprint_route exhausts sprintIterations and exits failed",
+  "intent": "Pin sprint_route's bound: after 3 failing evaluations the onExhausted target is sprint_exit and the contract is written failed, not passed.",
+  "tags": [
+    "sprint",
+    "loop:sprintIterations",
+    "onExhausted",
+    "region:sprint"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "sprint_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_generate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": false,
+        "notes": "Could not make the parser accept the block.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": false,
+        "score": 31,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": false,
+            "score": 31,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": false,
+                "message": "No test covers the criterion."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 1,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": false,
+        "score": 31,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": false,
+            "score": 31,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": false,
+                "message": "No test covers the criterion."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 2,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": false,
+        "score": 31,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": false,
+            "score": 31,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": false,
+                "message": "No test covers the criterion."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_correct",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": false,
+        "notes": "Still failing.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_correct",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 1,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": false,
+        "notes": "Still failing.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_exit",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "sprint.exit",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "contract": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "failed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "sprint_exit",
+    "artifacts": {
+      "contracts": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "failed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      ]
+    },
+    "notes": "sprint_route and sprint_correct SHARE the counterKey sprintIterations, so the bound of 3 covers both nodes together: three evaluations and two corrections, not three of each."
+  }
+}

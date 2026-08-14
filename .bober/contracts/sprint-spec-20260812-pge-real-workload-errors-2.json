@@ -1,0 +1,90 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 2,
+  "title": "A committed workload corpus, and the measurement extended to every channel",
+  "description": "Sprint 1 measured the plan channels. Real generator and evaluator payloads flow through messages, evaluations and refs, and those are unbounded strings today. Extend the measurement to every channel, and commit a corpus of real payloads that the caps will be derived from and pinned against for ever after -- so that a fixture can never again be the only evidence.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-1"
+  ],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "A committed workload corpus holds real PlanSpec and SprintContract payloads drawn from .bober/specs/ and .bober/contracts/, plus representative generator and evaluator payloads, each labelled with the channel it exercises.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A function computes, from the corpus, the maximum serialised byte size per channel using the SAME byteSize function the commit boundary uses -- not a reimplementation.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "The measurement from sprint 1 is extended to messages, evaluations and refs under corpus-sized payloads, and the results are committed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A test asserts the corpus is non-empty for every channel the artifact declares, so a channel cannot silently escape measurement by having no corpus entry.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "The corpus is committed under version control and its location is documented; a test asserts it is read from disk at test time rather than inlined into the test file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing any cap -- sprint 3 does that, using this corpus.",
+    "Trimming the corpus to make a number look better."
+  ],
+  "stopConditions": [
+    "A channel has no plausible real payload to measure -- record that fact explicitly rather than inventing one."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [
+    "CORRECTED BY THE SPRINT-2 CURATOR, verified by the orchestrator: the corpus must NOT live under .bober/golden/. src/pge/golden/runner.ts treats every file in that directory as one golden case and reports any non-.json entry as a stray, which feeds the BLOCKING CI golden gate; a workload/ subdirectory there also causes EISDIR in the gate, executor, coverage and capture tests, and fails dataset.test.ts. The corpus lives at .bober/workload/ instead.",
+    "byteSize (src/pge/runtime/commit.ts:257-259) is NOT exported \u2014 verified against the module's export list. Nothing pins that module's export surface, so adding `export` is the least invasive way to satisfy sc-2-2's ban on reimplementation. Sprint 1 left a duplicate copy of it in src/pge/engine/real-workload.test.ts which must be deleted in the same change.",
+    "60 of 250 files in .bober/contracts/ and 1 of 53 in .bober/specs/ FAIL schema parse, so a naive corpus loader that parses every file will throw. The loader must handle this deliberately and say what it does with unparseable files.",
+    "Four channels \u2014 refs, counters, branchStatus, ledger \u2014 have no committed real payload anywhere in the repository. sc-2-4 still requires a non-empty corpus entry for every declared channel, so these are the hard part; the curator identified a RunContext.commit spy as the technique for observing them from a real run."
+  ],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "Import byteSize's behaviour rather than reimplementing it: the boundary uses Buffer.byteLength(canonicalJson(value), 'utf8') (src/pge/runtime/commit.ts:257-259). If byteSize is not exported, export it or expose an equivalent through a named helper -- do not hand-roll JSON.stringify, which will disagree with canonical form. GeneratorResult.notes is an unbounded z.string() and real ones run 1,100-1,900 chars, so evaluations is the channel to look at after spec. Draw corpus entries from files already in the repository so the corpus is real rather than synthetic, and record where each entry came from.",
+  "evaluatorNotes": "Check that the corpus is genuinely real: spot-check that entries correspond to actual files in .bober/specs/ and .bober/contracts/. Check the byte measurement matches the boundary's -- construct a value, run it through both the corpus helper and the real commit boundary, and confirm they agree; a divergence here silently mis-sizes every cap in sprint 3. Verify sc-2-4 bites by deleting a channel's corpus entry and confirming the test fails.",
+  "estimatedFiles": [
+    ".bober/workload/",
+    "src/pge/golden/workload.ts",
+    "src/pge/golden/workload.test.ts",
+    "src/pge/runtime/commit.ts",
+    "src/pge/engine/real-workload.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-2-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T05:08:44Z"
+    }
+  ],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T05:08:44Z",
+  "completedAt": "2026-08-12T05:08:44Z",
+  "completionNote": "All 6 required criteria met on iteration 1. Corpus of 123 entries at .bober/workload/ (tracked, nothing leaked into .bober/golden/). byteSize EXPORTED from commit.ts and imported by the corpus helper; sprint 1's duplicate deleted. MEASURED corpus maxima (canonical bytes): spec 48,097 | sprintContracts 135,106 | messages 1,292 | evaluations 1,067 | refs 283 | ledger 221 | testAnchors 114 | branchStatus 102 | counters 64 | verdict 8 \u2014 ONLY spec and sprintContracts exceed the 4,096 cap. 60/250 contracts and 1/53 specs fail schema and are skipped by safeParse, deliberately and visibly. refs/counters/branchStatus/ledger have no committed payload and were sourced by OBSERVING a real run through a RunContext.commit spy, provenance {kind:'observed'}. Suite 6860 -> 6871."
+}

@@ -1,0 +1,127 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-5",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 5,
+  "title": "Three-scope state split, closed join-semilattice reducer registry, node/effect registries and the topology compiler",
+  "description": "Define OverallState as a small snapshot-pinned set of public Zod keys bound to the existing PlanSpec and SprintContract contracts with a compile-time drift guard, declare per-node input and output port schemas resolved through a SchemaCatalog, and confine node-local data to a NodeContext.priv map that is never a channel. Implement the closed six-reducer registry whose signature is merge(current, updates[]) called once per channel per superstep, with all four join-semilattice flags as literal true so a non-conforming reducer is unregisterable at the type level. Add NodeRegistry, EffectRegistry with a seal() that closes the effect channel during topology production, and the compiler that turns a validated artifact plus registries into a CompiledGraph with proven port assignability, failing on both unregistered node implementations and orphan implementations.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-2"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "A snapshot test pins the exact OverallState key set as a sorted list; adding or removing any key fails the test until the whitelist and the pinned key-count budget are amended in the same change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A compile-time Exact guard asserts OverallState['sprintContracts'] element type is exactly z.infer<typeof SprintContractSchema> and OverallState['spec'] is PlanSpec or null, so a parallel contract type fails npm run typecheck rather than failing at runtime.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "Each of the six reducers appendById, maxNumber, lastWriteWinsByKey, setUnion, replaceIfNewer and mergeLedger passes a property test over at least 200 randomized input pairs asserting merge(merge(s,xs),ys) equals merge(s,[...xs,...ys]) exactly.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "The same property suite asserts shuffle invariance of the canonicalised merged result and idempotence, so merge(s,xs) equals merge(merge(s,xs),xs) for every reducer.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "A property test applies 100 randomized concurrent merges to the messages channel and asserts the list length is monotonically non-decreasing and every previously present message id survives every merge.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "Attempting to register a reducer object whose associative, batchingInvariant, orderInvariant or idempotent flag is not the literal true fails npm run typecheck, proven by a type-level negative fixture.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "compile() throws TopologyCompileError with an UnregisteredNodeImpl diagnostic when the artifact names a node with no registered implementation, and an OrphanNodeImpl diagnostic when a registered implementation is absent from the artifact.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-8",
+      "description": "compilerFidelity compiles a fixture artifact with fixture registries and asserts CompiledGraph.nodes keys equal spec.nodes ids and CompiledGraph.adjacency equals spec.edges, with the spec authoritative in both directions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-9",
+      "description": "compile() asserts each registered NodeImpl's declared inputSchema and outputSchema match the schemaRef declared on that node's ports, and a mismatch produces a diagnostic naming the node id and the port key.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-10",
+      "description": "EffectRegistry.invoke throws EffectNotDeclaredError when an effect's tags exceed the calling node's declared effects array, and throws EffectChannelClosed after seal(); `bober pge dump` calls seal() and a test asserts an effect invocation during dump throws rather than performing the effect.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-11",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the interpreter, the frontier planner, the commit boundary or any checkpointer — this sprint produces the type substrate they consume.",
+    "Do not implement any production node body; register only fixture implementations for the compiler tests.",
+    "Do not compile the real .bober/topology/coding.json in this sprint — most of its node implementations do not exist yet and compile() correctly throws UnregisteredNodeImpl. The first full-graph compile is sprint 13.",
+    "Do not add a seventh reducer or an escape hatch that accepts an arbitrary merge function; the registry is deliberately closed.",
+    "Do not put raw tool stdout, workspace diffs or bulk payloads into any OverallState key.",
+    "Do not modify src/contracts/sprint-contract.ts or src/contracts/spec.ts — OverallState binds to them, it does not redefine them."
+  ],
+  "stopConditions": [
+    "All six reducers pass associativity, batching invariance, shuffle invariance and idempotence at 200 or more randomized pairs.",
+    "compile() fails in both directions — unregistered artifact node and orphan implementation.",
+    "The 14-key snapshot is pinned and the Exact drift guard fails typecheck when deliberately broken.",
+    "A required channel needs a merge that is genuinely order-dependent, in which case the channel must be modelled as an offloaded artifact referenced by refs rather than adding a non-conforming reducer."
+  ],
+  "definitionOfDone": "src/pge/state/overall.ts, src/pge/registry/{nodes,reducers,effects}.ts and src/pge/compile/compiler.ts exist with paired tests, OverallState is a snapshot-pinned key whitelist bound to the existing contracts by a typecheck-enforced guard, the six reducers are proven join-semilattices by property tests, and the compiler resolves every string reference or fails loudly. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and nothing outside src/pge/ changed except the seal() call added to the dump path.",
+  "assumptions": [
+    "OPEN — the architecture text says 'Exactly 14 keys' but its OverallStateSchema enumerates 15: runId, projectRoot, featureRequest, specId, currentPhase, spec, sprintContracts, evaluations, messages, refs, counters, branchStatus, testAnchors, verdict, ledger. This sprint pins the enumerated set (15) and records the count in the snapshot; a human must confirm whether a key was intended to be dropped before the snapshot is treated as the whitelist.",
+    "PrivateState is a fresh Map per task on NodeContext.priv, never registered as a channel, and therefore structurally incapable of reaching the commit boundary.",
+    "ModelBinder resolving a node's declared modelTier to a concrete provider and model id lives with the registries in this sprint, so a model-profile swap is a binder concern and not a topology change."
+  ],
+  "outOfScope": [
+    "Executing a compiled graph.",
+    "Scratch, archive, cache, trace and ledger implementations — sprint 6 supplies them behind the NodeContext type declared here."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "OverallState must reuse PlanSpecSchema (src/contracts/spec.ts:124) and SprintContractSchema (src/contracts/sprint-contract.ts:82) directly — the source documents' SprintContract shape with sprint_id, goals, files_to_edit and verification_commands, and their OverallState trip_goal field, are document errata and must not appear anywhere. Reducer bindings per the architecture table: appendById for messages, evaluations and refs (union by intrinsic id then sort by seq then id); maxNumber for counters; lastWriteWinsByKey for branchStatus over disjoint per-branch keys; setUnion for testAnchors; replaceIfNewer for the single-writer spec channel; mergeLedger keyed by (nodeId, attempt, callIndex) replacing rather than adding. NodeContext declares scratch, archive, cache, trace, ledger, prompts and models as interface types only — sprint 6 supplies the implementations, so declare the interfaces here and keep them dependency-free. The seal() call in the dump path is the one edit outside src/pge/ and it must not make cli/commands/pge.ts import anything that transitively reaches a provider.",
+  "evaluatorNotes": "Verify the property tests use genuinely randomized inputs with a recorded seed rather than a fixed table dressed up as a property test, and that the associativity assertion compares canonicalised forms rather than reference equality. Verify the Exact guard actually fails typecheck by temporarily changing the sprintContracts element type. Verify NodeContext.priv is not reachable from any commit path — grep for priv outside the registry and interpreter modules. Verify the effect seal test proves the effect did NOT happen, not merely that a throw occurred after it happened. Confirm the OverallState snapshot is a key-set snapshot and not a full-value snapshot, so it stays stable across unrelated changes.",
+  "estimatedFiles": [
+    "src/pge/state/overall.ts",
+    "src/pge/state/overall.test.ts",
+    "src/pge/registry/nodes.ts",
+    "src/pge/registry/nodes.test.ts",
+    "src/pge/registry/reducers.ts",
+    "src/pge/registry/reducers.test.ts",
+    "src/pge/registry/effects.ts",
+    "src/pge/registry/effects.test.ts",
+    "src/pge/compile/compiler.ts",
+    "src/pge/compile/compiler.test.ts",
+    "src/pge/compile/compilerFidelity.test.ts",
+    "src/cli/commands/pge.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

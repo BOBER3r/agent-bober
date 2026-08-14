@@ -3,9 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { appendHistory, loadHistory, loadRecentHistory } from "./history.js";
+import { appendHistory, loadHistory, loadRecentHistory, getStatusIcon } from "./history.js";
 import type { HistoryEntry } from "./history.js";
 import { rotateIfNeeded, historyArchivePath, historyActivePath } from "./history-rotation.js";
+import {
+  ContractStatusSchema,
+  SETTLED_CONTRACT_STATUSES,
+} from "../contracts/sprint-contract.js";
+import type { ContractStatus } from "../contracts/sprint-contract.js";
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -337,5 +342,66 @@ describe("sc-3-5: sprint-passed history round-trip — additive costUsd", () => 
 
     const [entry] = await loadHistory(tmpDir);
     expect(Object.hasOwn(entry.details, "costUsd")).toBe(false);
+  });
+});
+
+// ── sc-5: getStatusIcon covers the whole settled vocabulary ───────────
+//
+// Before sprint 5 of spec-20260812-terminal-vocabulary this switched on the bare literal
+// "passed", so once runSprintCycle and the workflow flusher started writing "completed" for
+// a settled sprint, every settled row in .bober/progress.md silently fell through to the
+// `default: "[PENDING]"` branch — a real user-visible regression the flip alone would have
+// introduced, with nothing in the pre-sprint suite to catch it.
+
+describe("sc-5: getStatusIcon covers the settled vocabulary", () => {
+  it("renders [PASS] for EVERY member of SETTLED_CONTRACT_STATUSES, not just the literal it happens to know about", () => {
+    // Iterates the SET rather than hardcoding "passed"/"completed" — a status added to
+    // SETTLED_CONTRACT_STATUSES in the future without a matching getStatusIcon update
+    // would fail this test, which is the whole point (it is what the pre-sprint bug looked
+    // like: the set grew a new member and the icon switch did not follow).
+    for (const status of SETTLED_CONTRACT_STATUSES) {
+      expect(getStatusIcon(status), `status "${status}" should render [PASS]`).toBe("[PASS]");
+    }
+  });
+
+  it("renders [PASS] for \"completed\" specifically — the exact regression the flip would introduce", () => {
+    expect(getStatusIcon("completed")).toBe("[PASS]");
+  });
+
+  it("renders [PASS] for \"passed\" too — the legacy word stays supported", () => {
+    expect(getStatusIcon("passed")).toBe("[PASS]");
+  });
+
+  it("renders the non-settled icons unchanged", () => {
+    expect(getStatusIcon("failed")).toBe("[FAIL]");
+    expect(getStatusIcon("in-progress")).toBe("[WIP]");
+    expect(getStatusIcon("evaluating")).toBe("[WIP]");
+    expect(getStatusIcon("needs-rework")).toBe("[REWORK]");
+  });
+
+  it("falls through to [PENDING] only for genuinely pre-settlement statuses", () => {
+    for (const status of ["proposed", "negotiating", "agreed"] as const) {
+      expect(getStatusIcon(status)).toBe("[PENDING]");
+    }
+  });
+
+  it("covers every member of the schema's status enum with exactly one icon, none falling through by accident", () => {
+    // Cross-checks against the full enum (not just SETTLED_CONTRACT_STATUSES) so a brand-new
+    // status added to ContractStatusSchema without a getStatusIcon opinion is at least
+    // visible here, even though [PENDING] remains a legitimate default for pre-settlement
+    // statuses.
+    const seen = new Map<ContractStatus, string>();
+    for (const status of ContractStatusSchema.options) {
+      seen.set(status, getStatusIcon(status));
+    }
+    expect(seen.get("passed")).toBe("[PASS]");
+    expect(seen.get("completed")).toBe("[PASS]");
+    expect(seen.get("failed")).toBe("[FAIL]");
+    expect(seen.get("in-progress")).toBe("[WIP]");
+    expect(seen.get("evaluating")).toBe("[WIP]");
+    expect(seen.get("needs-rework")).toBe("[REWORK]");
+    expect(seen.get("proposed")).toBe("[PENDING]");
+    expect(seen.get("negotiating")).toBe("[PENDING]");
+    expect(seen.get("agreed")).toBe("[PENDING]");
   });
 });

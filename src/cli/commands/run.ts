@@ -241,6 +241,23 @@ export async function runRunCommand(
     if (!result.success) {
       process.exitCode = 1;
     }
+
+    // sc-6-1/sc-6-2: a non-empty `errors` array is possible ALONGSIDE `success: true`
+    // (Option A — see PipelineResult.errors doc comment), so this is a SEPARATE branch
+    // from the `!result.success` check above, not a replacement for it. Both branches
+    // only ever WRITE 1, never reset to 0, so they cannot fight over the exit code
+    // regardless of evaluation order.
+    if (result.errors && result.errors.length > 0) {
+      process.exitCode = 1;
+      console.log(chalk.bold.red("Refused:"));
+      for (const failure of result.errors) {
+        console.log(
+          `  ${chalk.red("x")} ${failure.nodeId} ${chalk.gray(`(${failure.errorClass})`)}`,
+        );
+        console.log(chalk.gray(`      ${failure.message}`));
+      }
+      console.log();
+    }
   } catch (err) {
     spinner.stop();
     logger.error(

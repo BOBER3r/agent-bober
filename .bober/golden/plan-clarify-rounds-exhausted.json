@@ -1,0 +1,216 @@
+{
+  "formatVersion": 1,
+  "caseId": "plan-clarify-rounds-exhausted",
+  "title": "plan_clarify_check exhausts planClarifyRounds",
+  "intent": "Pin plan_clarify_check's loop bound: three unresolved clarification rounds route to graceful_failure rather than looping forever.",
+  "tags": [
+    "plan",
+    "loop:planClarifyRounds",
+    "onExhausted"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Make the config better.",
+    "entryNodeId": "plan_draft"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Make the config better.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "ambiguityScore": 8,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-1",
+              "category": "scope",
+              "question": "Better in which respect — validation, ergonomics or performance?",
+              "recommendation": "Each implies a different plan; pick one."
+            }
+          ],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "needs-clarification",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Make the config better",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 1,
+      "request": {
+        "userPrompt": "Make the config better.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "ambiguityScore": 8,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-2",
+              "category": "scope",
+              "question": "Better in which respect — validation, ergonomics or performance?",
+              "recommendation": "Each implies a different plan; pick one."
+            }
+          ],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "needs-clarification",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Make the config better",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 2,
+      "request": {
+        "userPrompt": "Make the config better.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "ambiguityScore": 8,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-3",
+              "category": "scope",
+              "question": "Better in which respect — validation, ergonomics or performance?",
+              "recommendation": "Each implies a different plan; pick one."
+            }
+          ],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "needs-clarification",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Make the config better",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "planClarifyRounds exhausted after 3 rounds",
+          "node": "plan_clarify_check",
+          "runId": "golden-run",
+          "detail": "The run stopped at plan_clarify_check: planClarifyRounds exhausted after 3 rounds."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": "Exactly three planner calls: a fourth would mean the bound did not bite, and the pinned callIndex sequence 0,1,2 on plan_draft is what makes that countable."
+  }
+}

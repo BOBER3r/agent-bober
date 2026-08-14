@@ -1,0 +1,122 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-4",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 4,
+  "title": "Engine-seam hardening, single terminal side-effect owner, and enforced loop bounds on the live imperative path",
+  "description": "Prepare the shipped path before any graph code depends on it. Exports PIPELINE_ENGINE_NAMES as the single source for both Zod engine enums and adds 'pge' as a fifth name with no implementation behind it. Replaces the ad-hoc opts object with a named RunOptions and widens the pipelineFn signatures in mcp/run-manager.ts and orchestrator/worktree.ts that currently pass fields the interface does not declare. Extracts finalizePipelineRun from pipeline.ts so the pipeline-complete history event and the <runId>.completed.json marker have exactly one emitter shared by TsPipelineEngine and RunResultFlusher, repairing the pre-existing divergence where the flusher writes neither. Finally retrofits enforced retry counters and maximum-iteration bounds onto the currently live cyclic paths so runaway budget burn is bounded today rather than after the port.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "PIPELINE_ENGINE_NAMES is exported once from src/orchestrator/workflow/engine.ts as a const tuple including 'pge', PipelineEngineName is derived from it, and both the pipeline.engine enum at config/schema.ts and the teams[].pipelineShape enum are constructed from that same tuple rather than repeating string literals.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A test asserts config.pipeline.engine still defaults to 'ts', that 'pge' parses as a valid enum value, and that resolveEngineName downgrades 'pge' to 'ts' with a logged line while no PgeEngine implementation exists.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "PipelineEngine.run declares a named RunOptions type covering runId, teamId, now, signal and resume, and the pipelineFn parameter types in mcp/run-manager.ts and orchestrator/worktree.ts accept it, so passing teamId or now no longer relies on structural widening that the interface does not declare.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "finalizePipelineRun is exported from src/orchestrator/finalize.ts, PIPELINE_COMPLETE_EVENT and COMPLETION_MARKER_SUFFIX are exported constants, and src/chat/completion-tailer.ts imports the marker suffix constant instead of matching an inline string literal.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "An end-to-end test drives a run through TsPipelineEngine and asserts CompletionTailer.poll() yields the runId, and a second test drives RunResultFlusher.flush and asserts it emits the identical history event and completion marker that the TS engine emits.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "The PipelineResult object returned by finalizePipelineRun has the same field set as the one previously built inline in pipeline.ts, asserted by a key-set snapshot so the frozen shape cannot drift during extraction.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "The sprint retry path in runSprintCycle and the pure-sprint iteration loop both read a configured maximum and emit a bounded-exit event when reached; a test injecting an always-failing evaluator terminates within max+1 iterations and the test's own hard ceiling is never reached.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": ".gitignore gains no runtime directories in this sprint, and a test asserts the .bober/ paths that sprints 6 and 8 will create are still absent, so the ignore additions land alongside the code that creates them.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-9",
+      "description": "The full Vitest suite passes with no failures versus the pre-sprint baseline, specifically including src/orchestrator/pipeline.test.ts, pipeline.pause.test.ts, pipeline-run-id.test.ts, workflow/selector.test.ts, workflow/flusher.test.ts and chat completion-tailer tests.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-10",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement PgeEngine — 'pge' is a reserved enum value that downgrades to 'ts' until sprint 13 supplies an implementation.",
+    "Do not flip src/orchestrator/workflow/eligibility.ts away from returning false or make WorkflowEngine.invoke stop throwing; the dormant workflow path stays dormant.",
+    "Do not change the runPipeline signature at pipeline.ts:1074 or add, remove or rename any PipelineResult field.",
+    "Do not change what a run does — this sprint moves the terminal side-effect block and bounds loops; the sequence of stages, the agents spawned and the artifacts written stay identical.",
+    "Do not re-point bober sprint or bober_sprint; their disposition is decided in sprint 14.",
+    "Do not import anything from src/pge/ — this sprint is deliberately independent of the topology layer."
+  ],
+  "stopConditions": [
+    "finalizePipelineRun has exactly one definition and three callers, and no other site emits the pipeline-complete event or writes a completion marker.",
+    "A grep for the raw string 'pipeline-complete' and for '.completed.json' finds only the two exported constants and their imports.",
+    "The always-failing-evaluator test terminates by bound rather than by the test's own ceiling.",
+    "A required change would alter the observable stage sequence of a run."
+  ],
+  "definitionOfDone": "The private engine seam accepts a named RunOptions, engine names come from one exported tuple, the terminal side-effect set has a single owner that both the TS engine and the flusher call, the tailer matches an imported constant rather than a literal, and every live cyclic path is bounded by a configured maximum that emits an event on exhaustion. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and a run started before this sprint produces the same artifacts as a run started after it.",
+  "assumptions": [
+    "This sprint is genuinely independent of sprints 1 to 3: it touches only src/orchestrator/, src/mcp/, src/chat/ and src/config/, and imports nothing from src/pge/.",
+    "The flusher currently writing neither the completion marker nor the terminal event is a latent defect rather than intended behaviour, so extracting the shared owner repairs it. If any consumer depends on the flusher NOT writing them, that consumer must be identified before the change lands.",
+    "The configured maximum for the sprint retry path is the existing evaluator maxIterations value and the pure-sprint loop already accepts maxIterations at pure-sprint.ts:106; this sprint enforces and instruments them rather than inventing a new knob."
+  ],
+  "outOfScope": [
+    "Any graph, topology or superstep concept.",
+    "Deleting the dormant src/orchestrator/workflow/ subtree."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "The extraction target is the terminal block at src/orchestrator/pipeline.ts:1015-1054. Move it verbatim into src/orchestrator/finalize.ts with an explicit args object; do not take the opportunity to change its behaviour. src/chat/completion-tailer.ts:181 currently matches by untyped string literal — importing COMPLETION_MARKER_SUFFIX there is the whole point of the constant, because no type error and no test outside that module would catch a divergence. For the engine tuple use `export const PIPELINE_ENGINE_NAMES = [\"ts\",\"skill\",\"workflow\",\"medical-sop\",\"pge\"] as const` and derive both z.enum calls with a spread so adding a sixth name is a one-place edit. For the loop bounds, follow the existing Scheduler.maxAgents to AgentCapError pattern (scheduler.ts:23,118) — a named error and an emitted event, not a silent break. Emit the bounded-exit event through the existing emit() telemetry helper rather than writing to history.jsonl directly.",
+  "evaluatorNotes": "This is the only sprint before 13 that can regress a shipping run, so weight regression evidence heavily. Verify the PipelineResult key-set snapshot was taken from the pre-change code rather than written to match the post-change code. Verify the flusher change does not double-emit when both the flusher and the TS engine run in the same process — assert exactly one history event and exactly one marker file per runId. Verify the tailer still matches markers produced by an older run whose filename was written before this sprint. Confirm resolveEngineName's downgrade for 'pge' logs once and does not throw. Confirm no src/pge/ import appeared anywhere in the diff.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/engine.ts",
+    "src/orchestrator/workflow/selector.ts",
+    "src/orchestrator/workflow/selector.test.ts",
+    "src/orchestrator/finalize.ts",
+    "src/orchestrator/finalize.test.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/pipeline.test.ts",
+    "src/orchestrator/workflow/flusher.ts",
+    "src/orchestrator/workflow/flusher.test.ts",
+    "src/orchestrator/workflow/pure-sprint.ts",
+    "src/chat/completion-tailer.ts",
+    "src/mcp/run-manager.ts",
+    "src/orchestrator/worktree.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

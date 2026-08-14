@@ -109,8 +109,8 @@ describe("TokensaveCli.sync()", () => {
     mockExeca({
       exitCode: 0,
       stdout: "",
-      stderr: "[32m✔[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
-      all: "[32m✔[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
+      stderr: "\u001b[32m✔\u001b[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
+      all: "\u001b[32m✔\u001b[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
     });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp);

@@ -927,6 +927,94 @@
 {"event":"plan-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"pipeline-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"totalIterations":3,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"sprint-docs-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","docsCommit":"3053de4","timestamp":"2026-07-14T22:46:00Z"}
+{"event":"plan-created","specId":"spec-20260726-graph-backend-choice","title":"Pluggable code-graph backend (tokensave or code-review-graph)","sprintCount":8,"status":"ready","timestamp":"2026-07-26T00:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260726-graph-backend-choice","task":"Pluggable code-graph backend (tokensave or code-review-graph)","branch":"bober/graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-1","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-1","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-1","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"ae1bde7","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-2","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-2","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-2","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"129d841","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":1,"note":"generator stalled post-implementation; orchestrator committed verified work","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":1,"failedCriteria":["sc-3-6"],"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":2,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-3","specId":"spec-20260726-graph-backend-choice","iteration":2,"commits":["77bb53c","6fc5a00"],"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-4","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-4","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-4","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"ed7d9cf","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-5","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-5","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-5","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"2ebe2af","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-6","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-6","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-6","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"4b837ff","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-7","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-7","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-7","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"d190d7b","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-8","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-8","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-8","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"7137bf0","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"plan-completed","specId":"spec-20260726-graph-backend-choice","sprintsCompleted":8,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"research-completed","researchId":"research-20260727-dual-graph-backend-fixes","feature":"what do we have to fix so both tokensave and code-review-graph work depending on what the user has","questionsGenerated":8,"filesExplored":12,"timestamp":"2026-07-27T10:57:53Z"}
+{"event":"research-completed","researchId":"research-20260804-agent-bober-opus5-adaptation","feature":"How well-adapted is agent-bober to Opus-5-class models; what can be cut to reduce latency","questionsGenerated":8,"filesExplored":14,"note":"two-phase subagent isolation skipped per user global CLAUDE.md (tokensave-first, no exploration agents)","timestamp":"2026-08-04T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260804-opus5-adaptation","title":"Opus-5 Adaptation: Tiered Prompts, Deterministic Pre-Gate, Stronger Completion Gate","sprintCount":8,"timestamp":"2026-08-04T00:00:00Z"}
+{"event":"research-completed","researchId":"research-20260805-pge-langgraph-refactor","feature":"Refactor agent-bober execution layer into a Prompt Graph Engineering (PGE) pipeline per the two Downloads docs","questionsGenerated":10,"filesExplored":24,"timestamp":"2026-08-05T00:00:00.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260805-pge-graph-engineering-13","specId":"spec-20260805-pge-graph-engineering","timestamp":"2026-08-06T19:37:55.966Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260805-pge-graph-engineering-13","specId":"spec-20260805-pge-graph-engineering","iteration":1,"timestamp":"2026-08-06T22:07:03.374Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260805-pge-graph-engineering-14","specId":"spec-20260805-pge-graph-engineering","timestamp":"2026-08-06T22:08:26.533Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260805-pge-graph-engineering-14","specId":"spec-20260805-pge-graph-engineering","iteration":1,"timestamp":"2026-08-07T00:14:08.407Z"}
+{"event":"plan-completed","specId":"spec-20260805-pge-graph-engineering","sprintsCompleted":14,"timestamp":"2026-08-07T00:14:08.407Z"}
+{"event":"plan-created","specId":"spec-20260812-pge-real-workload-errors","title":"PGE real-workload viability and an error channel on PipelineResult","sprintCount":9,"timestamp":"2026-08-12T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-08-12T00:00:00Z","task":"spec-20260812-pge-real-workload-errors — PGE real-workload viability and an error channel on PipelineResult"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","iteration":1,"timestamp":"2026-08-12T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T04:13:08Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T04:30:00Z","note":"estimatedFiles corrected: corpus moved from .bober/golden/workload/ to .bober/workload/ — the golden runner rejects non-case files in its directory"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","iteration":1,"timestamp":"2026-08-12T04:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T05:08:44Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T05:30:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","iteration":1,"failedCriteria":["sc-3-7"],"timestamp":"2026-08-12T05:55:00Z","note":"suite red: 5x capture.test.ts byte-exact vs graphVersion stamp; 1x workload corpus self-reference staleness"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","specId":"spec-20260812-pge-real-workload-errors","iteration":2,"timestamp":"2026-08-12T06:17:53Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-4","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T06:40:00Z","note":"contract re-scoped: sprint 3 revealed SuperstepLimitExceededError; sprint 4 now diagnoses ceiling-vs-non-convergence before fixing anything"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-4","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T07:03:29Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-5","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T07:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-5","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T11:26:23Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-6","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T11:40:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-6","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T11:46:48Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-7","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T12:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-7","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T12:51:20Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-8","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T13:10:00Z","note":"re-scoped: recapture already done by sprints 5 and 7; what remains is re-AUTHORING plus two obsolete test expectations"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-8","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T13:18:40Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-9","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T13:35:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-9","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T13:49:26Z"}
+{"event":"plan-completed","specId":"spec-20260812-pge-real-workload-errors","sprintsCompleted":9,"timestamp":"2026-08-12T13:49:26Z"}
+{"event":"plan-created","specId":"spec-20260812-terminal-vocabulary","title":"One terminal vocabulary for SprintContract, and the rank-aware channel join","sprintCount":6,"timestamp":"2026-08-12T14:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-08-12T15:30:07Z","specId":"spec-20260812-terminal-vocabulary","task":"One terminal vocabulary for SprintContract, and the rank-aware channel join","branch":"bober/terminal-vocabulary"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-terminal-vocabulary-1","specId":"spec-20260812-terminal-vocabulary","timestamp":"2026-08-12T15:30:29Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-1","iteration":1,"timestamp":"2026-08-12T15:54:26Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-1", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T16:02:01Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-1","critical":0,"important":0,"minor":2,"timestamp":"2026-08-12T16:12:05Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-2", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T16:12:59Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-2","iteration":1,"timestamp":"2026-08-12T16:27:39Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-2", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T16:33:49Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-2","critical":0,"important":0,"minor":0,"timestamp":"2026-08-12T16:40:14Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-3", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T16:40:32Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-3","iteration":1,"timestamp":"2026-08-12T17:04:21Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-3", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T17:15:28Z"}
+{"event":"security-audit-passed","contractId":"sprint-spec-20260812-terminal-vocabulary-3","critical":0,"important":0,"minor":1,"informational":1,"verifierDowngrades":2,"timestamp":"2026-08-12T17:28:56Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T17:29:25Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-4","iteration":1,"timestamp":"2026-08-12T18:31:05Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T18:49:05Z"}
+{"event": "security-audit-passed", "contractId": "sprint-spec-20260812-terminal-vocabulary-4", "critical": 1, "criticalPreExisting": true, "important": 2, "minor": 1, "note": "critical is a pre-existing NUL byte in reducers.ts, present at main before this spec; spawned as task_9e3c1791", "timestamp": "2026-08-12T19:03:02Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T19:03:39Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-5","iteration":1,"timestamp":"2026-08-12T19:44:43Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T19:55:38Z"}
+{"event": "security-audit-passed", "contractId": "sprint-spec-20260812-terminal-vocabulary-5", "critical": 0, "important": 0, "minor": 3, "timestamp": "2026-08-12T20:03:39Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260812-terminal-vocabulary-6", "specId": "spec-20260812-terminal-vocabulary", "timestamp": "2026-08-12T20:04:24Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-terminal-vocabulary-6","iteration":1,"timestamp":"2026-08-12T20:39:48Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260812-terminal-vocabulary-6", "specId": "spec-20260812-terminal-vocabulary", "iteration": 1, "timestamp": "2026-08-12T20:51:36Z"}
+{"event": "plan-completed", "specId": "spec-20260812-terminal-vocabulary", "sprintsCompleted": 6, "timestamp": "2026-08-12T20:51:36Z"}
 {"event":"plan-created","specId":"spec-20260731-documenter-docs-output","title":"Configurable documenter docs output (solo vs team)","sprintCount":3,"timestamp":"2026-07-31T00:00:00Z"}
 {"event":"sprint-started","contractId":"sprint-spec-20260731-documenter-docs-output-1","specId":"spec-20260731-documenter-docs-output","timestamp":"2026-07-31T00:10:00Z"}
 {"event":"sprint-iteration-failed","contractId":"sprint-spec-20260731-documenter-docs-output-1","iteration":1,"failedCriteria":[],"regression":"committed-mode absolute-path nonGoal violation","timestamp":"2026-07-31T12:15:00Z"}

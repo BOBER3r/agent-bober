@@ -28,8 +28,12 @@ export {
   MIN_CRITERION_DESCRIPTION_LENGTH,
   MIN_DEFINITION_OF_DONE_LENGTH,
   BANNED_VAGUE_PHRASES,
+  SETTLED_CONTRACT_STATUSES,
+  TERMINAL_CONTRACT_STATUSES,
   createContract,
   updateContractStatus,
+  isSettledContractStatus,
+  isTerminalContractStatus,
   findPrecisionIssues,
   isContractPrecise,
 } from "./contracts/sprint-contract.js";
@@ -71,8 +75,13 @@ export {
   type ContextHandoff,
   type Decision,
   type ProjectContext,
+  DEFAULT_KEEP_RECENT_SPRINTS,
+  MAX_KEEP_RECENT_SPRINTS,
+  MAX_SUMMARIZED_DESCRIPTION_LENGTH,
+  MAX_SUMMARIZED_SPRINTS,
   createHandoff,
   serializeHandoff,
+  serializeHandoffForPrompt,
   summarizeOlderSprints,
 } from "./orchestrator/context-handoff.js";
 
@@ -146,9 +155,12 @@ export type {
 
 export {
   ensureBoberDir,
+  type ContractListing,
+  type SkippedContractFile,
   saveContract,
   loadContract,
   listContracts,
+  listContractsWithSkips,
   updateContract,
   saveSpec,
   loadSpec,

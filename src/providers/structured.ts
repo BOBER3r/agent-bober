@@ -99,7 +99,12 @@ export function zodValidator<T>(schema: SafeParseable<T>): Validator<T> {
  *   1. direct `JSON.parse` (well-behaved providers / strict json mode);
  *   2. strip a leading/trailing markdown code fence, then parse;
  *   3. extract the substring spanning the first `{`/`[` to the matching last
- *      `}`/`]` (drops surrounding prose), then parse.
+ *      `}`/`]` (drops surrounding prose), then parse;
+ *   4. last resort: {@link normaliseBlockScalars} repairs raw control characters and
+ *      unescaped quotes inside string values, then parse each candidate in turn.
+ *
+ * Step 4 is unreachable for any text steps 1-3 accept, so adding it cannot change what an
+ * existing caller sees — it only narrows the set of inputs that throw.
  *
  * @throws {JsonCoercionError} if nothing parses.
  */
@@ -117,6 +122,14 @@ export function coerceJson(text: string): unknown {
   if (span !== null) {
     const spanned = tryParse(span);
     if (spanned.ok) return spanned.value;
+  }
+
+  // 4. LAST RESORT, and last on purpose (ADR-7). Every step above has already refused
+  //    this text, so nothing that parses today reaches this line and no existing caller
+  //    can observe a different value. See {@link normaliseBlockScalars}.
+  for (const candidate of normaliseBlockScalars(span ?? defenced)) {
+    const normalised = tryParse(candidate);
+    if (normalised.ok) return normalised.value;
   }
 
   throw new JsonCoercionError(
@@ -160,6 +173,254 @@ function extractJsonSpan(s: string): string | null {
   const lastClose = s.lastIndexOf(close);
   if (lastClose <= start) return null;
   return s.slice(start, lastClose + 1);
+}
+
+// ── Block-scalar normaliser (tolerant inbound path, ADR-7) ──────────
+
+/**
+ * The failure mode this exists for.
+ *
+ * A model asked for `{ "path": …, "content": … }` where `content` is a file's source
+ * routinely emits the source LITERALLY — raw newlines and unescaped inner double quotes
+ * inside a JSON string — or reaches for YAML's block-scalar syntax (`"content": |`) to
+ * avoid escaping at all. Both are invalid JSON and both are recoverable without a parser
+ * dependency, which is what ADR-7 chose over mandating YAML on the wire.
+ *
+ * ── Why this is a TOLERANT INBOUND PATH and nothing more ──
+ *
+ * It runs as the FOURTH step of {@link coerceJson}, after `JSON.parse`, after the fence
+ * strip and after the span extraction have each already refused the text. So:
+ *
+ *  - no input that parses today reaches it, which is why no existing value can change;
+ *  - an input that fails today either becomes a parsed value (a recovery) or still throws
+ *    {@link JsonCoercionError} with the same message and the same `raw`;
+ *  - {@link runStructuredAgent} treats a throw and a validation failure identically, so a
+ *    recovery can only turn a failed attempt into a successful one.
+ *
+ * The structural fix is still the one ADR-7 names — generated source travels by scratch
+ * reference and never inside a JSON string — and this is the residue absorber for output
+ * that arrives before that discipline can be applied.
+ *
+ * ── Why it returns CANDIDATES, and why the CONSERVATIVE one comes first ──
+ *
+ * Deciding whether a `"` inside an unterminated string closes it or belongs to the source
+ * is a heuristic, and a heuristic that is wrong once ruins the whole document. Two repairs
+ * are emitted instead: the conservative one (escape control characters only) and the
+ * aggressive one (escape control characters AND embedded quotes). The caller tries them in
+ * order and takes the first that parses.
+ *
+ * The order is load-bearing and it is conservative-first, because the two failures are not
+ * symmetric. The aggressive repair can produce a document that parses but is WRONG: a JSON
+ * array of strings — `"filesChanged": ["src/a.ts", "src/b.ts"]` — reaches `closesString`
+ * with no `:` ahead of `"src/b.ts"`, so the quotes around each element get escaped and the
+ * array silently collapses into one long element. That value still satisfies
+ * `z.array(z.string())`, so no validator downstream can catch it. The conservative repair
+ * cannot make that mistake: it never touches a quote, so it can never merge two array
+ * elements, and it only parses at all when the document's own quoting was already correct
+ * — which is precisely the case in which nothing should be guessed. Being wrong about
+ * quotes must therefore cost one `JSON.parse`, not a corrupted value, and only ordering the
+ * conservative candidate first buys that.
+ *
+ * The aggressive repair stays as the FALLBACK, for output whose inner quotes are genuinely
+ * unescaped (a TypeScript snippet inside a string field); such output does not parse under
+ * the conservative repair, so the fallback is reached exactly when it is needed.
+ */
+export function normaliseBlockScalars(text: string): string[] {
+  const inlined = inlineBlockScalars(text);
+  const candidates = [repairStrings(inlined, false), repairStrings(inlined, true)];
+  if (inlined !== text) candidates.push(inlined);
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (candidate === text || seen.has(candidate)) return false;
+    seen.add(candidate);
+    return true;
+  });
+}
+
+/** The escape characters JSON itself defines, so a legal escape is never doubled. */
+const JSON_ESCAPES = new Set(['"', "\\", "/", "b", "f", "n", "r", "t", "u"]);
+
+/** Control characters JSON forbids raw inside a string, and their escapes. */
+const CONTROL_ESCAPES: Readonly<Record<string, string>> = {
+  "\n": "\\n",
+  "\r": "\\r",
+  "\t": "\\t",
+  "\b": "\\b",
+  "\f": "\\f",
+};
+
+/** The next character after `from` that is not a space, tab, CR or LF. */
+function nextMeaningful(s: string, from: number): { char: string; index: number } {
+  for (let i = from; i < s.length; i++) {
+    const char = s.charAt(i);
+    if (char !== " " && char !== "\t" && char !== "\n" && char !== "\r") {
+      return { char, index: i };
+    }
+  }
+  return { char: "", index: s.length };
+}
+
+/** A complete JSON string literal followed by a `:` — i.e. an object KEY. */
+const KEY_AHEAD = /^"(?:[^"\\]|\\.)*"\s*:/;
+
+/**
+ * Walk a run of `}` and `]` from `index` and report what follows it.
+ *
+ * The discriminator between `…"}` inside a TypeScript snippet and `…"}` closing the JSON
+ * document: real JSON continues with a `,` or runs out of input, while source code
+ * continues with a `;`, an identifier or anything else.
+ */
+function afterCloserChain(s: string, index: number): { char: string; index: number } {
+  let i = index;
+  while (i < s.length) {
+    const char = s.charAt(i);
+    if (char === "}" || char === "]" || char === " " || char === "\t" || char === "\n" || char === "\r") {
+      i += 1;
+      continue;
+    }
+    return { char, index: i };
+  }
+  return { char: "", index: s.length };
+}
+
+/**
+ * Does the `"` at `index` CLOSE the string it sits in, or belong to its contents?
+ *
+ * Structural position is the only evidence available, so that is what is used, and WHERE
+ * THE STRING STARTED is half of it:
+ *
+ *  - a KEY string (one that opened right after `{` or `,`) closes only at a `:`;
+ *  - a VALUE string closes at end of input, at a `,` THAT INTRODUCES THE NEXT KEY, or at
+ *    a run of closers that the document then ends on or continues from with a `,`.
+ *
+ * All three halves matter for real source. `const m = {"kind": "error"};` inside a value
+ * string contains a `"` before a `:` and a `"` before a `}` — the key rule keeps the first
+ * inside the string, and the closer-chain rule keeps the second inside it because a `;`
+ * follows the brace. `return "x", y;` stays inside because the comma introduces an
+ * identifier, and `["run", "typecheck"]` stays inside because `"typecheck"` is followed by
+ * `]` rather than by the `:` a real next key would carry.
+ */
+function closesString(s: string, index: number, keyPosition: boolean): boolean {
+  const next = nextMeaningful(s, index + 1);
+  if (next.char === "") return true;
+  if (keyPosition) return next.char === ":";
+  if (next.char === ",") {
+    const after = nextMeaningful(s, next.index + 1);
+    return KEY_AHEAD.test(s.slice(after.index));
+  }
+  if (next.char === "}" || next.char === "]") {
+    const after = afterCloserChain(s, next.index);
+    if (after.char === "") return true;
+    // The same test as the comma rule, one level out: `["run", "typecheck"], { cwd }`
+    // reaches a comma through a closer too, and only a real next KEY makes it JSON.
+    return (
+      after.char === "," &&
+      KEY_AHEAD.test(s.slice(nextMeaningful(s, after.index + 1).index))
+    );
+  }
+  return false;
+}
+
+/**
+ * Escape what JSON forbids inside a string literal, leaving the structure alone.
+ *
+ * `escapeQuotes` selects the aggressive repair. Outside strings nothing is touched at all,
+ * so the document's own punctuation, numbers and literals survive byte-for-byte.
+ */
+function repairStrings(s: string, escapeQuotes: boolean): string {
+  let out = "";
+  let inString = false;
+  let keyPosition = false;
+  /** The last meaningful character seen OUTSIDE a string; decides key vs value position. */
+  let lastStructural = "";
+  for (let i = 0; i < s.length; i++) {
+    const char = s.charAt(i);
+
+    if (!inString) {
+      out += char;
+      if (char === '"') {
+        inString = true;
+        keyPosition = lastStructural === "{" || lastStructural === ",";
+      } else if (char !== " " && char !== "\t" && char !== "\n" && char !== "\r") {
+        lastStructural = char;
+      }
+      continue;
+    }
+
+    if (char === "\\") {
+      const next = s.charAt(i + 1);
+      // A backslash that does not begin a legal JSON escape is a lone backslash from the
+      // source (a Windows path, a regex) and has to become one.
+      if (JSON_ESCAPES.has(next)) {
+        out += char + next;
+        i += 1;
+      } else {
+        out += "\\\\";
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      if (closesString(s, i, keyPosition)) {
+        out += char;
+        inString = false;
+        lastStructural = '"';
+      } else {
+        out += escapeQuotes ? '\\"' : char;
+      }
+      continue;
+    }
+
+    const control = CONTROL_ESCAPES[char];
+    if (control !== undefined) {
+      out += control;
+      continue;
+    }
+    // Every other C0 control character, which JSON also forbids raw.
+    out += char.charCodeAt(0) < 0x20 ? `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}` : char;
+  }
+  return out;
+}
+
+/** `"key": |` / `|-` / `>` / `>-` — YAML's block-scalar introducers. */
+const BLOCK_SCALAR_HEADER = /^(\s*)("[^"\n]*"\s*:\s*)([|>])([-+]?)\s*$/;
+
+/**
+ * Fold a YAML block scalar back into a JSON string literal.
+ *
+ * The one YAML shape a model reaches for unprompted when it is asked for JSON and its
+ * payload is source code. Everything else about the document is left as it was — this is
+ * not a YAML parser and must not become one (ADR-7: no parser dependency).
+ */
+function inlineBlockScalars(s: string): string {
+  const lines = s.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const header = BLOCK_SCALAR_HEADER.exec(lines[i]);
+    if (header === null) {
+      out.push(lines[i]);
+      continue;
+    }
+    const [, indent, keyPart, style, chomp] = header;
+    const body: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const line = lines[j];
+      const blank = line.trim().length === 0;
+      const deeper = line.startsWith(`${indent} `) || line.startsWith(`${indent}\t`);
+      if (!blank && !deeper) break;
+      body.push(blank ? "" : line.slice(indent.length).replace(/^\s{1,2}/, ""));
+    }
+    while (body.length > 0 && body[body.length - 1] === "") body.pop();
+    const joined = style === ">" ? body.join(" ") : body.join("\n");
+    const text = chomp === "-" ? joined : `${joined}\n`;
+    // YAML separates members by line, JSON by comma. A block scalar followed by another
+    // key therefore needs the comma the source never had.
+    const follows = (lines[j] ?? "").trim();
+    out.push(`${indent}${keyPart}${JSON.stringify(text)}${follows.startsWith('"') ? "," : ""}`);
+    i = j - 1;
+  }
+  return out.join("\n");
 }
 
 // ── Structured agent ────────────────────────────────────────────────

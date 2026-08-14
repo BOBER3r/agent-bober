@@ -1,0 +1,150 @@
+{
+  "formatVersion": 1,
+  "caseId": "research-reflect-explore-collect-happy",
+  "title": "Research completes in one reflexion round",
+  "intent": "Pin the single-round research path: reflect, explore, an accepting critique and collect, with no conformance-visible artifact written.",
+  "tags": [
+    "research",
+    "happy-path",
+    "region:research"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "promptRef": "research/reflect",
+        "model": "light-model"
+      },
+      "response": {
+        "coreProblem": "Config parsing rejects the new block instead of validating it.",
+        "assumptions": [
+          "The block is optional and absent in every existing config."
+        ],
+        "unknowns": [
+          "Whether the block may appear more than once."
+        ],
+        "successLooksLike": "A malformed block yields a typed error naming the offending key."
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-config-block",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [
+          "src/config/parse.ts",
+          "src/config/parse.test.ts",
+          "src/config/errors.ts"
+        ],
+        "questionsAnswered": 4
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-config-block",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [
+          "Where is the config parsed today?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts.",
+        "questionsAnswered": 4,
+        "reflexionRound": 0,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": null
+      }
+    },
+    {
+      "nodeId": "research_collect",
+      "branchKey": null,
+      "effectName": "research.collect",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "doc": {
+          "id": "research-20260805-config-block",
+          "timestamp": "2026-08-05T10:00:00.000Z",
+          "questions": [
+            "Where is the config parsed today?",
+            "What happens to an unknown block?",
+            "Which tests cover the parser?",
+            "Is there a typed error class already?"
+          ],
+          "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+          "sections": {
+            "architecture": "One parse entry point, called from the CLI and from the library surface.",
+            "patterns": "Zod schemas per block, composed at the top level.",
+            "conventions": "Typed errors extend ConfigError and carry the offending key.",
+            "risks": "Silently dropping unknown blocks means a typo is invisible today."
+          },
+          "filesExplored": [
+            "src/config/parse.ts",
+            "src/config/parse.test.ts",
+            "src/config/errors.ts"
+          ],
+          "questionsAnswered": 4
+        }
+      },
+      "response": {
+        "researchId": "research-20260805-config-block",
+        "documentId": "research-20260805-config-block"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "research_collect",
+    "artifacts": {},
+    "notes": "Deliberately empty: research_collect writes .bober/research/, which is not one of the eleven conformance fields. The expectation is therefore the strong claim that a research-only run writes NO contract, spec, history line or completion marker."
+  }
+}

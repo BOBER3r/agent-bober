@@ -60,39 +60,111 @@ function toDistillable(raw: unknown): DistillableEval | null {
   return out;
 }
 
+/** An eval-result file {@link loadEvalResultsWithSkips} could not project. */
+export interface SkippedEvalFile {
+  /** Basename within `.bober/eval-results/`. */
+  file: string;
+  /** Why it was skipped — unreadable, bad JSON, or not a JSON object. */
+  reason: string;
+}
+
+/** What {@link loadEvalResultsWithSkips} returns: both halves of the directory. */
+export interface EvalResultListing {
+  /** Files that projected, sorted by filename. */
+  results: DistillableEval[];
+  /** Files that did not, sorted by filename. Never silently dropped. */
+  skipped: SkippedEvalFile[];
+}
+
 /**
- * Load all eval results from .bober/eval-results/, projected onto DistillableEval.
+ * Load eval results AND the files that could not be read.
  *
- * Returns entries sorted by filename for deterministic distill input. A missing
- * directory yields an empty array; malformed JSON files are skipped silently
- * (mirrors listContracts' skip-on-bad-file behaviour).
+ * ── Why both halves ─────────────────────────────────────────────────
+ *
+ * The same defect `listContractsWithSkips` fixes for `.bober/contracts/`, in
+ * the corpus this loader owns. Skipping an unreadable file is right — one bad
+ * file must not stop distillation — but skipping it silently means
+ * `bober memory distill` reports "distilled N lessons" from a smaller input
+ * set than the one on disk, with nothing to indicate the shortfall. A lesson
+ * that never got distilled because its eval file was unreadable is
+ * indistinguishable, from the outside, from a lesson there was no evidence for.
+ *
+ * Unlike the contracts corpus (52 of 248 files unreadable when this was
+ * written), `.bober/eval-results/` was clean at 234 of 234 — so this closes a
+ * LATENT hole rather than an active one. That is the point of doing it now:
+ * the skip is only invisible while nothing is being skipped.
+ *
+ * Note this loader is deliberately LENIENT — it does not validate against
+ * `EvalResultSchema` (see the module header), so the only things that can put
+ * a file in `skipped` are an unreadable file, unparseable JSON, or JSON that
+ * is not an object. Schema drift alone never lands here, by design.
  */
-export async function loadEvalResults(
+export async function loadEvalResultsWithSkips(
   projectRoot: string,
-): Promise<DistillableEval[]> {
+): Promise<EvalResultListing> {
   const dir = evalResultsDir(projectRoot);
 
   let entries: string[];
   try {
     entries = await readdir(dir);
   } catch {
-    // Directory doesn't exist yet — no eval results.
-    return [];
+    // Directory doesn't exist yet — no eval results, and nothing was skipped.
+    return { results: [], skipped: [] };
   }
 
   const jsonFiles = entries.filter((f) => f.endsWith(".json")).sort();
 
   const results: DistillableEval[] = [];
+  const skipped: SkippedEvalFile[] = [];
+
   for (const file of jsonFiles) {
+    let content: string;
     try {
-      const content = await readFile(join(dir, file), "utf-8");
-      const parsed: unknown = JSON.parse(content);
-      const projected = toDistillable(parsed);
-      if (projected) results.push(projected);
-    } catch {
-      // Skip malformed files.
+      content = await readFile(join(dir, file), "utf-8");
+    } catch (err) {
+      skipped.push({
+        file,
+        reason: `unreadable: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      skipped.push({
+        file,
+        reason: `invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      continue;
+    }
+
+    const projected = toDistillable(parsed);
+    if (projected) {
+      results.push(projected);
+    } else {
+      skipped.push({
+        file,
+        reason: "not a JSON object — nothing to project onto DistillableEval",
+      });
     }
   }
 
-  return results;
+  return { results, skipped };
+}
+
+/**
+ * Load all eval results from .bober/eval-results/, projected onto DistillableEval.
+ *
+ * Returns entries sorted by filename for deterministic distill input. A missing
+ * directory yields an empty array; unreadable files are skipped. This is the
+ * results-only projection of {@link loadEvalResultsWithSkips} — callers that
+ * report a count to a human should prefer that one, so a short read is visible
+ * rather than being reported as a complete one.
+ */
+export async function loadEvalResults(
+  projectRoot: string,
+): Promise<DistillableEval[]> {
+  return (await loadEvalResultsWithSkips(projectRoot)).results;
 }

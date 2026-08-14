@@ -1,0 +1,93 @@
+{
+  "contractId": "sprint-spec-20260726-graph-backend-choice-5",
+  "specId": "spec-20260726-graph-backend-choice",
+  "sprintNumber": 5,
+  "title": "code-review-graph read adapters: search, reviewContext, overview, impact, changes",
+  "description": "Implement the CodeReviewGraphBackend response adapters for the five non-query operations, validated against the fixtures captured in Sprint 4. search -> semantic_search_nodes_tool (SearchHit[] with NodeRef + score/snippet, kind coercion), reviewContext -> get_review_context_tool (string), overview -> get_architecture_overview_tool (string), impact -> get_impact_radius_tool (ImpactReport with root/affected/testsAffected partition), changes -> detect_changes_tool (NodeRef[]). Each adapter's *Plan method returns {tool, params, narrow} exactly like the tokensave backend, so GraphClient's sandbox/staleness/health/fallback logic is reused unchanged.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-4"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "Build + typecheck pass with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "search: CodeReviewGraphBackend.searchPlan returns {tool:'semantic_search_nodes_tool', params: <query+limit shape>, narrow}, and narrow(fixture) yields SearchHit[] whose NodeRef carries symbol/file/line with kind coerced to the NodeRef kind set, and score/snippet populated where the fixture provides them. Unit-tested against tests/graph/fixtures/cr-graph/semantic_search_nodes_tool.json.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "reviewContext (get_review_context_tool) and overview (get_architecture_overview_tool) narrows return the correct string payload from their fixtures (matching how GraphClient.reviewContext/overview consume a string).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "impact: impactPlan narrow(fixture from get_impact_radius_tool) yields an ImpactReport with a root NodeRef and affected vs testsAffected partitioned by the test/spec heuristic (or cr-graph's own test edges if the fixture distinguishes them). Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "changes: changesPlan narrow(fixture from detect_changes_tool) yields NodeRef[] of changed symbols. Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "End-to-end through GraphClient: with the code-review-graph backend injected and the transport mocked to return the captured fixtures, GraphClient.search/reviewContext/overview/impact/changes return GraphResult.ok=true with correctly-narrowed data, and the sandbox post-filter + kind coercion apply identically to the tokensave path. Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "Full suite green (no NEW failures); tokensave path unaffected; lint clean.",
+      "verificationMethod": "unit-test",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do NOT implement the four query sub-patterns (callers/callees/imports/tests) — Sprint 6.",
+    "Do NOT change GraphClient, the transport, or the tokensave backend adapters.",
+    "Do NOT normalize cr-graph's scoring/ranking to match tokensave — map the shape faithfully, keep the engine's own semantics.",
+    "Do NOT add new fixtures by guessing — use the Sprint-4 captured fixtures; if one is missing/insufficient, capture it live and note it, do not fabricate."
+  ],
+  "stopConditions": [
+    "All required success criteria pass",
+    "cr-graph search/reviewContext/overview/impact/changes adapters narrow the captured fixtures correctly and return ok GraphResults through GraphClient; suite + lint green"
+  ],
+  "definitionOfDone": "CodeReviewGraphBackend implements searchPlan/reviewContextPlan/overviewPlan/impactPlan/changesPlan producing SearchHit[]/string/string/ImpactReport/NodeRef[] validated against Sprint-4 fixtures; GraphClient returns ok results through the cr-graph backend with sandbox + kind coercion intact; tokensave path unchanged; suite + lint green.",
+  "assumptions": [
+    "GraphClient.search consumes SearchHit{node:NodeRef, score, snippet}; reviewContext/overview consume a string (client.ts:270-281); impact consumes an ImpactReport{root, affected, testsAffected} (247-268); changes consumes NodeRef[] (283-294). The cr-graph narrows must produce those exact shapes.",
+    "Original cr-graph field names (from 6ed3f77~1) and the live fixtures (Sprint 4) drive the narrows. semantic search likely returns rows with name/file/line/score fields; impact likely returns an affected-node set; review/overview likely return a text/markdown blob. Confirm against the actual fixtures — do not assume.",
+    "Kind coercion: reuse the NODE_KINDS set concept (function/class/module/symbol; unknown->symbol) from the tokensave backend. Factor a shared toNodeRef-like helper if cr-graph rows share the name/file/line/kind shape, or keep a cr-graph-specific one.",
+    "impact test/non-test partition: the tokensave backend splits affected vs testsAffected via a /test|spec/i heuristic on file path (client.ts:260-261). If the cr-graph impact fixture already tags test edges, prefer that; else reuse the same path heuristic.",
+    "The transport is mocked in unit tests (feed the fixture as the unwrapped payload) so these tests are deterministic and need no live binary."
+  ],
+  "outOfScope": [
+    "query sub-patterns (Sprint 6)",
+    "onboard / CLI parity (Sprint 7)",
+    "Docs (Sprint 8)"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read FIRST: tests/graph/fixtures/cr-graph/*.json (the captured shapes — THESE are your source of truth), the tokensave-backend *Plan methods (the template for {tool, params, narrow}), GraphClient's search/reviewContext/overview/impact/changes (how each result is consumed), and `git show 6ed3f77~1:src/graph/client.ts` (original cr-graph narrows).\n\nIMPLEMENT on CodeReviewGraphBackend: searchPlan(q, opts) -> {tool:'semantic_search_nodes_tool', params (query + limit — match the captured arg shape), narrow: rows->SearchHit[]}; reviewContextPlan(nodes) -> {tool:'get_review_context_tool', params, narrow: raw->string}; overviewPlan() -> {tool:'get_architecture_overview_tool', params, narrow: raw->string (JSON.stringify if it returns an object, matching how tokensave overview stringifies module_api)}; impactPlan(target) -> {tool:'get_impact_radius_tool', params (node id / symbol — match capture), narrow: raw->ImpactReport}; changesPlan(since) -> {tool:'detect_changes_tool', params, narrow: raw->NodeRef[]}.\n\nWRITE the narrows to consume the ACTUAL fixture fields. Add a fixture-driven unit test per operation: load the JSON, call narrow, assert the produced SearchHit/ImpactReport/etc. Add an end-to-end test that injects the cr-graph backend into GraphClient with a mocked transport returning the fixture, asserting GraphResult.ok=true and sandbox filtering applies.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-5): code-review-graph read adapters (search/reviewContext/overview/impact/changes)`.",
+  "evaluatorNotes": "sc-5-2..5-5: for each op, open the fixture and independently trace that the narrow maps the RIGHT fixture fields (e.g. semantic search score -> SearchHit.score, node name -> NodeRef.symbol). Reject adapters that ignore the fixture and hardcode/guess. sc-5-4: confirm impact partitions affected vs tests sensibly and root is populated. sc-5-6: confirm the end-to-end GraphClient test uses the cr-graph backend (not tokensave) and that sandbox keepNode still drops out-of-repo files. sc-5-7: tokensave tests + full suite unaffected. Reject if any narrow was written against an assumed shape that contradicts the committed fixture, or if scoring was 'normalized' to tokensave rather than mapped faithfully.",
+  "estimatedFiles": [
+    "src/graph/backends/code-review-graph-backend.ts",
+    "tests/graph/backends/code-review-graph-backend.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
+}

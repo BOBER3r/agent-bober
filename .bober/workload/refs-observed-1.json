@@ -1,0 +1,16 @@
+{
+  "entryId": "refs-observed-1",
+  "channel": "refs",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"research_explore\" writing \"refs\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "research-findings": {
+      "uri": "scratch://run-workload-observe/96ff947a369989aecc9de611dfff83e564057c507fbbdb46d52c56d798baf9fa.md",
+      "sha256": "96ff947a369989aecc9de611dfff83e564057c507fbbdb46d52c56d798baf9fa",
+      "bytes": 16,
+      "kind": "document"
+    }
+  }
+}

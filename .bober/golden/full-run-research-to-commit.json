@@ -1,0 +1,642 @@
+{
+  "formatVersion": 1,
+  "caseId": "full-run-research-to-commit",
+  "title": "A whole run from research to an approved commit",
+  "intent": "Pin the end-to-end artifact set of one complete run: spec, contract, eval result, briefing, review, audit, marker and history line together.",
+  "tags": [
+    "end-to-end",
+    "happy-path",
+    "artifacts:all"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "research_body",
+    "config": {
+      "autopilot": false
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "promptRef": "research/reflect",
+        "model": "light-model"
+      },
+      "response": {
+        "coreProblem": "Config parsing rejects the new block instead of validating it.",
+        "assumptions": [
+          "The block is optional and absent in every existing config."
+        ],
+        "unknowns": [
+          "Whether the block may appear more than once."
+        ],
+        "successLooksLike": "A malformed block yields a typed error naming the offending key."
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-e2e",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [
+          "src/config/parse.ts",
+          "src/config/parse.test.ts",
+          "src/config/errors.ts"
+        ],
+        "questionsAnswered": 4
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-e2e",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [],
+        "findings": "Complete.",
+        "questionsAnswered": 4,
+        "reflexionRound": 0,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": null
+      }
+    },
+    {
+      "nodeId": "research_collect",
+      "branchKey": null,
+      "effectName": "research.collect",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "doc": {
+          "id": "research-20260805-e2e",
+          "timestamp": "2026-08-05T10:00:00.000Z",
+          "questions": [
+            "Where is the config parsed today?",
+            "What happens to an unknown block?",
+            "Which tests cover the parser?",
+            "Is there a typed error class already?"
+          ],
+          "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+          "sections": {
+            "architecture": "One parse entry point, called from the CLI and from the library surface.",
+            "patterns": "Zod schemas per block, composed at the top level.",
+            "conventions": "Typed errors extend ConfigError and carry the offending key.",
+            "risks": "Silently dropping unknown blocks means a typo is invisible today."
+          },
+          "filesExplored": [
+            "src/config/parse.ts",
+            "src/config/parse.test.ts",
+            "src/config/errors.ts"
+          ],
+          "questionsAnswered": 4
+        }
+      },
+      "response": {
+        "researchId": "research-20260805-e2e",
+        "documentId": "research-20260805-e2e"
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "researchDoc": {
+          "id": "research-20260805-e2e",
+          "timestamp": "2026-08-05T10:00:00.000Z",
+          "questions": [
+            "Where is the config parsed today?",
+            "What happens to an unknown block?",
+            "Which tests cover the parser?",
+            "Is there a typed error class already?"
+          ],
+          "findings": "The parser lives in src/config/parse.ts and drops unknown blocks silently; ConfigError already exists.",
+          "sections": {
+            "architecture": "One parse entry point, called from the CLI and from the library surface.",
+            "patterns": "Zod schemas per block, composed at the top level.",
+            "conventions": "Typed errors extend ConfigError and carry the offending key.",
+            "risks": "Silently dropping unknown blocks means a typo is invisible today."
+          },
+          "filesExplored": [
+            "src/config/parse.ts",
+            "src/config/parse.test.ts",
+            "src/config/errors.ts"
+          ],
+          "questionsAnswered": 4
+        },
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "ready",
+        "spec": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      }
+    },
+    {
+      "nodeId": "plan_materialize",
+      "branchKey": null,
+      "effectName": "plan.materialize",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "spec": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      },
+      "response": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "pending",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      ]
+    },
+    {
+      "nodeId": "sprint_curate_explain",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.brief",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "spec": {
+          "specId": "spec-20260805-golden-fixture"
+        },
+        "completedSprints": [],
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "timestamp": "2026-08-05T12:00:00.000Z",
+        "briefing": "One parse entry point; add the block schema beside the existing ones.",
+        "filesAnalyzed": [
+          "src/config/parse.ts"
+        ],
+        "patternsFound": 2,
+        "utilsIdentified": 1
+      }
+    },
+    {
+      "nodeId": "sprint_generate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": true,
+        "notes": "Added the block schema and the typed error, plus tests for both branches.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": true,
+        "score": 92,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": true,
+            "score": 92,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": true,
+                "message": "Covered by a unit test."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_review",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "reviewer.sprint",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 92,
+          "results": [
+            {
+              "evaluator": "agent",
+              "passed": true,
+              "score": 92,
+              "details": [
+                {
+                  "criterion": "sc-1-1",
+                  "passed": true,
+                  "message": "Covered by a unit test."
+                }
+              ]
+            }
+          ]
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "reviewId": "review-golden-1",
+        "contractId": "spec-20260805-golden-fixture-1",
+        "specId": "spec-20260805-golden-fixture",
+        "timestamp": "2026-08-05T11:00:00.000Z",
+        "summary": "Clean.",
+        "critical": [],
+        "important": [],
+        "minor": [],
+        "approvedAreas": [
+          "schema composition"
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_exit",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "sprint.exit",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "contract": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1"
+      }
+    },
+    {
+      "nodeId": "commit",
+      "branchKey": null,
+      "effectName": "git.commit",
+      "callIndex": 0,
+      "request": {
+        "cwd": "/tmp/golden-run",
+        "message": "bober(sprint-1): accept and validate the new config block"
+      },
+      "response": {
+        "commit": "3c7d9e1f2a4b5c6d7e8f9012a3b4c5d6e7f80912"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "finalize",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "end-of-pipeline",
+          "iteration": 1,
+          "mechanism": "cli",
+          "outcome": "approved"
+        }
+      ],
+      "briefings": [
+        {
+          "content": "One parse entry point; add the block schema beside the existing ones.",
+          "contractId": "spec-20260805-golden-fixture-1"
+        }
+      ],
+      "completionMarker": [
+        {
+          "completedSprints": 1,
+          "failedSprints": 0,
+          "success": true
+        }
+      ],
+      "contracts": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      ],
+      "evalResults": [
+        {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "details": [
+            {
+              "criterion": "sc-1-1",
+              "message": "Covered by src/fixture/sprint-1.test.ts",
+              "passed": true
+            }
+          ],
+          "evaluator": "agent",
+          "feedback": "",
+          "iteration": 1,
+          "passed": true,
+          "score": 92,
+          "summary": "All criteria verified against the diff."
+        }
+      ],
+      "history": [
+        {
+          "details": {
+            "completed": 1,
+            "failed": 0
+          },
+          "event": "pipeline-complete",
+          "phase": "complete"
+        }
+      ],
+      "reviews": [
+        {
+          "content": "Clean.",
+          "contractId": "spec-20260805-golden-fixture-1"
+        }
+      ],
+      "specs": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "estimatedComplexity": "low",
+              "featureId": "feat-1",
+              "priority": "must-have",
+              "title": "Parse the new config block"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "ready",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      ]
+    },
+    "notes": "Eight of the eleven conformance fields at once. This is the case that fails first when any writer changes shape, and the three absent fields — progress, runState and pipelineResult — are absent because a run driven from pinned answers does not produce them."
+  }
+}

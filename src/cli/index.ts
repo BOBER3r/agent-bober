@@ -20,6 +20,8 @@ import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
 import { createBoberMCPServer } from "../mcp/server.js";
 import { registerGraphCommand } from "./commands/graph.js";
+import { registerPgeCommand } from "./commands/pge.js";
+import { registerTraceCommand } from "./commands/trace.js";
 import { registerOnboardCommand } from "./commands/onboard.js";
 import { registerImpactCommand } from "./commands/impact.js";
 import { registerApproveCommand } from "./commands/approve.js";
@@ -278,6 +280,12 @@ async function main(): Promise<void> {
 
   // ── graph ──────────────────────────────────────────────────────
   registerGraphCommand(program);
+
+  // ── pge ────────────────────────────────────────────────────────
+  registerPgeCommand(program);
+
+  // ── trace ──────────────────────────────────────────────────────
+  registerTraceCommand(program);
 
   // ── onboard ────────────────────────────────────────────────────
   registerOnboardCommand(program);

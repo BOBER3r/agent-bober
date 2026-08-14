@@ -1,0 +1,46 @@
+{
+  "formatVersion": 1,
+  "caseId": "research-gate-in-refuses-empty-request",
+  "title": "gate_research_in refuses an empty feature request",
+  "intent": "Pin the entry gate's refusal: a request that fails the FeatureRequest schema never reaches an LLM node and routes to graceful_failure.",
+  "tags": [
+    "research",
+    "gate:gate_research_in",
+    "refusal",
+    "region:research"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "?",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "gate_research_in refused the request: featureRequest is not a usable request",
+          "node": "gate_research_in",
+          "runId": "golden-run",
+          "detail": "The run stopped at gate_research_in: gate_research_in refused the request: featureRequest is not a usable request."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": "Exactly one pinned response, and it is the failure writer: if any research effect were invoked this case would fail, which is the assertion — the gate refuses BEFORE the model is called."
+  }
+}

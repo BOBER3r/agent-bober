@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// The engine-name tuple is the SINGLE source for both engine enums below
+// (pipeline.engine and teams[].pipelineShape). engine.ts has zero runtime
+// imports of its own, so this is a leaf value import — no module cycle.
+import { PIPELINE_ENGINE_NAMES } from "../orchestrator/workflow/engine.js";
+
 // ── Enums & Primitives ──────────────────────────────────────────────
 
 export const ProjectModeSchema = z.enum(["greenfield", "brownfield"]);
@@ -386,8 +391,17 @@ export const PipelineSectionSchema = z.object({
    *  via `git worktree remove` after a successful pipeline run. On failure the
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
-  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
-  engine: z.enum(["ts", "skill", "workflow", "medical-sop"]).default("ts"),
+  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines. 'pge' runs the graph engine and is an explicit opt-in that never becomes the default; a topology that does not compile downgrades to 'ts' inside PgeEngine.run. Values come from PIPELINE_ENGINE_NAMES. Default: 'ts'. */
+  engine: z.enum([...PIPELINE_ENGINE_NAMES]).default("ts"),
+  /**
+   * Per-run USD spend ceiling for the whole pipeline.
+   *
+   * Optional, and ABSENT MEANS UNCAPPED — the same null-means-unlimited convention every
+   * other `budget` section in this file uses. The graph engine checks it at each superstep
+   * barrier and ABORTS with a typed `BudgetExceededError` when the run's ledger has passed
+   * it; the imperative engine has its own per-role budgets and is unaffected.
+   */
+  budget: BudgetSectionSchema.optional(),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -424,6 +438,10 @@ export type GraphPreflightBudgets = z.infer<typeof GraphPreflightBudgetsSchema>;
 export const GraphSectionSchema = z.object({
   enabled: z.boolean().default(false),
   tokensavePath: z.string().optional(),
+  /** Explicit engine override. Unset = auto-detect (tokensave preferred). */
+  backend: z.enum(["tokensave", "code-review-graph"]).optional(),
+  /** Custom code-review-graph binary path (mirrors tokensavePath). */
+  codeReviewGraphPath: z.string().optional(),
   autoSync: z.boolean().default(true),
   languageTier: GraphLanguageTierSchema.default("core"),
   manifestPath: z.string().default(".bober/graph/manifest.json"),
@@ -541,8 +559,8 @@ export const TeamConfigSchema = z.object({
   displayName: z.string().optional(),
   /** Memory namespace segment — restricted to a safe path segment. */
   memoryNamespace: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
-  /** Orchestration engine shape for this team. Mirrors the z.enum in PipelineSectionSchema. */
-  pipelineShape: z.enum(["ts", "skill", "workflow", "medical-sop"]).optional(),
+  /** Orchestration engine shape for this team. Built from the SAME PIPELINE_ENGINE_NAMES tuple as PipelineSectionSchema.engine — the two enums can no longer drift apart. */
+  pipelineShape: z.enum([...PIPELINE_ENGINE_NAMES]).optional(),
   /** Partial role -> provider override. Keys SHOULD be RoleName values. */
   providers: z.record(z.string(), z.string()).optional(),
   roles: z.array(z.object({ name: z.string(), displayName: z.string() })).optional(),
@@ -829,6 +847,42 @@ export const SeoConfigSchema = z.object({
 });
 export type SeoConfig = z.infer<typeof SeoConfigSchema>;
 
+// ── PGE Section (prompt-graph engine, off the shipped execution path) ─
+
+/**
+ * Selective verification for the PGE sprint subgraph.
+ *
+ * Consumed only by `src/pge/nodes/verification.ts`, which nothing on a shipped execution
+ * path reaches (`src/pge/zero-execution.test.ts`). Both fields are optional and the
+ * defaults live in that module, so a config that omits this section — every config that
+ * exists today, including the one `createDefaultConfig` emits — behaves exactly as before.
+ */
+export const PgeSelectiveVerificationSchema = z.object({
+  /**
+   * Paths whose change always earns the expensive suite. Patterns support `*` (within one
+   * segment) and `**` (any remainder). Omitted means `["src/**"]`, i.e. every source
+   * change runs the suite, which is what the imperative pipeline already does.
+   */
+  highRiskPaths: z.array(z.string().min(1)).optional(),
+  /**
+   * An intermediate quality score below this earns the expensive suite even for a diff
+   * that touches no declared high-risk path. Omitted means 70.
+   */
+  qualityScoreThreshold: z.number().min(0).max(100).optional(),
+});
+export type PgeSelectiveVerification = z.infer<typeof PgeSelectiveVerificationSchema>;
+
+export const PgeSectionSchema = z.object({
+  selectiveVerification: PgeSelectiveVerificationSchema.optional(),
+  /**
+   * Wall-clock budget for one sandboxed command, in milliseconds. Omitted means the
+   * sandbox's own default (120000, `src/pge/runtime/sandbox.ts:117`). A generated test that
+   * does not terminate is killed at this bound rather than hanging the run.
+   */
+  sandboxTimeoutMs: z.number().int().positive().optional(),
+});
+export type PgeSection = z.infer<typeof PgeSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -872,6 +926,8 @@ export const BoberConfigSchema = z.object({
   research: ResearchSectionSchema.optional(),
   // ── Sprint 10 (agent-loop-capability-port): opt-in MCP tool bridge axis ──
   tools: ToolsSectionSchema.optional(),
+  // ── Sprint 12 (pge-graph-engineering): selective verification for the sprint subgraph ──
+  pge: PgeSectionSchema.optional(),
   // ── Security audit gate (opt-in, default-off) ──
   security: SecuritySectionSchema.optional(),
   // ── Sprint 1 (ultimate-seo-suite): SEO capability, default-off egress axes ──

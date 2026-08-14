@@ -1,0 +1,91 @@
+{
+  "contractId": "sprint-spec-20260726-graph-backend-choice-7",
+  "specId": "spec-20260726-graph-backend-choice",
+  "sprintNumber": 7,
+  "title": "Command parity: onboard, graph/impact CLI, external MCP + backend-status readout",
+  "description": "Ensure every graph-consuming surface works through the resolved backend and expose which engine is active. Verify `agent-bober onboard` produces all 5 artifacts on the code-review-graph backend (version line sourced from backendVersion, not tokensave), that `agent-bober impact` and `agent-bober graph` and src/mcp/server.ts construct and use the resolved backend, and add a backend-status readout (e.g. `agent-bober graph status`) printing the active engine id + version. All verified with fixtures/mocked transport per the fixtures-now decision.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-6"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "Build + typecheck pass with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "onboard: with the code-review-graph backend + mocked transport returning cr-graph search fixtures, `agent-bober onboard` writes all 5 markdown artifacts (README, architecture-overview, hotspots, knowledge-gaps, communities) to .bober/onboarding/, and the status/version line shows the cr-graph backendVersion (onboard.ts:134 no longer assumes manifest.tokensaveVersion for a non-tokensave backend). Unit/integration-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "impact + graph CLIs: src/cli/commands/impact.ts and src/cli/commands/graph.ts resolve and use the active backend; a test forcing graph.backend='code-review-graph' shows they operate through the cr-graph backend (mocked transport) and produce their reports.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "External MCP server: src/mcp/server.ts exposes its graph tools backed by the resolved backend (not a hardcoded tokensave client). Verified by a test that constructs the server with graph.backend='code-review-graph'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "A backend-status readout exists (e.g. `agent-bober graph status`) that prints the active engine id and version (backendVersion), and indicates whether it was chosen by explicit config or auto-detection. Tested for both backends.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "Selecting each backend in turn (graph.backend='tokensave' then 'code-review-graph') produces a working graph layer for that engine across onboard/impact/graph in tests. tokensave remains byte-identical. Full suite green (no NEW failures); lint clean.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT rework onboard.ts's data-gathering strategy (it keeps its 5 search() calls); only its backend source + version line change.",
+    "Do NOT add a live cr-graph run to default CI (fixtures/mocked transport for these tests).",
+    "Do NOT change the adapters from Sprints 5-6 or the tokensave path.",
+    "Do NOT add new graph capabilities beyond the backend-status readout."
+  ],
+  "stopConditions": [
+    "All required success criteria pass",
+    "onboard/impact/graph/mcp-server all work through the resolved backend for both engines; a backend-status readout shows the active engine; tokensave byte-identical; suite + lint green"
+  ],
+  "definitionOfDone": "Every graph-consuming surface (onboard, impact, graph, external MCP) operates through the resolved backend; onboard's version line uses backendVersion; a `graph status`-style readout prints the active engine id + version + selection source; both backends are exercised end-to-end via fixtures; tokensave byte-identical; suite + lint green.",
+  "assumptions": [
+    "onboard.ts already gathers all data via graphClient.search() (119-126) and maps SearchHit -> OnboardingInputs (137-185), so it is backend-agnostic EXCEPT status.tokensaveVersion (134). Change that to manifest.backendVersion ?? prereq.version, and (optional) the DISABLED_MSG/arch-doc references can mention either engine.",
+    "impact.ts, graph.ts, mcp/server.ts were switched to resolveGraphBackend in Sprint 3; this sprint confirms they actually EXERCISE the resolved backend end-to-end (not just construct it) and adds coverage forcing the cr-graph backend.",
+    "The backend-status readout can extend the existing `graph` command group (src/cli/commands/graph.ts) with a `status` subcommand, or augment an existing status output, printing {engine id, version, selectedBy: 'config'|'auto-detect'}.",
+    "Tests mock the transport (feed cr-graph fixtures) so no live binary is needed; a skipIf live onboard against cr-graph is optional and, if added, must skip when the binary is absent.",
+    "onboard writes to .bober/onboarding/; tests can run it against a temp project root or assert on the composed artifacts in-memory to avoid polluting the repo."
+  ],
+  "outOfScope": [
+    "Docs (Sprint 8)",
+    "onboard data-strategy rework",
+    "Live-CI cr-graph integration"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read FIRST: src/cli/commands/onboard.ts (full — esp. 119-185 gather+map and 134 version), src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/mcp/server.ts (graph tool wiring), the Sprint-3 resolveGraphBackend, and the Sprint-5/6 cr-graph adapters + fixtures.\n\nonboard: change status.tokensaveVersion source to backendVersion (manifest.backendVersion ?? prereq.version). Confirm onboard already flows through resolveGraphBackend (Sprint 3); if it still builds a bare tokensave backend, switch it. Add a test that runs onboard with the cr-graph backend + a mocked transport returning the semantic_search_nodes_tool fixture for the 5 search calls, asserting all 5 artifacts are written and the version line shows the cr-graph version.\n\nimpact/graph/mcp-server: add tests forcing graph.backend='code-review-graph' and assert the resolved backend is used end-to-end (mock transport). Fix any site that still assumes tokensave.\n\nbackend-status: add a `graph status` subcommand (or extend status output) printing engine id + version + selectedBy. Test for both backends.\n\nRun `npm run build && npm run typecheck && npx vitest run` (full) + lint. Confirm tokensave onboard/impact/graph byte-identical. Commit `bober(sprint-7): command parity (onboard/impact/graph/mcp) through resolved backend + graph status readout`.",
+  "evaluatorNotes": "sc-7-2: confirm onboard's version line no longer hardcodes/assumes tokensaveVersion for a cr-graph backend, and all 5 files are produced from cr-graph fixtures. sc-7-3/7-4: verify the tests actually FORCE graph.backend='code-review-graph' and that impact/graph/mcp-server use the cr-graph backend (not silently tokensave). sc-7-5: run the status readout for both backends and confirm it names the right engine + version + selection source. sc-7-6: flip the backend and confirm each engine yields a working graph layer; tokensave path byte-identical (existing onboard/impact/graph tests unchanged). Full suite: no new failures. Reject if any surface still hardcodes tokensave, or if onboard shows a tokensave version while running cr-graph.",
+  "estimatedFiles": [
+    "src/cli/commands/onboard.ts",
+    "src/cli/commands/impact.ts",
+    "src/cli/commands/graph.ts",
+    "src/mcp/server.ts",
+    "tests/graph/onboard.test.ts",
+    "tests/cli/graph-status.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
+}

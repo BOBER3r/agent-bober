@@ -1,0 +1,81 @@
+{
+  "formatVersion": 1,
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.4.0"
+  },
+  "workload": {
+    "specPath": ".bober/specs/spec-20260805-pge-graph-engineering.json",
+    "specId": "spec-20260805-pge-graph-engineering",
+    "specCanonicalBytes": 29214,
+    "contractCount": 14,
+    "contractsCanonicalBytes": 135106
+  },
+  "channelLimits": {
+    "branchStatus": 4096,
+    "counters": 4096,
+    "evaluations": 4096,
+    "ledger": 4096,
+    "messages": 4096,
+    "refs": 4096,
+    "spec": 131072,
+    "specDraft": 65536,
+    "sprintContracts": 524288,
+    "testAnchors": 4096,
+    "verdict": 4096
+  },
+  "rejections": [],
+  "failures": [
+    {
+      "nodeId": "commit",
+      "branchKey": null,
+      "superstep": 232,
+      "errorClass": "FailClosed"
+    }
+  ],
+  "terminalNodeId": "graceful_failure",
+  "status": "completed",
+  "verdict": "failed",
+  "specChannelNullAtBoundary": false,
+  "supersteps": 234,
+  "superstepCeiling": {
+    "configured": 512,
+    "measuredBasis": 234,
+    "headroomFactor": 2
+  },
+  "engineOutcome": {
+    "kind": "resolved",
+    "success": true
+  },
+  "corpusHeadroom": {
+    "messages": {
+      "corpusMaxBytes": 1292,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "evaluations": {
+      "corpusMaxBytes": 1067,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "refs": {
+      "corpusMaxBytes": 283,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    }
+  },
+  "contractCountScaling": [
+    {
+      "contractCount": 1,
+      "supersteps": 39,
+      "terminalNodeId": "graceful_failure",
+      "status": "completed"
+    },
+    {
+      "contractCount": 14,
+      "supersteps": 234,
+      "terminalNodeId": "graceful_failure",
+      "status": "completed"
+    }
+  ]
+}

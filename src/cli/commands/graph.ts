@@ -4,9 +4,12 @@ import chalk from "chalk";
 
 import { loadConfig } from "../../config/loader.js";
 import { findProjectRoot } from "../../utils/fs.js";
-import { TokensavePrereqCheck } from "../../graph/prereq.js";
+import { GenericPrereqCheck } from "../../graph/prereq.js";
 import { TokensaveCli } from "../../graph/cli.js";
 import { GraphArtifactStore } from "../../graph/artifact-store.js";
+import { resolveGraphBackend, binaryForBackend } from "../../graph/backends/registry.js";
+import { TokensaveBackend } from "../../graph/backends/tokensave-backend.js";
+import type { BoberConfig } from "../../config/schema.js";
 
 // ── Architecture doc link ──────────────────────────────────────────
 
@@ -34,14 +37,28 @@ async function resolveRoot(): Promise<string> {
 export function registerGraphCommand(program: Command): void {
   const graph = program
     .command("graph")
-    .description("Code-graph (tokensave) integration commands");
+    .description("Code-graph (tokensave or code-review-graph) integration commands");
 
   // ── check-prereq ─────────────────────────────────────────────────
   graph
     .command("check-prereq")
     .description("Detect tokensave and report version compatibility (JSON)")
     .action(async () => {
-      const checker = new TokensavePrereqCheck();
+      // check-prereq is usable before a config exists (bootstrap tool) — only
+      // resolve a config-driven backend when a config is actually present;
+      // otherwise fall back to the tokensave-only legacy behavior.
+      const projectRoot = await resolveRoot();
+      let config: BoberConfig | undefined;
+      try {
+        config = await loadConfig(projectRoot);
+      } catch {
+        // No config yet — legacy tokensave-only detection below.
+      }
+
+      const backend = config ? await resolveGraphBackend(config) : new TokensaveBackend();
+      const binary = config ? binaryForBackend(backend, config) : backend.processSpec().binary;
+
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const result = await checker.check();
       // Plain JSON to stdout — no chalk, no logger
       process.stdout.write(JSON.stringify(result) + "\n");
@@ -73,12 +90,17 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
+      // Resolve which engine to run — explicit config.graph.backend wins,
+      // else auto-detect (tokensave preferred when both are installed).
+      const backend = await resolveGraphBackend(config);
+      const binary = binaryForBackend(backend, config);
+
       // Prereq check
-      const checker = new TokensavePrereqCheck(graphCfg.tokensavePath ?? "tokensave");
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const prereq = await checker.check();
       if (!prereq.ok) {
         process.stderr.write(
-          `tokensave is not available. To install:\n  ${prereq.hint}\n`,
+          `${backend.id} is not available. To install:\n  ${prereq.hint}\n`,
         );
         process.exitCode = 2;
         return;
@@ -87,11 +109,9 @@ export function registerGraphCommand(program: Command): void {
       const store = new GraphArtifactStore(projectRoot);
       await store.ensureLayout();
 
-      const cli = new TokensaveCli(
-        projectRoot,
-        store,
-        graphCfg.tokensavePath ?? "tokensave",
-      );
+      // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+      // init honors whichever engine was selected, not a hardcoded tokensave.
+      const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       try {
         await cli.init({
@@ -116,8 +136,14 @@ export function registerGraphCommand(program: Command): void {
         languageTier: existingManifest?.languageTier ?? graphCfg.languageTier ?? "core",
         lastSyncedHeadSha: existingManifest?.lastSyncedHeadSha ?? null,
         pendingFiles: existingManifest?.pendingFiles ?? [],
-        // always overwrite with fresh values
-        tokensaveVersion: prereq.version,
+        // always overwrite with fresh values; tokensaveVersion is kept
+        // back-compat (only updated when tokensave IS the resolved engine —
+        // a cr-graph run does not know tokensave's version, so it preserves
+        // whatever was last recorded).
+        tokensaveVersion:
+          backend.id === "tokensave" ? prereq.version : (existingManifest?.tokensaveVersion ?? ""),
+        backend: backend.id,
+        backendVersion: prereq.version,
         lastSyncAt: now,
       });
 
@@ -153,12 +179,17 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
+      // Resolve which engine to run — explicit config.graph.backend wins,
+      // else auto-detect (tokensave preferred when both are installed).
+      const backend = await resolveGraphBackend(config);
+      const binary = binaryForBackend(backend, config);
+
       // Prereq check
-      const checker = new TokensavePrereqCheck(graphCfg.tokensavePath ?? "tokensave");
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const prereq = await checker.check();
       if (!prereq.ok) {
         process.stderr.write(
-          `tokensave is not available. To install:\n  ${prereq.hint}\n`,
+          `${backend.id} is not available. To install:\n  ${prereq.hint}\n`,
         );
         process.exitCode = 1;
         return;
@@ -167,11 +198,9 @@ export function registerGraphCommand(program: Command): void {
       const store = new GraphArtifactStore(projectRoot);
       await store.ensureLayout();
 
-      const cli = new TokensaveCli(
-        projectRoot,
-        store,
-        graphCfg.tokensavePath ?? "tokensave",
-      );
+      // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+      // sync honors whichever engine was selected, not a hardcoded tokensave.
+      const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       // --force → `tokensave sync --force .` re-indexes everything;
       // otherwise an incremental sync of the project root.
@@ -188,8 +217,12 @@ export function registerGraphCommand(program: Command): void {
           createdAt: existing?.createdAt ?? now,
           languageTier: existing?.languageTier ?? graphCfg.languageTier ?? "core",
           lastSyncedHeadSha: existing?.lastSyncedHeadSha ?? null,
-          // always overwrite with fresh sync values
-          tokensaveVersion: prereq.version,
+          // always overwrite with fresh sync values; tokensaveVersion is kept
+          // back-compat (see the same rationale in the `init` handler above).
+          tokensaveVersion:
+            backend.id === "tokensave" ? prereq.version : (existing?.tokensaveVersion ?? ""),
+          backend: backend.id,
+          backendVersion: prereq.version,
           lastSyncAt: now,
           indexedFileCount: result.indexed,
           pendingFiles: [],
@@ -230,22 +263,25 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
+      // Resolve which engine to run — explicit config.graph.backend wins,
+      // else auto-detect (tokensave preferred when both are installed).
+      const backend = await resolveGraphBackend(config);
+      const binary = binaryForBackend(backend, config);
+
       // Prereq check (non-fatal — just note it in status)
-      const checker = new TokensavePrereqCheck(graphCfg.tokensavePath ?? "tokensave");
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const prereq = await checker.check();
 
       const store = new GraphArtifactStore(projectRoot);
       const manifest = await store.readManifest();
       const staleness = await store.staleness();
 
-      // Attempt to get live status from tokensave binary
+      // Attempt to get live status from the resolved engine's binary.
       let liveStatus = { ready: false, indexedFileCount: 0, tokensaveVersion: "" };
       if (prereq.ok) {
-        const cli = new TokensaveCli(
-          projectRoot,
-          null,
-          graphCfg.tokensavePath ?? "tokensave",
-        );
+        // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+        // status honors whichever engine was selected, not a hardcoded tokensave.
+        const cli = new TokensaveCli(projectRoot, null, binary, backend);
         try {
           liveStatus = await cli.status();
         } catch {
@@ -253,12 +289,26 @@ export function registerGraphCommand(program: Command): void {
         }
       }
 
+      // Backend-status readout (sc-7-5): which engine is active, its version,
+      // and whether it was pinned by explicit config or auto-detected. This
+      // mirrors resolveGraphBackend's own "explicit config.graph.backend wins"
+      // branch (registry.ts:100-103) without needing to change that function's
+      // signature (it has 5 existing call sites + its own test suite).
+      const engine = backend.id;
+      const backendVersion = (prereq.ok ? prereq.version : "") || manifest?.backendVersion || "";
+      const selectedBy: "config" | "auto-detect" = config.graph?.backend
+        ? "config"
+        : "auto-detect";
+
       const output = {
         ready: liveStatus.ready,
         indexedFileCount: liveStatus.indexedFileCount || manifest?.indexedFileCount || 0,
         tokensaveVersion: liveStatus.tokensaveVersion || manifest?.tokensaveVersion || "",
         lastSyncedHeadSha: manifest?.lastSyncedHeadSha ?? null,
         stale: staleness.stale,
+        engine,
+        backendVersion,
+        selectedBy,
       };
 
       if (opts.json) {
@@ -277,5 +327,10 @@ export function registerGraphCommand(program: Command): void {
       process.stdout.write(
         `Last HEAD SHA:   ${output.lastSyncedHeadSha ?? chalk.gray("(none)")}\n`,
       );
+      process.stdout.write(`Engine:          ${output.engine}\n`);
+      process.stdout.write(
+        `Version:         ${output.backendVersion || chalk.gray("(unknown)")}\n`,
+      );
+      process.stdout.write(`Selected by:     ${output.selectedBy}\n`);
     });
 }

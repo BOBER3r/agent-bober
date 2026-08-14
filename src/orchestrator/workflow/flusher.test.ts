@@ -12,8 +12,13 @@ import { RunResultFlusher } from "./flusher.js";
 import { loadContract, listContracts } from "../../state/sprint-state.js";
 import { loadHistory } from "../../state/history.js";
 import { createDefaultConfig } from "../../config/schema.js";
+import {
+  COMPLETION_MARKER_SUFFIX,
+  PIPELINE_COMPLETE_EVENT,
+  completionMarkerPath,
+} from "../finalize.js";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
 import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { PlanSpec } from "../../contracts/spec.js";
@@ -201,13 +206,24 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     await flusher.flush(tmpDir, config, result);
 
     const loaded = await loadContract(tmpDir, contract.contractId);
-    expect(loaded.status).toBe("passed");
+    expect(loaded.status).toBe("completed");
     expect(typeof loaded.completedAt).toBe("string");
     // completedAt must be a valid ISO 8601 datetime
     expect(() => new Date(loaded.completedAt!).toISOString()).not.toThrow();
   });
 
-  it("appends pendingHistory entries with stamped timestamps (C3)", async () => {
+  /**
+   * CHANGED in the PGE sprint-4 extraction, and deliberately so.
+   *
+   * This assertion used to be `toHaveLength(result.pendingHistory.length)`,
+   * which encoded the pre-existing DEFECT that the flusher emitted no terminal
+   * event at all — a workflow-engine run was invisible to
+   * src/chat/completion-tailer.ts. The flusher now shares finalizePipelineRun
+   * with the TS engine, so the expected history is the pendingHistory entries
+   * PLUS exactly one PIPELINE_COMPLETE_EVENT, appended last. The count is still
+   * exact (nothing is loosened) and the extra line is named, not tolerated.
+   */
+  it("appends pendingHistory entries with stamped timestamps, then exactly one terminal event (C3)", async () => {
     const flusher = new RunResultFlusher();
     const config = createDefaultConfig("test", "brownfield");
     const contract = makeSyntheticContract();
@@ -217,12 +233,26 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     await flusher.flush(tmpDir, config, result);
 
     const history = await loadHistory(tmpDir);
-    expect(history).toHaveLength(result.pendingHistory.length);
+    expect(history).toHaveLength(result.pendingHistory.length + 1);
 
     for (const entry of history) {
       expect(typeof entry.timestamp).toBe("string");
       expect(() => new Date(entry.timestamp).toISOString()).not.toThrow();
     }
+
+    // The pendingHistory entries come first, in order, unchanged.
+    expect(history.slice(0, result.pendingHistory.length).map((h) => h.event)).toEqual(
+      result.pendingHistory.map((h) => h.event),
+    );
+
+    // ...and the terminal event is last, exactly once.
+    const terminal = history.filter((h) => h.event === PIPELINE_COMPLETE_EVENT);
+    expect(terminal).toHaveLength(1);
+    expect(history[history.length - 1]!.event).toBe(PIPELINE_COMPLETE_EVENT);
+    expect(terminal[0]!.phase).toBe("complete");
+    expect(terminal[0]!.details["completed"]).toBe(1);
+    expect(terminal[0]!.details["failed"]).toBe(0);
+    expect(typeof terminal[0]!.details["durationMs"]).toBe("number");
   });
 
   it("writes progress.md containing the contract title (C3)", async () => {
@@ -312,7 +342,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
 
       // Contract must still be loadable and valid
       const loaded = await loadContract(tmpDir, contract.contractId);
-      expect(loaded.status).toBe("passed");
+      expect(loaded.status).toBe("completed");
       expect(loaded.contractId).toBe(contract.contractId);
     });
 
@@ -376,7 +406,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     expect(pipelineResult.failedSprints).toHaveLength(1);
 
     const loaded1 = await loadContract(tmpDir, contract1.contractId);
-    expect(loaded1.status).toBe("passed");
+    expect(loaded1.status).toBe("completed");
 
     const loaded2 = await loadContract(tmpDir, contract2.contractId);
     expect(loaded2.status).toBe("failed");
@@ -386,5 +416,142 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     // Sanity: ensure tmpDir is an absolute path (required by all state helpers)
     expect(tmpDir.startsWith("/")).toBe(true);
     expect(resolve(tmpDir)).toBe(tmpDir);
+  });
+});
+
+// ── Terminal side effects (PGE sprint 4) ──────────────────────────────
+//
+// Before this sprint the flusher wrote NEITHER the pipeline-complete history
+// event NOR the .completed.json marker, so a workflow-engine run never reached
+// src/chat/completion-tailer.ts. These tests pin the repaired behaviour by
+// COUNTING writes — an "it exists" assertion would pass just as happily on a
+// double emission, which is the other way to break the tailer's dedupe.
+
+describe("RunResultFlusher.flush — terminal side effects", () => {
+  /** Count files in .bober/runs/ whose name ends with the marker suffix. */
+  async function countMarkers(root: string): Promise<string[]> {
+    const entries = await readdir(join(root, ".bober", "runs"));
+    return entries.filter((e) => e.endsWith(COMPLETION_MARKER_SUFFIX));
+  }
+
+  it("writes exactly ONE completion marker, named <runId>.completed.json", async () => {
+    const config = createDefaultConfig("test", "brownfield");
+    const contract = makeSyntheticContract();
+    const spec = makeSyntheticSpec();
+
+    await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      makeSyntheticResult(contract, spec),
+      { runId: "run-flusher-marker" },
+    );
+
+    const markers = await countMarkers(tmpDir);
+    expect(markers).toEqual(["run-flusher-marker.completed.json"]);
+
+    const raw = JSON.parse(
+      await readFile(completionMarkerPath(tmpDir, "run-flusher-marker"), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(raw["runId"]).toBe("run-flusher-marker");
+    expect(raw["success"]).toBe(true);
+    expect(raw["completedSprints"]).toBe(1);
+    expect(raw["failedSprints"]).toBe(0);
+    expect(typeof raw["completedAt"]).toBe("string");
+    expect(typeof raw["duration"]).toBe("number");
+  });
+
+  it("emits exactly ONE pipeline-complete line and ONE marker per flush (counted)", async () => {
+    const config = createDefaultConfig("test", "brownfield");
+    const contract = makeSyntheticContract();
+    const spec = makeSyntheticSpec();
+
+    await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      makeSyntheticResult(contract, spec),
+      { runId: "run-once" },
+    );
+
+    const history = await loadHistory(tmpDir);
+    expect(history.filter((h) => h.event === PIPELINE_COMPLETE_EVENT)).toHaveLength(1);
+    expect(await countMarkers(tmpDir)).toHaveLength(1);
+  });
+
+  it("two flushes with DISTINCT runIds produce two markers and two terminal lines", async () => {
+    const config = createDefaultConfig("test", "brownfield");
+    const spec = makeSyntheticSpec();
+
+    await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      makeSyntheticResult(makeSyntheticContract(), spec),
+      { runId: "run-a" },
+    );
+    await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      makeSyntheticResult(makeSyntheticContract(), spec),
+      { runId: "run-b" },
+    );
+
+    expect((await countMarkers(tmpDir)).sort()).toEqual([
+      "run-a.completed.json",
+      "run-b.completed.json",
+    ]);
+    const history = await loadHistory(tmpDir);
+    expect(history.filter((h) => h.event === PIPELINE_COMPLETE_EVENT)).toHaveLength(2);
+  });
+
+  it("phase is 'failed' and success=false when no sprint passed", async () => {
+    const config = createDefaultConfig("test", "brownfield");
+    const contract = makeSyntheticContract();
+    const spec = makeSyntheticSpec();
+
+    const pipelineResult = await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      {
+        spec,
+        perSprint: [
+          {
+            contract,
+            finalVerdict: makeEvalResult(false),
+            iterationsUsed: 3,
+            outcome: "failed",
+            lensVerdicts: [makeEvalResult(false)],
+          },
+        ],
+        needsClarification: false,
+        pendingHistory: [],
+      },
+      { runId: "run-failed" },
+    );
+
+    expect(pipelineResult.success).toBe(false);
+
+    const history = await loadHistory(tmpDir);
+    const terminal = history.filter((h) => h.event === PIPELINE_COMPLETE_EVENT);
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]!.phase).toBe("failed");
+    expect(terminal[0]!.details["completed"]).toBe(0);
+    expect(terminal[0]!.details["failed"]).toBe(1);
+
+    const marker = JSON.parse(
+      await readFile(completionMarkerPath(tmpDir, "run-failed"), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(marker["success"]).toBe(false);
+  });
+
+  it("self-generates a run-<timestamp> runId when none is supplied", async () => {
+    const config = createDefaultConfig("test", "brownfield");
+    await new RunResultFlusher().flush(
+      tmpDir,
+      config,
+      makeSyntheticResult(makeSyntheticContract(), makeSyntheticSpec()),
+    );
+
+    const markers = await countMarkers(tmpDir);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toMatch(/^run-\d+\.completed\.json$/);
   });
 });

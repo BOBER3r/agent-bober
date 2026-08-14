@@ -1,0 +1,138 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-14",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 14,
+  "title": "Golden dataset, blocking CI structural-diff and regression gates, node-level documentation with drift enforcement, and the recorded engine migration disposition",
+  "description": "Close the loop that makes the whole design pay: an artifact nobody gates on is an artifact nobody maintains. Commit a curated dataset of 20 to 50 golden cases with pinned provider responses and expected artifacts. Add one blocking pull-request CI job that runs the graph regression suite against that dataset behind a minimum pass-rate threshold, and in the same job runs pge dump --check, pge validate --mode full, pge docs --check, pge diff --require-version-bump against the base-branch artifact, and pge audit-state followed by git diff --exit-code — none with continue-on-error, so a stale artifact, an undocumented node or an unversioned structural change cannot merge regardless of review attention. Write docs/pge-graph.md covering every node, edge, gate and loop bound, kept in sync by the drift checker. Finally record the migration disposition in writing: PgeEngine remains opt-in with 'ts' as default, TsPipelineEngine is retained permanently as the oracle, the dormant src/orchestrator/workflow/ subtree's retention or conditional retirement is decided against the stated criteria, and the divergence of bober sprint and bober_sprint from the full sprint cycle is either resolved or formally documented as a deliberate escape hatch.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-3",
+    "sprint-spec-20260805-pge-graph-engineering-13"
+  ],
+  "features": [
+    "feat-11"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-14-1",
+      "description": "A test asserts the count of files under .bober/golden/ is within [20,50] and that each validates against a GoldenCase Zod schema containing input, pinned provider responses and expected artifacts.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-2",
+      "description": "Unit tests drive the regression runner at 79, 80 and 81 percent against a threshold of 80 and assert exit codes fail, fail and pass respectively.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-3",
+      "description": "A test parses .github/workflows/ci.yml and asserts a job exists that triggers on pull_request, invokes the graph regression runner, and does not set continue-on-error true.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-4",
+      "description": "The same workflow-parsing test asserts the blocking job also invokes pge dump --check, pge validate --mode full, pge docs --check, pge diff --require-version-bump and pge audit-state with git diff --exit-code, each without continue-on-error.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-5",
+      "description": "Both branches of the structural-diff rule are driven in unit tests: a non-empty topology diff without a graphVersion bump exits non-zero, and the same diff with a bump plus a changelog entry exits zero.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-6",
+      "description": "The diff gate uses structural mode so a base-branch artifact naming schema or prompt refs absent on head does not produce a spurious failure, asserted with a base fixture carrying an unknown promptRef.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-7",
+      "description": "docs/pge-graph.md exists and a doc-drift test asserts the set of node ids documented equals the set of node ids in the committed topology artifact; adding a node to a fixture artifact without documenting it fails the test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-8",
+      "description": "docs/pge-graph.md documents, for every gate, what schema it validates and what it routes to on failure, and for every cyclic edge its counterKey, maxIterations and onExhausted target, asserted by a test that cross-checks those fields against the artifact rather than merely checking headings exist.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-9",
+      "description": "A test asserts config.pipeline.engine still defaults to 'ts' and that TsPipelineEngine is still constructible and still exercised by the conformance job, so the oracle is provably retained.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-10",
+      "description": "The migration disposition is recorded in docs/pge-graph.md with an explicit decision for the dormant src/orchestrator/workflow/ subtree and for bober sprint and bober_sprint; if any workflow module is deleted, its assertions are first proven green against the graph runtime and the deletion is reflected in the test count with no net loss of covered invariants.",
+      "verificationMethod": "agent-evaluation",
+      "required": true
+    },
+    {
+      "criterionId": "sc-14-11",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add continue-on-error to any new job, and do not follow the precedent of the existing informational kpi-gate job — an informational structural gate is decorative and defeats the purpose of the whole design.",
+    "Do not delete src/orchestrator/workflow/ modules that gained production callers: Scheduler, Semaphore, mapBounded, Budget, retry.ts, reconciler.ts, synthesizer.ts and conformance.ts are retained permanently.",
+    "Do not delete any test to make a gate pass. Deletion of the dormant subtree is conditional on its assertions being green on the graph runtime first.",
+    "Do not change the default engine to 'pge' in this sprint, and do not remove TsPipelineEngine.",
+    "Do not treat a permanently-green golden dataset as evidence of generation quality; the pinned provider responses regression-test runtime and artifact shape only, and the documentation must say so.",
+    "Do not implement bober sprint / bober_sprint re-pointing here; this sprint records the decision, and re-pointing would change observable behaviour for two of three entry points."
+  ],
+  "stopConditions": [
+    "The blocking CI job runs all six checks plus the regression suite with no continue-on-error anywhere.",
+    "Both branches of the version-bump rule are proven by unit tests rather than by trusting the workflow file.",
+    "The doc-drift test fails when a node is added without documentation.",
+    "The golden dataset count is within [20,50] and every case validates.",
+    "A decision recorded in the disposition would require deleting a test whose invariant is not yet covered on the graph runtime."
+  ],
+  "definitionOfDone": "A curated golden dataset is committed, one blocking pull-request job gates merges on graph regression pass rate plus artifact freshness, validity, documentation, structural version bumping and state-audit determinism, docs/pge-graph.md documents every node, gate and loop bound with a drift test enforcing it, and the engine migration disposition is written down. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, pipeline.engine still defaults to 'ts', and no test was removed to satisfy a gate.",
+  "assumptions": [
+    "Authoring 20 to 50 cases with pinned provider responses is substantial hand-written content and is the largest non-code effort in the plan; the count may be delivered at the low end of the range with a documented plan to grow it.",
+    "The CI job checks out the base branch artifact to diff against; structural mode is required because a base artifact may name refs absent on head.",
+    "The changelog entry required alongside a graphVersion bump is a section in docs/pge-graph.md rather than a separate file, so documentation and version history stay in one place the drift test already reads."
+  ],
+  "outOfScope": [
+    "A quality benchmark measuring generation output against human judgement.",
+    "Flipping the default engine, which is a separate decision requiring sustained green conformance across real runs."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Add the new job to the existing .github/workflows/ci.yml alongside build-and-test rather than creating a second workflow file, and make it need build-and-test so it runs on a built tree. The golden-case schema should reuse the existing conformance normalisation so expected artifacts are stored already stripped of volatile keys. For the diff gate, fetch the base artifact with git show <base>:.bober/topology/coding.json rather than a network call, so the gate works on forks and offline. The doc-drift checker already exists from sprint 3 — this sprint supplies the document and wires the check, it does not rewrite the checker. When recording the disposition, state the evidence: which workflow assertions are now green on the graph runtime, whether conformance is blocking, and what the pre-authorised end state is if conformance never converges.",
+  "evaluatorNotes": "The central risk here is a gate that exists but does not bite. Verify each of the six checks by deliberately breaking its precondition in a test and asserting a non-zero exit: mutate the committed artifact, add an undocumented node to a fixture, change a fixture topology without bumping graphVersion, and stale the state audit. Verify the workflow-parsing test reads the real ci.yml and would fail if continue-on-error were added. Verify the golden dataset count assertion reads the directory rather than a hardcoded list. Verify no test file was deleted in this diff, and if a workflow module was deleted, verify the corresponding invariant has a passing counterpart on the graph runtime. Verify the documentation states the golden dataset's limitation explicitly.",
+  "estimatedFiles": [
+    ".github/workflows/ci.yml",
+    "docs/pge-graph.md",
+    "src/pge/golden/case-schema.ts",
+    "src/pge/golden/case-schema.test.ts",
+    "src/pge/golden/runner.ts",
+    "src/pge/golden/runner.test.ts",
+    "src/pge/golden/dataset.test.ts",
+    "src/pge/topology/docs.test.ts",
+    "src/cli/commands/pge.ts",
+    "src/cli/commands/pge.test.ts",
+    ".bober/golden/",
+    "scripts/"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260805-pge-graph-engineering-14-1",
+      "result": "pass",
+      "timestamp": "2026-08-07T00:14:08.407Z"
+    }
+  ],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-07T00:14:08.407Z",
+  "completedAt": "2026-08-07T00:14:08.407Z",
+  "completionNote": "All 11 required criteria met. 41 golden cases (bounds [20,50]) under .bober/golden/, counted by readdir. Blocking pge-graph-gate job added to the EXISTING ci.yml with needs:build-and-test and NO continue-on-error, running the regression runner plus dump --check, validate --mode full, docs --check, diff --require-version-bump and audit-state + staged git diff. pge docs was widened from <doc> to [doc] with a REAL --check flag defaulting to docs/pge-graph.md, not a decorative flag. IMPORTANT SCOPE CAVEAT, disclosed by the runner itself and documented: only 4 of the 41 cases are enforcement=replay and actually EXECUTED against the engine; the other 37 are enforcement=integrity and make NO runtime claim. Erosion is blocked by GOLDEN_MIN_REPLAY_CASES=4, verified by the orchestrator: relabelling one replay case to integrity drops to 3 and exits 2. Orchestrator fix post-agents: the CI audit step ran a bare git diff --exit-code while its own negative control staged first, so a PR DELETING state-audit.json would have regenerated it untracked and merged green; CI now stages before diffing and the ci-gate parser test and negative control were updated to the same command. Disposition recorded and test-enforced: pge permanently opt-in, default ts, TsPipelineEngine retained as oracle, dormant subtree (interpreter.ts + pure-sprint.ts only, 16 of 18 modules have production callers) RETAINED, bober sprint / bober_sprint documented as a deliberate escape hatch."
+}

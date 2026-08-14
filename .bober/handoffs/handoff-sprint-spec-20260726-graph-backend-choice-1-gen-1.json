@@ -1,0 +1,45 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-1",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent TypeScript/ESM CLI + MCP harness. This spec makes the code-graph layer pluggable between tokensave (default) and code-review-graph. Sprint 1 is a PURE REFACTOR: extract a GraphBackend abstraction and a TokensaveBackend that reproduces today's exact behavior; GraphClient delegates tool-name/params/narrow to the injected backend while keeping all cross-cutting logic. tokensave path MUST stay byte-identical.",
+    "completedSprints": [],
+    "currentBranch": "bober/graph-backend-choice",
+    "relevantFiles": [
+      "src/graph/client.ts",
+      "src/graph/types.ts",
+      "src/graph/mcp-client.ts",
+      "src/graph/pipeline-lifecycle.ts",
+      "src/cli/commands/onboard.ts",
+      "tests/graph/client.test.ts"
+    ],
+    "keyReference": "The pre-remap client.ts at `git show 6ed3f77~1:src/graph/client.ts` shows the same code before the tokensave 6.1.1 remap — useful for understanding the seam, but Sprint 1 only extracts CURRENT tokensave behavior."
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-1.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "buildCmd": "tsc",
+      "typecheck": "npm run typecheck",
+      "typecheckCmd": "tsc --noEmit",
+      "lint": "npm run lint",
+      "lintCmd": "eslint src/",
+      "test": "npx vitest run",
+      "testScoped": "npx vitest run tests/graph/"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    },
+    "evaluatorStrategies": ["typecheck (required)", "lint", "unit-test", "build (required)", "api-check"]
+  },
+  "principles": "TypeScript strict mode, zero type errors is a hard gate. ESM everywhere: `.js` import specifiers for NodeNext, no CommonJS. `import type { ... }` (consistent-type-imports enforced). No `any` without justification (prefer unknown + narrowing). No synchronous fs (node:fs/promises only). Unicode box-drawing section headers `// -- Section --`. Small focused util modules. Conventional commits; sprint commits use `bober(sprint-N): description`. Zod for config validation. Contract-based filesystem state under .bober/. Never import provider SDKs outside providers/ adapters. Work on the feature branch, never main.",
+  "evaluatorFeedback": null
+}

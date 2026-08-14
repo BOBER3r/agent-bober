@@ -1,0 +1,70 @@
+{
+  "formatVersion": 1,
+  "caseId": "commit-approved-writes-commit-object",
+  "title": "An approved end-of-pipeline checkpoint commits",
+  "intent": "Pin the other side of the commit gate: with an approving mechanism the git effect runs exactly once and the audit records the approval.",
+  "tags": [
+    "commit",
+    "hitl:end-of-pipeline",
+    "happy-path",
+    "artifacts:audits"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "hitl_commit",
+    "config": {
+      "autopilot": false
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "commit",
+      "branchKey": null,
+      "effectName": "git.commit",
+      "callIndex": 0,
+      "request": {
+        "cwd": "/tmp/golden-run",
+        "message": "bober(sprint-1): accept and validate the new config block"
+      },
+      "response": {
+        "commit": "9f2c1ab4d5e6f7089a1b2c3d4e5f60718293a4b5"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "finalize",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "end-of-pipeline",
+          "iteration": 1,
+          "mechanism": "cli",
+          "outcome": "approved"
+        }
+      ],
+      "completionMarker": [
+        {
+          "completedSprints": 1,
+          "failedSprints": 0,
+          "success": true
+        }
+      ],
+      "history": [
+        {
+          "details": {
+            "completed": 1,
+            "failed": 0
+          },
+          "event": "pipeline-complete",
+          "phase": "complete"
+        }
+      ]
+    },
+    "notes": "Exactly one git.commit call. The interpreter's approval check and the effect registry's declared-tag check are two independent locks on the same door; this case is green only when both were opened by a real approval."
+  }
+}

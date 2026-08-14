@@ -1,0 +1,313 @@
+{
+  "entryId": "sprintContracts-spec-20260618-fleet-tier-provider-routing",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-1.json",
+      ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-2.json",
+      ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-3.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-1",
+      "specId": "spec-20260618-fleet-tier-provider-routing",
+      "sprintNumber": 1,
+      "title": "Grok/xAI provider wiring",
+      "description": "Add Grok/xAI as the EXISTING openai-compat provider pointed at https://api.x.ai/v1, mirroring the DeepSeek wiring at its three resolution sites, plus a single shared isXaiEndpoint() predicate. NO new ProviderName value, NO new adapter class. Touch-points: (1) src/orchestrator/model-resolver.ts SHORTHAND_MAP — add grok shorthands {provider:'openai-compat', modelId} and make the openai-compat endpoint-attach branch select https://api.x.ai/v1 for grok* (vs https://api.deepseek.com for deepseek*); (2) src/providers/factory.ts validateApiKey openai-compat case — add an isXaiEndpoint(endpoint) arm requiring apiKey ?? process.env.XAI_API_KEY and throwing a clear 'configured to use Grok/xAI but XAI_API_KEY is not set' error; (3) src/providers/factory.ts createClient openai-compat case key-injection — add a parallel isXaiEndpoint arm injecting XAI_API_KEY (the OpenAICompatAdapter constructor call is UNCHANGED). Add isXaiEndpoint(endpoint?:string):boolean as the SOLE place the 'api.x.ai' host string is matched, reused by both factory sites (mirror however DeepSeek's host is matched today). src/fleet/index.ts validateManifestCredentials already calls validateApiKey(provider, role, apiKey, endpoint) per child section, so adding the xAI arm makes the fleet pre-spawn credential check recognize Grok with ZERO edits to index.ts. This sprint changes NO fleet behavior and NO tier logic (that is Sprint 2).",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The full test suite passes with zero new failures (npm run test); the 6 pre-existing tests/e2e/cockpit-integration.test.ts MCP 'Connection closed' failures are the only allowed failures and are confirmed unrelated.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "resolveProviderModel('grok') and the other added grok shorthands return { provider:'openai-compat', modelId:<the grok model id>, endpoint:'https://api.x.ai/v1' }, exactly mirroring the deepseek shorthand shape; a collocated test asserts the provider, modelId, and endpoint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "validateApiKey('openai-compat', role, undefined, 'https://api.x.ai/v1') THROWS a message naming Grok/xAI and XAI_API_KEY when neither providerConfig.apiKey nor process.env.XAI_API_KEY is set, and does NOT throw when XAI_API_KEY is present; the existing api.deepseek.com and no-key (Ollama) behaviors are unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "createClient for an openai-compat provider at an api.x.ai endpoint injects XAI_API_KEY into the OpenAICompatAdapter (parallel to the DEEPSEEK_API_KEY arm), verified by a test that asserts the adapter is constructed with the xAI key (and that Ollama/other openai-compat endpoints keep the no-key behavior).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "isXaiEndpoint(endpoint) is the ONLY place 'api.x.ai' is matched; a grep/test confirms 'api.x.ai' appears solely inside isXaiEndpoint, and both validateApiKey and createClient call it. ProviderName is unchanged (still anthropic|openai|google|openai-compat|claude-code).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "lint passes (npm run lint, zero errors); no new disallowed imports; the change is confined to model-resolver.ts + factory.ts (+ their tests).",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT add a new ProviderName value or a GrokAdapter class — Grok is openai-compat.",
+        "Do NOT add tier logic, FleetChild.tier, or any buildChildConfig change (Sprint 2).",
+        "Do NOT edit validateManifestCredentials' loop body — the xAI arm in validateApiKey must make it work for free.",
+        "Do NOT change the DeepSeek or Ollama openai-compat behavior.",
+        "Do NOT hardcode an XAI_API_KEY or commit any secret."
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "grok* resolves to openai-compat @ api.x.ai/v1, XAI_API_KEY is validated+injected only via the single isXaiEndpoint predicate, ProviderName unchanged, and build/typecheck/test/lint green with no new failures"
+      ],
+      "definitionOfDone": "src/orchestrator/model-resolver.ts SHORTHAND_MAP has grok shorthands resolving to openai-compat with endpoint https://api.x.ai/v1. src/providers/factory.ts exports/uses isXaiEndpoint(endpoint) and has parallel xAI arms in validateApiKey (require XAI_API_KEY) and createClient (inject XAI_API_KEY), leaving OpenAICompatAdapter and ProviderName unchanged. validateManifestCredentials recognizes xAI with no edit. Collocated tests cover shorthand resolution, key-required/throw, key-injection, the single-predicate invariant, and DeepSeek/Ollama non-regression. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "xAI exposes an OpenAI-wire-compatible API at https://api.x.ai/v1, so OpenAICompatAdapter handles it unchanged (research:50).",
+        "The DeepSeek wiring (SHORTHAND_MAP deepseek entry + endpoint attach at model-resolver.ts; validateApiKey + createClient api.deepseek.com arms in factory.ts:251-255) is the exact template to mirror.",
+        "The grok model id default(s) can be a placeholder shorthand (e.g. 'grok-4' / 'grok-4-fast'); the actual id is overridable via child.config.model and is not asserted to be a live model — tests assert routing/endpoint/key, not a live API call.",
+        "validateManifestCredentials (src/fleet/index.ts) already passes section.endpoint into validateApiKey, so the xAI arm is sufficient for the fleet pre-check."
+      ],
+      "outOfScope": [
+        "Tier mapping / FleetChild.tier (Sprint 2)",
+        "ToolRoleGuard (Sprint 3)",
+        "Any blackboard / Phase B work"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Read FIRST: src/orchestrator/model-resolver.ts (SHORTHAND_MAP ~:11-22 and the resolveProviderModel openai-compat endpoint-attach branch ~:79-85 where deepseek gets endpoint 'https://api.deepseek.com' — you add a selector so grok* gets 'https://api.x.ai/v1'); src/providers/factory.ts (validateApiKey openai-compat case ~:128 with the `endpoint?.includes('api.deepseek.com')` check ~:130, and createClient openai-compat case ~:244-261 with the DEEPSEEK_API_KEY injection ~:251-255). Mirror BOTH deepseek arms for xAI.\n\nAdd `export function isXaiEndpoint(endpoint?: string): boolean { return !!endpoint && endpoint.includes('api.x.ai'); }` in factory.ts (or a small shared spot factory imports) and use it in BOTH the validateApiKey arm and the createClient arm — do not inline the substring twice. Optionally refactor the existing deepseek match into an isDeepseekEndpoint() for symmetry, but that is not required.\n\nSHORTHAND_MAP: add `grok: { provider: 'openai-compat', modelId: 'grok-4' }` and a fast variant (e.g. `'grok-4-fast'`); ensure the openai-compat endpoint-attach branch returns endpoint 'https://api.x.ai/v1' when the modelId is a grok id, else keeps 'https://api.deepseek.com'. Keep it a small branch keyed on the modelId/shorthand.\n\nvalidateApiKey: in the openai-compat case, BEFORE/alongside the deepseek check add: `if (isXaiEndpoint(endpoint)) { const key = apiKey ?? process.env['XAI_API_KEY']; if (!key) throw new Error(`${roleLabel} is configured to use Grok/xAI but XAI_API_KEY is not set. Set the XAI_API_KEY environment variable and try again.`); }`. createClient: in the openai-compat case, extend the key resolution to `apiKey ?? (isXaiEndpoint(resolvedEndpoint) ? process.env['XAI_API_KEY'] : resolvedEndpoint.includes('api.deepseek.com') ? process.env['DEEPSEEK_API_KEY'] : undefined)`; pass to the UNCHANGED OpenAICompatAdapter ctor.\n\nTests (collocated *.test.ts next to each file): model-resolver grok resolution; factory validateApiKey xAI throw/no-throw (set/unset XAI_API_KEY via vi.stubEnv or by passing apiKey) + deepseek+ollama unchanged; createClient xAI key injection (you may need to assert via a spy on the adapter constructor or via the resolved key — follow how the existing deepseek createClient test asserts, if any; otherwise assert validateApiKey behavior + that createClient does not throw with XAI_API_KEY set). isXaiEndpoint single-source: a test importing isXaiEndpoint + a grep-style assertion. Follow ESM .js imports, import type, unicode section headers.",
+      "evaluatorNotes": "sc-1-3: call resolveProviderModel('grok') and any other added ids; assert {provider:'openai-compat', endpoint:'https://api.x.ai/v1', modelId set}. sc-1-4: call validateApiKey('openai-compat','generator',undefined,'https://api.x.ai/v1') with XAI_API_KEY unset (vi.stubEnv) → expect throw naming XAI_API_KEY; with it set → no throw; confirm api.deepseek.com still requires DEEPSEEK_API_KEY and a bare Ollama endpoint still needs no key. sc-1-5: assert createClient injects the xAI key (spy/adapter-arg or no-throw-with-key) and Ollama keeps no-key. sc-1-6: grep the repo for 'api.x.ai' and confirm it appears ONLY in isXaiEndpoint; confirm ProviderName union literal is unchanged. sc-1-2: run the FULL suite; only the 6 known cockpit-integration MCP failures may fail; assert no model-resolver/factory/fleet test regressed. Build+typecheck+lint clean.",
+      "estimatedFiles": [
+        "src/orchestrator/model-resolver.ts",
+        "src/orchestrator/model-resolver.test.ts",
+        "src/providers/factory.ts",
+        "src/providers/factory.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T18:30:00Z",
+      "updatedAt": "2026-06-18T18:30:00Z",
+      "completedAt": "2026-06-18T18:45:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-2",
+      "specId": "spec-20260618-fleet-tier-provider-routing",
+      "sprintNumber": 2,
+      "title": "TierProviderPolicy + buildChildConfig tier overlay",
+      "description": "Add a closed difficulty-tier enum on FleetChild and a TierProviderPolicy that maps each tier to a planner/generator/evaluator provider block, overlaid in buildChildConfig BEFORE the existing shallow-merge so the result is byte-identical when tier is absent. New file src/fleet/tier-policy.ts exports: type RoleProviderBlock = {provider: ProviderName; model: string; endpoint?: string|null}; type TieredRoleBlock = {planner: RoleProviderBlock; generator: RoleProviderBlock; evaluator: RoleProviderBlock}; type DifficultyTier = 'default'|'cheap'|'standard'|'hard'|'frontier'; a TIER_POLICY table (cheap->DeepSeek openai-compat api.deepseek.com, standard->Grok openai-compat api.x.ai/v1, hard->Anthropic Sonnet, frontier->Anthropic Opus); resolveTier(tier): TieredRoleBlock|undefined ('default'/undefined -> undefined = NO overlay); knownTiers(). claude-code is NEVER in the table (children build = TOOL_ROLES). src/fleet/manifest.ts FleetChildSchema gains `tier: z.enum(['default','cheap','standard','hard','frontier']).optional()`. src/fleet/child-config.ts buildChildConfig adds an applyTier(base, child.tier) step that, when resolveTier returns a block, sets base.planner/generator/evaluator = {...base.role, ...block.role} — applied BEFORE the UNCHANGED `const merged = {...base, ...(child.config ?? {})}` at child-config.ts:43 so an explicit child.config still wins. When tier is undefined or 'default', applyTier returns base UNCHANGED and the whole function output is byte-identical to today.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-fleet-tier-provider-routing-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail; the existing fleet child-config/manifest tests pass unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "FleetChildSchema parses a child WITH tier (any enum value) and WITHOUT tier; a tier outside the closed enum is a ZodError; a manifest with no tier on any child parses field-for-field identically to before (the new field is optional and absent).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "TierProviderPolicy.resolveTier returns undefined for 'default' and undefined input, and the correct TieredRoleBlock for cheap (DeepSeek), standard (Grok openai-compat https://api.x.ai/v1), hard (anthropic Sonnet), frontier (anthropic Opus). No tier block places claude-code on any role.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "buildChildConfig(child) with NO tier returns a BoberConfig deep-equal to the pre-change DeepSeek-default output — proven by a test that constructs the expected config (planner/generator/evaluator on DeepSeek) and asserts deepEqual. This is the byte-identical guarantee.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "buildChildConfig(child) with tier='standard' yields planner/generator/evaluator on provider 'openai-compat' with endpoint 'https://api.x.ai/v1'; tier='hard' yields provider 'anthropic' + a Sonnet model; tier='frontier' yields 'anthropic' + an Opus model; tier='cheap' yields DeepSeek. Each asserted on the parsed BoberConfig.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "child.config precedence is preserved: a child with BOTH tier='standard' AND child.config.generator={provider:'anthropic',model:'...'} yields generator on anthropic (child.config wins over the tier block), proving the overlay runs BEFORE the shallow-merge at child-config.ts:43.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "lint passes (npm run lint, zero errors); the change is confined to tier-policy.ts (new), manifest.ts, child-config.ts (+ tests); no new SDK/network imports; ProviderName unchanged.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT place claude-code in any tier block (children build = tool roles).",
+        "Do NOT add the ToolRoleGuard (Sprint 3) — though tier blocks must never produce a claude-code tool role in the first place.",
+        "Do NOT change the decomposer EXPAND prompt or the never-throw validateManifest shape guard.",
+        "Do NOT add BoberConfig.fleet / blackboard / Phase B fields.",
+        "Do NOT alter the `merged = {...base, ...(child.config ?? {})}` line itself (apply the overlay BEFORE it)."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "A tier-less child config is deep-equal to today's DeepSeek default, each tier maps to its specified provider block, child.config still wins, and build/typecheck/test/lint are green with no new failures"
+      ],
+      "definitionOfDone": "src/fleet/tier-policy.ts exports DifficultyTier, RoleProviderBlock, TieredRoleBlock, TierProviderPolicy (resolveTier/knownTiers), and a TIER_POLICY table (cheap=DeepSeek, standard=Grok api.x.ai, hard=anthropic Sonnet, frontier=anthropic Opus; default=>undefined). src/fleet/manifest.ts FleetChildSchema has optional tier enum. src/fleet/child-config.ts applies the tier overlay before the unchanged shallow-merge, byte-identical when tier absent. Collocated tests cover schema parse (with/without/invalid tier), resolveTier per tier, the deep-equal byte-identical no-tier config, each tier's resolved provider block, and child.config precedence. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "buildChildConfig today (child-config.ts:20-44) sets planner/generator/evaluator to DEEPSEEK_* then `const merged = {...base, ...(child.config ?? {})}` then BoberConfigSchema.parse(merged); the tier overlay is inserted on `base` BEFORE that merge line so child.config precedence is preserved.",
+        "RoleProviderBlock matches the per-role section shape buildChildConfig already writes (provider, model, endpoint); anthropic tiers set endpoint to null/undefined, openai-compat tiers set the deepseek/x.ai endpoint.",
+        "Tier model ids use model-resolver shorthands or full ids (deepseek -> deepseek + api.deepseek.com; grok -> grok + api.x.ai from Sprint 1; hard -> a Sonnet id e.g. 'sonnet'/'claude-sonnet-4-6'; frontier -> an Opus id e.g. 'opus'/'claude-opus-4-8'); ids are overridable via child.config.",
+        "Grok routing/endpoint from Sprint 1 (resolveProviderModel grok -> openai-compat + api.x.ai/v1) is available, so the standard tier block can specify provider 'openai-compat' + that endpoint + a grok model."
+      ],
+      "outOfScope": [
+        "Grok provider wiring (Sprint 1, dependency)",
+        "ToolRoleGuard (Sprint 3)",
+        "Blackboard / Phase B"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/fleet/child-config.ts (FULL — the DeepSeek hard-set at :24-41 and the `const merged = {...base, ...(child.config ?? {})}` at :43, then BoberConfigSchema.parse(merged) at :44); src/fleet/manifest.ts (FleetChildSchema :6-9, FleetManifestSchema :13-17); src/config/schema.ts (the per-role section shape: provider/model/endpoint fields, so RoleProviderBlock matches); src/providers/factory.ts ProviderName; arch ADR-2 in .bober/architecture/arch-20260618-heterogeneous-multi-provider-agent-team-adr-2.md.\n\nNew src/fleet/tier-policy.ts: define DifficultyTier union; RoleProviderBlock {provider: ProviderName; model: string; endpoint?: string | null}; TieredRoleBlock {planner,generator,evaluator: RoleProviderBlock}; a const TIER_POLICY: Record<Exclude<DifficultyTier,'default'>, TieredRoleBlock> with the four entries (cheap: all three roles -> {provider:'openai-compat', model:'deepseek', endpoint:'https://api.deepseek.com'}; standard -> {provider:'openai-compat', model:'grok', endpoint:'https://api.x.ai/v1'}; hard -> {provider:'anthropic', model:'sonnet', endpoint: null}; frontier -> {provider:'anthropic', model:'opus', endpoint: null}); export const tierPolicy: TierProviderPolicy with resolveTier(tier) => (tier && tier !== 'default') ? TIER_POLICY[tier] : undefined, and knownTiers().\n\nmanifest.ts: add `tier: z.enum(['default','cheap','standard','hard','frontier']).optional()` to FleetChildSchema. Keep config field.\n\nchild-config.ts: after the three DeepSeek hard-sets and BEFORE `const merged = ...`, insert: `const block = tierPolicy.resolveTier(child.tier); if (block) { base.planner = {...base.planner, ...block.planner}; base.generator = {...base.generator, ...block.generator}; base.evaluator = {...base.evaluator, ...block.evaluator}; }`. Then the UNCHANGED merge + parse. When block is undefined the function is byte-identical. Be careful endpoint: for anthropic tiers set endpoint to null/undefined exactly as the existing anthropic config sections do (check schema default) so the parsed config matches a normal anthropic role section.\n\nTests: tier-policy.test.ts (resolveTier per tier incl default/undefined => undefined; assert no block has provider 'claude-code'); manifest.test.ts additions (parse with/without/invalid tier); child-config.test.ts additions (deep-equal no-tier vs an explicit expected DeepSeek config = the byte-identical proof; each tier's resolved planner/generator/evaluator provider+endpoint+model; child.config-wins-over-tier precedence). Use BoberConfigSchema to build the expected config in the deep-equal test so field defaults match. Follow ESM .js imports, import type, unicode section headers.",
+      "evaluatorNotes": "sc-2-3: parse a FleetManifest with a child tier of each enum value, one with no tier, and one with tier:'bogus' (expect ZodError); assert the no-tier parse equals the prior shape. sc-2-4: resolveTier('default')===undefined, resolveTier(undefined)===undefined, resolveTier('standard').generator.endpoint==='https://api.x.ai/v1', resolveTier('hard').generator.provider==='anthropic', resolveTier('frontier') Opus; grep tier-policy.ts to confirm no 'claude-code' literal. sc-2-5 (CRITICAL byte-identical): build the expected DeepSeek-default BoberConfig and assert deepEqual to buildChildConfig({folder,task}) with no tier. sc-2-6: buildChildConfig with each tier -> assert planner/generator/evaluator provider+endpoint+model. sc-2-7: child with tier:'standard' + config.generator={provider:'anthropic',model:'sonnet'} -> assert resulting generator.provider==='anthropic' (child.config wins). sc-2-2: FULL suite, only the 6 known cockpit failures allowed. Build/typecheck/lint clean.",
+      "estimatedFiles": [
+        "src/fleet/tier-policy.ts",
+        "src/fleet/tier-policy.test.ts",
+        "src/fleet/manifest.ts",
+        "src/fleet/manifest.test.ts",
+        "src/fleet/child-config.ts",
+        "src/fleet/child-config.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T18:30:00Z",
+      "updatedAt": "2026-06-18T18:30:00Z",
+      "completedAt": "2026-06-18T18:58:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-3",
+      "specId": "spec-20260618-fleet-tier-provider-routing",
+      "sprintNumber": 3,
+      "title": "ToolRoleGuard (build-time, fail-fast)",
+      "description": "Reject at manifest-build time any child whose RESOLVED BoberConfig would place the claude-code provider on a TOOL_ROLE (curator/generator/evaluator/codeReview), throwing BEFORE any child is spawned. Add a new EXPORTED predicate isToolRole(role: RoleName): boolean to src/config/role-providers.ts derived from the authoritative TOOL_ROLES constant (role-providers.ts:25), and export the existing effectiveProvider. New file src/fleet/tool-role-guard.ts exports: type ToolRoleViolation = {childFolder: string; role: RoleName; provider: 'claude-code'}; check(child: FleetChild, resolved: BoberConfig): ToolRoleViolation|null (pure, never throws — for each TOOL_ROLE, if effectiveProvider(role, resolved)==='claude-code' return the violation); assertManifest(manifest: FleetManifest): void which builds each child config via buildChildConfig and THROWS a named Error identifying child.folder+role on the first violation. Wire assertManifest into the fail-fast credential phase in src/fleet/index.ts — call it alongside/just before validateManifestCredentials (BOTH run before coordinator.execute), so no child is spawned when it throws. The never-throw validateManifest is UNCHANGED; the guard is a separate throwing call. The no-flag fleet path stays byte-identical (a clean manifest passes with no throw, no side effects).",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-fleet-tier-provider-routing-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail; existing fleet index/role-providers tests pass unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "Exported isToolRole(role) returns true for 'curator','generator','evaluator','codeReview' and false for 'planner','researcher','chat', and is derived from the authoritative TOOL_ROLES (a test asserts isToolRole agrees with TOOL_ROLES membership — no independently re-declared literal).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "ToolRoleGuard.check(child, resolved) returns a ToolRoleViolation {childFolder, role, provider:'claude-code'} when claude-code resolves onto a tool role (e.g. child.config.generator.provider='claude-code'), and returns null for a clean config; check never throws.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "ToolRoleGuard.assertManifest(manifest) THROWS a named error whose message contains the offending child.folder and role when any child would place claude-code on a tool role, and does NOT throw for a clean manifest (including one whose children carry tiers from Sprint 2).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "assertManifest runs in the fail-fast phase BEFORE coordinator.execute in runFleet (src/fleet/index.ts): a test drives the fleet path (or runFleet with injected deps) with a claude-code-on-generator manifest and asserts it throws and that the coordinator/spawn was never invoked.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "The never-throw validateManifest is unchanged and the no-flag fleet path is byte-identical: a clean tier-less manifest passes assertManifest with no throw, and the existing fleet behavior (and ~203-test suite) is unaffected.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "lint passes (npm run lint, zero errors); change confined to role-providers.ts (new export), tool-role-guard.ts (new), index.ts (wire the call) + tests; no new SDK/network imports.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT modify the never-throw validateManifest (the guard is a separate throwing call).",
+        "Do NOT re-declare the tool-role list — isToolRole must derive from the authoritative TOOL_ROLES.",
+        "Do NOT add blackboard / Phase B work.",
+        "Do NOT change tier mapping (Sprint 2) or Grok wiring (Sprint 1).",
+        "Do NOT spawn or run children to test the guard — it is a pure pre-spawn check."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "claude-code on a tool role throws at build time (before any spawn) naming the child+role, isToolRole derives from TOOL_ROLES, clean manifests pass, validateManifest unchanged, and build/typecheck/test/lint are green with no new failures"
+      ],
+      "definitionOfDone": "src/config/role-providers.ts exports isToolRole(role) (from TOOL_ROLES) and effectiveProvider. src/fleet/tool-role-guard.ts exports ToolRoleViolation, check (pure, never-throws), and assertManifest (throws naming child.folder+role). src/fleet/index.ts calls assertManifest in the fail-fast phase before coordinator.execute. Collocated tests cover isToolRole membership, check violation/null, assertManifest throw/clean, the pre-spawn ordering (coordinator not invoked on throw), and the byte-identical clean path. validateManifest unchanged. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "role-providers.ts already has TOOL_ROLES = ['curator','generator','evaluator','codeReview'] (:25) and effectiveProvider(role, config) (:48); isToolRole is a thin `TOOL_ROLES.includes(role)` export and effectiveProvider is exported for the guard.",
+        "buildChildConfig(child) (from Sprint 2, tier-aware) yields the resolved BoberConfig the guard inspects via effectiveProvider; the guard calls buildChildConfig per child inside assertManifest.",
+        "runFleet (src/fleet/index.ts) has a fail-fast phase (validateManifestCredentials at ~:46) that runs before coordinator.execute; assertManifest is inserted there so a violation prevents any spawn.",
+        "Given the tier table never places claude-code (Sprint 2), the guard's real job is catching a hand-authored child.config that does — so tests must construct that case via child.config, not via a tier."
+      ],
+      "outOfScope": [
+        "Grok wiring (Sprint 1)",
+        "Tier mapping (Sprint 2)",
+        "Blackboard / Phase B"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/config/role-providers.ts (FULL — RoleName :10, TOOL_ROLES :25, effectiveProvider :48 and its claude-code/tool-role fallback logic ~:122-135 which already THROWS if a tool role lands on claude-code with no non-claude-code fallback — note that throw is per-process at config-load; the guard front-loads it at manifest-build time); src/fleet/index.ts (runFleet — find validateManifestCredentials ~:46 and the coordinator.execute call; insert assertManifest just before/after the credential loop, both BEFORE execute); src/fleet/child-config.ts (buildChildConfig, tier-aware after Sprint 2); src/fleet/manifest.ts (FleetChild/FleetManifest); arch ADRs in .bober/architecture/arch-20260618-heterogeneous-multi-provider-agent-team-architecture.md (ToolRoleGuard component + CP4 risk: claude-code-on-tool-role build-vs-runtime).\n\nrole-providers.ts: add `export function isToolRole(role: RoleName): boolean { return TOOL_ROLES.includes(role); }` and ensure effectiveProvider is exported.\n\nNew src/fleet/tool-role-guard.ts: import { isToolRole, effectiveProvider, type RoleName } from '../config/role-providers.js'; import { buildChildConfig } from './child-config.js'; types FleetChild/FleetManifest from './manifest.js'; BoberConfig from '../config/schema.js'. ToolRoleViolation type. `export function check(child, resolved): ToolRoleViolation | null` { for (const role of (['curator','generator','evaluator','codeReview'] as RoleName[])) if (effectiveProvider(role, resolved) === 'claude-code') return {childFolder: child.folder, role, provider:'claude-code'}; return null; } — or iterate all RoleName and gate on isToolRole(role). `export function assertManifest(manifest)` { for (const child of manifest.children) { const resolved = buildChildConfig(child); const v = check(child, resolved); if (v) throw new Error(`Fleet child \"${v.childFolder}\" places claude-code on tool role \"${v.role}\" — claude-code cannot drive tools. Use an api-key provider (anthropic/openai-compat) for builder roles.`); } }.\n\nindex.ts: in runFleet, BEFORE coordinator.execute (and ideally right next to validateManifestCredentials so both fail-fast checks are colocated), call assertManifest(effectiveManifest). Keep it inside the same pre-spawn region; do not move it after execute.\n\nTests: role-providers.test.ts additions (isToolRole true/false set, and that it equals TOOL_ROLES membership); tool-role-guard.test.ts (check returns violation for a child.config.generator.provider='claude-code'; check returns null for a clean/tiered child; assertManifest throws naming folder+role; assertManifest no-throw for a clean manifest); index.test.ts addition (runFleet with injected fake coordinator + a claude-code-on-generator manifest asserts throw AND fake coordinator.execute NOT called). Reuse the existing runFleet DI test pattern. Follow ESM .js imports, import type, unicode section headers.",
+      "evaluatorNotes": "sc-3-3: assert isToolRole for all 7 RoleName values and that the true-set equals TOOL_ROLES; grep tool-role-guard.ts/role-providers.ts to confirm no second hard-coded tool-role list. sc-3-4: check() with a resolved config whose generator.provider resolves to claude-code -> ToolRoleViolation; clean -> null; wrap in expect(()=>check()).not.toThrow(). sc-3-5: assertManifest on a manifest with a claude-code-on-generator child -> throws, message includes folder + 'generator'; on a clean manifest (incl. tiered children) -> no throw. sc-3-6: drive runFleet with an injected fake coordinator (or the existing DI seam) + the bad manifest -> expect throw and assert the fake coordinator.execute was never called (no spawn). sc-3-7: a clean tier-less manifest passes; confirm validateManifest source is unchanged (git diff) and the fleet suite is unaffected. sc-3-2: FULL suite, only 6 known cockpit failures allowed. Build/typecheck/lint clean.",
+      "estimatedFiles": [
+        "src/config/role-providers.ts",
+        "src/config/role-providers.test.ts",
+        "src/fleet/tool-role-guard.ts",
+        "src/fleet/tool-role-guard.test.ts",
+        "src/fleet/index.ts",
+        "src/fleet/index.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T18:30:00Z",
+      "updatedAt": "2026-06-18T18:30:00Z",
+      "completedAt": "2026-06-18T19:10:00Z"
+    }
+  ]
+}

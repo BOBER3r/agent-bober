@@ -46,3 +46,25 @@ pnpm-debug.log*
 # Regenerable runtime state
 .bober/memory/*.db
 .bober/graph/.hook-queue.jsonl
+
+# PGE graph-runtime state (sprint 6) — written per run, never version-controlled.
+# Only the topology and golden-case artifacts stay tracked; a 40-node run would
+# otherwise commit its scratch payloads, per-node archives, spans and cache entries.
+.bober/scratch/
+.bober/traces/
+.bober/cache/
+.bober/archive/
+.bober/logs/
+
+# Resumable run checkpoints (sprint 8) — one JSON snapshot per superstep. A 40-node
+# run leaves ~40 of them, and they carry the whole run state; they are recovery
+# artifacts, not committed ones.
+.bober/checkpoints/
+
+# Graceful-failure artifacts (sprint 9) — one per run that exhausted a branch's retries.
+.bober/failures/
+
+# Engram phase digests (sprint 10) — regenerated per phase on every run. This is the
+# SINGULAR directory owned by the graph runtime; the tracked plural `.bober/handoffs/`
+# holds the skill-driven pipeline's ContextHandoff documents and stays version-controlled.
+.bober/handoff/

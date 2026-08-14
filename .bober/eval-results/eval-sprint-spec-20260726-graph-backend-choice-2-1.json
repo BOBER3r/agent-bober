@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-2-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-2",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings (untouched file)" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "tests/graph/ 244/244; full 4994 passed / 1 skip / 0 fail (baseline 4974, +20 new); skipIf integration ran vs real tokensave 6.1.1 and passed" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "build+typecheck re-run exit 0" },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "processSpec()={binary:'tokensave',serveArgs:['serve']}; transport spawns from ProcessSpec; argv test asserts ['serve'] + tokensavePath override" },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "version range + brew/scoop/cargo hints diffed char-for-char verbatim; 6.1.1 passes, out-of-range fails with existing hint" },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "cliMap parseSync '3 added,1 modified'->4 + all legacy cases; cli.test.ts byte-identical diff (0 lines), 20 tests pass" },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "leak audit: no serve/hint/range functional literals outside tokensave-backend.ts (one pre-existing comment noted); mcp-client no longer defaults binary to 'tokensave'" },
+    { "criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "full suite 0 failures; skipIf integration tests executed (real timings 2-3.5s) vs tokensave 6.1.1 and passed" },
+    { "criterionId": "sc-2-7", "required": false, "result": "pass", "evidence": "lint 0 errors; diff confined to graph layer + 4 construction sites; schema.ts/client.ts untouched" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required + 1 optional pass on independent re-run. Verbatim strings + byte-identical cli.test.ts + real-binary skipIf integration confirmed. NonGoals respected (SyncResult/StatusResult move to types.ts is purely additive). Commit 129d841.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite re-run + pre-sprint diff of verbatim strings + real-binary integration run)"
+}

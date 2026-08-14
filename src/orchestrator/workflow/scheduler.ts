@@ -96,6 +96,15 @@ export interface SchedulerOptions {
 /** A pipeline stage: receives the previous stage's output, the original item, and its index. */
 export type Stage<I> = (prev: unknown, item: I, index: number) => Promise<unknown>;
 
+/**
+ * One thunk's outcome from {@link Scheduler.settle}. Deliberately the same shape
+ * as `PromiseSettledResult`, restated so the reason is `unknown` rather than
+ * `any` — a caller must narrow before touching it.
+ */
+export type Settled<T> =
+  | { status: "fulfilled"; value: T }
+  | { status: "rejected"; reason: unknown };
+
 export class Scheduler {
   readonly maxConcurrent: number;
   readonly maxAgents: number;
@@ -138,6 +147,32 @@ export class Scheduler {
    */
   async parallel<T>(thunks: ReadonlyArray<() => Promise<T>>): Promise<T[]> {
     return Promise.all(thunks.map((t) => this.run(t)));
+  }
+
+  /**
+   * Run all thunks concurrently (bounded by the cap) and await them ALL,
+   * returning one settled outcome per thunk instead of rejecting on the first
+   * failure.
+   *
+   * {@link parallel} is backed by `Promise.all`, so ONE rejecting thunk rejects
+   * the whole call and the results of the thunks that succeeded are lost. That
+   * is wrong for a superstep barrier: the graph runtime must observe every
+   * branch's outcome — the failures too — before it can commit the superstep and
+   * decide what to route. `settle` is the barrier-shaped sibling; `parallel`
+   * keeps its fail-fast semantics for the callers that want them.
+   *
+   * `AgentCapError` is reported as a rejected outcome like any other, rather
+   * than propagating: at a barrier, "the runaway guard fired" is a fact about
+   * the batch that the caller must see ALONGSIDE the branches that completed,
+   * not a reason to discard them. Callers that must abort inspect the reasons.
+   */
+  async settle<T>(thunks: ReadonlyArray<() => Promise<T>>): Promise<Array<Settled<T>>> {
+    const outcomes = await Promise.allSettled(thunks.map((t) => this.run(t)));
+    return outcomes.map((outcome) =>
+      outcome.status === "fulfilled"
+        ? { status: "fulfilled", value: outcome.value }
+        : { status: "rejected", reason: outcome.reason as unknown },
+    );
   }
 
   /**

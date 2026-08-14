@@ -1,0 +1,373 @@
+{
+  "entryId": "sprintContracts-spec-20260529-opus-4-8-support",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260529-opus-4-8-support-1.json",
+      ".bober/contracts/sprint-spec-20260529-opus-4-8-support-2.json",
+      ".bober/contracts/sprint-spec-20260529-opus-4-8-support-3.json",
+      ".bober/contracts/sprint-spec-20260529-opus-4-8-support-4.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260529-opus-4-8-support-1",
+      "specId": "spec-20260529-opus-4-8-support",
+      "sprintNumber": 1,
+      "title": "Repoint opus shorthand to Claude Opus 4.8 with pinned 4.7 alias",
+      "description": "Update SHORTHAND_MAP in the model resolver so `opus` resolves to claude-opus-4-8, and add an `opus-4-7` shorthand that resolves to claude-opus-4-7 so existing pins keep working. Update model-resolver.test.ts accordingly. This sprint needs no SDK change and works on the installed @anthropic-ai/sdk 0.39.0 because the model id is a free string the API accepts server-side.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "resolveProviderModel('opus') returns { provider: 'anthropic', modelId: 'claude-opus-4-8' }, asserted by an updated model-resolver unit test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "resolveProviderModel('opus-4-7') returns { provider: 'anthropic', modelId: 'claude-opus-4-7' }, asserted by a new model-resolver unit test for the pinned alias.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "The sonnet and haiku shorthands and the full-id passthrough for claude-opus-4-7 keep resolving to their current values, asserted by the existing resolver tests staying green.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "npm run build completes with exit code zero after the resolver change, producing an updated dist for the npm-linked cockpit.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run test introduces no new failures beyond the documented flaky 37-tool-count baseline, with the model-resolver suite passing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not modify the sonnet or haiku shorthand mappings.",
+        "Do not upgrade @anthropic-ai/sdk or modify the Anthropic adapter in this sprint.",
+        "Do not change role-to-model assignments in defaults.ts; roles already use the `opus` shorthand and inherit 4.8 automatically.",
+        "Do not remove the existing full-id passthrough behavior for claude-opus-4-7."
+      ],
+      "stopConditions": [
+        "Stop when the opus->4.8 and opus-4-7->4.7 resolver tests pass and the full suite shows only the flaky baseline failures.",
+        "Stop when only src/orchestrator/model-resolver.ts and src/orchestrator/model-resolver.test.ts have changed."
+      ],
+      "definitionOfDone": "The `opus` shorthand in SHORTHAND_MAP resolves to claude-opus-4-8 and a new `opus-4-7` shorthand resolves to claude-opus-4-7; model-resolver.test.ts asserts both mappings and the existing sonnet/haiku and full-id passthrough assertions stay green; no SDK or adapter files change; the package builds and the full unit-test suite shows no new failures beyond the documented flaky baseline.",
+      "assumptions": [
+        "claude-opus-4-8 is a dateless pinned snapshot, so no dated suffix is required.",
+        "Roles in defaults.ts reference the `opus` shorthand (not a hardcoded id), so repointing the shorthand updates them transitively."
+      ],
+      "outOfScope": [
+        "SDK upgrade",
+        "effort parameter",
+        "mid_conv_system support",
+        "docs/prose model references"
+      ],
+      "ambiguityScore": 1,
+      "generatorNotes": "Edit src/orchestrator/model-resolver.ts SHORTHAND_MAP (line ~22-26): change `opus: { provider: 'anthropic', modelId: 'claude-opus-4-7' }` to modelId 'claude-opus-4-8'; ADD `'opus-4-7': { provider: 'anthropic', modelId: 'claude-opus-4-7' }`. You MAY also add `'opus-4-8': { provider:'anthropic', modelId:'claude-opus-4-8' }` for symmetry (optional). In src/orchestrator/model-resolver.test.ts: the test 'resolves opus to anthropic/claude-opus-4-7' (line ~6-9) and the resolveModel('opus') assertion (line ~127) must change to claude-opus-4-8; ADD a test asserting resolveProviderModel('opus-4-7') -> claude-opus-4-7. KEEP the existing passthrough tests at line ~117 and ~139 (resolveProviderModel('claude-opus-4-7') / resolveModel('claude-opus-4-7')) — full-id passthrough still yields claude-opus-4-7 via the default-anthropic branch, so those remain valid. Do NOT touch the SDK or adapter. Conventional commit: bober(sprint-1): repoint opus shorthand to claude-opus-4-8 + pin opus-4-7.",
+      "evaluatorNotes": "Read src/orchestrator/model-resolver.ts and confirm opus->claude-opus-4-8 and a new opus-4-7->claude-opus-4-7 entry. Run npx vitest run src/orchestrator/model-resolver.test.ts and confirm the updated opus assertion plus the new opus-4-7 test pass, and the sonnet/haiku/passthrough tests still pass. Run npm run typecheck and npm run build (exit 0). Run npm run test; only the 2 flaky 37-tool-count timeout baseline failures are tolerated. Confirm git diff touches only model-resolver.ts and its test. No SDK/adapter changes expected.",
+      "estimatedFiles": [
+        "src/orchestrator/model-resolver.ts",
+        "src/orchestrator/model-resolver.test.ts"
+      ],
+      "estimatedDuration": "small",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260529-opus-4-8-support-1-1",
+          "result": "pass",
+          "timestamp": "2026-05-29T18:30:00Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-1-1",
+      "createdAt": "2026-05-29T18:00:00Z",
+      "updatedAt": "2026-05-29T18:30:00Z",
+      "startedAt": "2026-05-29T18:20:00Z",
+      "completedAt": "2026-05-29T18:30:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260529-opus-4-8-support-2",
+      "specId": "spec-20260529-opus-4-8-support",
+      "sprintNumber": 2,
+      "title": "Upgrade @anthropic-ai/sdk to expose output_config.effort and mid_conv_system",
+      "description": "Bump @anthropic-ai/sdk from 0.39.0 to a version whose published types include the top-level output_config.effort field and the mid_conv_system content block, update package-lock, and fix any breaking changes in the Anthropic adapter so it compiles and keeps all existing behavior (including the prompt-caching helpers) intact. No new feature behavior is added here; this sprint is purely the dependency upgrade plus compile/regression fixes.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "package.json declares an @anthropic-ai/sdk version (e.g. 0.100.x) whose installed types expose output_config.effort and the mid_conv_system content block, and package-lock.json is regenerated to match.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "grep of node_modules/@anthropic-ai/sdk type declarations finds both an effort field under output_config and a mid_conv_system block type after the upgrade.",
+          "verificationMethod": "manual",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "npm run typecheck exits zero against the upgraded SDK with no new TypeScript errors in the Anthropic adapter.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "npm run lint and npm run build both exit zero after the upgrade.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "Every existing provider unit test passes, including the prompt-caching tests in anthropic.test.ts, with only the documented flaky 37-tool-count baseline failures remaining.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C6",
+          "description": "@anthropic-ai/sdk remains imported only inside src/providers/anthropic.ts, verified by grepping the src tree for the package name.",
+          "verificationMethod": "manual",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add the effort field or mid_conv_system handling in this sprint; sprints 3 and 4 own those.",
+        "Do not change adapter request/response behavior beyond what the upgrade requires to compile and keep tests green.",
+        "Do not introduce unjustified `any` casts to paper over SDK type changes.",
+        "Do not modify other provider adapters except where the upgrade forces a compile fix."
+      ],
+      "stopConditions": [
+        "Stop when the upgraded SDK compiles, typecheck/lint/build exit zero, and the full suite is green except the flaky baseline.",
+        "Stop when the installed @anthropic-ai/sdk types include output_config.effort and the mid_conv_system block."
+      ],
+      "definitionOfDone": "@anthropic-ai/sdk is upgraded in package.json and package-lock to a version whose installed type declarations expose output_config.effort and the mid_conv_system content block; the Anthropic adapter compiles with its existing behavior preserved (prompt-caching helpers included); npm run typecheck, lint, and build all exit zero; every provider unit test passes apart from the documented flaky baseline; and @anthropic-ai/sdk stays imported only inside the adapter.",
+      "assumptions": [
+        "The current latest @anthropic-ai/sdk (0.100.1) types both new fields; if an earlier version already does, that is acceptable as long as both are present.",
+        "Sprint 1 may or may not be merged first; this sprint does not depend on it."
+      ],
+      "outOfScope": [
+        "Implementing effort behavior",
+        "Implementing mid_conv_system behavior",
+        "Raising default max_tokens"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Upgrade @anthropic-ai/sdk to the current latest (0.100.1) or the minimum version that types output_config.effort and the mid_conv_system block. Update package.json and run npm install to regenerate package-lock. This is a LARGE version jump (0.39 -> ~0.100): expect possible breaking changes in messages.create params, the content-block param/response unions, usage fields (input_tokens/output_tokens and the cache_read_input_tokens/cache_creation_input_tokens names), the stop_reason union, and the cache_control / TextBlockParam / CacheControlEphemeral types that the recently-added prompt-caching helpers (buildCachedSystem, attachMessageBreakpoints) rely on. Fix imports/usages in src/providers/anthropic.ts ONLY (keep the SDK out of every other file). Verify the prompt-caching unit tests still pass unchanged. Confirm the new types are present: `grep -rn 'mid_conv_system\\|output_config\\|effort' node_modules/@anthropic-ai/sdk/resources`. Tolerate ONLY the 2 flaky 37-tool-count baseline failures. If a clean compile needs more than mechanical fixes, prefer correct typed code over `any`; document anything non-obvious. Conventional commit: bober(sprint-2): upgrade @anthropic-ai/sdk for Opus 4.8 API fields.",
+      "evaluatorNotes": "Read package.json — confirm @anthropic-ai/sdk version raised and package-lock updated. Run `grep -rn 'output_config\\|effort\\|mid_conv_system' node_modules/@anthropic-ai/sdk/resources` and confirm both effort (under output_config) and mid_conv_system types are present. Run npm run typecheck, lint, build (all exit 0). Run npm run test — anthropic.test.ts (7) and factory.test.ts (26) and all other provider suites must pass; only the 2 flaky 37-tool-count baseline failures are tolerated; confirm the caching tests still pass (behavior unchanged). Run `grep -rln '@anthropic-ai/sdk' src` and confirm the only match is src/providers/anthropic.ts. Check the adapter diff for any unjustified `any`.",
+      "estimatedFiles": [
+        "package.json",
+        "package-lock.json",
+        "src/providers/anthropic.ts",
+        "src/providers/anthropic.test.ts"
+      ],
+      "estimatedDuration": "large",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260529-opus-4-8-support-2-1",
+          "result": "pass",
+          "timestamp": "2026-05-29T18:50:00Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-2-1",
+      "createdAt": "2026-05-29T18:00:00Z",
+      "updatedAt": "2026-05-29T18:50:00Z",
+      "startedAt": "2026-05-29T18:40:00Z",
+      "completedAt": "2026-05-29T18:50:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260529-opus-4-8-support-3",
+      "specId": "spec-20260529-opus-4-8-support",
+      "sprintNumber": 3,
+      "title": "Add effort control via output_config.effort",
+      "description": "Add an optional, provider-agnostic effort field to ChatParams and have the Anthropic adapter forward it as top-level output_config.effort. When effort is unset the adapter sends no output_config so the API default (high on Opus 4.8) applies. Non-anthropic adapters accept and ignore the field. Verified by unit tests capturing the messages.create request for the set and unset cases.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260529-opus-4-8-support-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "ChatParams gains an optional effort field typed to the union 'low' | 'medium' | 'high' | 'xhigh' | 'max', and the package typechecks.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "When effort is set on a chat call, the Anthropic request body includes output_config.effort equal to that value, asserted by a unit test capturing messages.create arguments.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "When effort is unset, the Anthropic request body contains no output_config field, asserted by a unit test that scans the captured request.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "Passing effort to a non-anthropic adapter (for example the OpenAI adapter) produces a normal response and raises no error, asserted by a unit test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run build exits zero and npm run test shows no new failures beyond the documented flaky baseline.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not wire effort into the bober.config.json Zod schema or per-role config in this sprint.",
+        "Do not send output_config when effort is unset, so the API default of high is preserved.",
+        "Do not change model, max_tokens, tools, or the existing prompt-caching breakpoints.",
+        "Do not add a thinking parameter; Opus 4.8 uses adaptive thinking and the effort knob."
+      ],
+      "stopConditions": [
+        "Stop when effort threads from ChatParams to output_config.effort on the anthropic path, the unset case omits output_config, non-anthropic adapters ignore it, and the suite is green except the flaky baseline.",
+        "Stop when the change is confined to types.ts, anthropic.ts, and the relevant *.test.ts files."
+      ],
+      "definitionOfDone": "ChatParams carries an optional effort union (low|medium|high|xhigh|max); the Anthropic adapter includes output_config.effort in the request exactly when effort is set and omits output_config entirely when it is unset; non-anthropic adapters accept and ignore effort without raising; unit tests capture the request payload for both the set and unset cases and assert a non-anthropic adapter tolerates the field; typecheck, lint, and build pass and the suite shows only the documented flaky baseline failures.",
+      "assumptions": [
+        "output_config.effort is the correct location and the value union is low|medium|high|xhigh|max per the API reference.",
+        "The SDK upgrade from sprint 2 types output_config so no cast is needed."
+      ],
+      "outOfScope": [
+        "Per-role effort config",
+        "mid_conv_system",
+        "thinking parameter"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Add `effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'` to ChatParams in src/providers/types.ts (with a doc comment). In src/providers/anthropic.ts chat(), when params.effort is defined, add `output_config: { effort: params.effort }` to the messages.create payload; when undefined, do NOT include output_config at all (the API defaults to high on Opus 4.8). Confirm the upgraded SDK types output_config (from sprint 2). Other adapters (openai/google/openai-compat) read ChatParams but should simply not reference effort — destructuring already ignores unknown-to-them fields, so no change is usually needed; add a test proving the OpenAI adapter still returns normally when effort is passed. Extend src/providers/anthropic.test.ts (mirror the existing top-level vi.mock pattern) to assert: effort set -> req.output_config.effort === value; effort unset -> 'output_config' absent from the captured request. Conventional commit: bober(sprint-3): add effort control via output_config.effort.",
+      "evaluatorNotes": "Read types.ts — confirm the effort union. Read anthropic.ts chat() — confirm output_config.effort is added only when effort is set and omitted otherwise. Run the new/updated anthropic tests and confirm: set-case payload has output_config.effort with the value; unset-case payload has no output_config key (scan JSON.stringify). Confirm a non-anthropic adapter test passes effort and gets a normal response with no thrown error and no output_config leakage into its request. Run typecheck/lint/build (exit 0) and npm run test (only flaky baseline failures tolerated). Confirm the change is limited to types.ts, anthropic.ts, and *.test.ts.",
+      "estimatedFiles": [
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/anthropic.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260529-opus-4-8-support-3-1",
+          "result": "pass",
+          "timestamp": "2026-05-29T19:25:00Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-3-1",
+      "createdAt": "2026-05-29T18:00:00Z",
+      "updatedAt": "2026-05-29T19:25:00Z",
+      "startedAt": "2026-05-29T18:55:00Z",
+      "completedAt": "2026-05-29T19:25:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260529-opus-4-8-support-4",
+      "specId": "spec-20260529-opus-4-8-support",
+      "sprintNumber": 4,
+      "title": "Add mid-conversation system blocks (mid_conv_system)",
+      "description": "Add a provider-agnostic Message variant representing a mid-conversation system instruction with an optional ephemeral cache TTL, and have the Anthropic adapter render it as a mid_conv_system content block inside a message. This lets instructions be updated mid-task without breaking the prompt cache. Non-anthropic adapters render it as best-effort text or skip it, never throwing.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260529-opus-4-8-support-2"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "C1",
+          "description": "The provider Message union gains a variant carrying mid-conversation system instruction text plus an optional ephemeral cache TTL, and the package typechecks with the new variant handled in the conversion code.",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "C2",
+          "description": "The Anthropic adapter renders the new variant as a content block of type mid_conv_system whose content is a single text block containing the supplied instruction text, asserted by a unit test capturing messages.create.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C3",
+          "description": "When the variant supplies a cache TTL, the emitted mid_conv_system block carries cache_control of type ephemeral with that ttl; when no TTL is supplied, the block carries no cache_control, asserted by unit tests for both cases.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C4",
+          "description": "A non-anthropic adapter given the new variant returns a normal response and raises no error, rendering it as best-effort text or skipping it, asserted by a unit test.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "C5",
+          "description": "npm run build exits zero and npm run test shows no new failures beyond the documented flaky baseline.",
+          "verificationMethod": "build",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not add a role:'system' message variant; the Messages API has no system role inside the messages array.",
+        "Do not change how the top-level system prompt or the existing prompt-caching breakpoints are emitted.",
+        "Do not require non-anthropic adapters to faithfully implement mid_conv_system; a best-effort text rendering or a documented skip that does not throw is acceptable.",
+        "Do not introduce unjustified `any` casts around the new SDK block type."
+      ],
+      "stopConditions": [
+        "Stop when the new Message variant renders to a mid_conv_system block on the anthropic path with the correct optional cache_control, non-anthropic adapters do not throw, and the suite is green except the flaky baseline.",
+        "Stop when the change is confined to types.ts, the provider adapters, and the relevant *.test.ts files."
+      ],
+      "definitionOfDone": "The provider Message union includes a mid-conversation-system variant carrying instruction text and an optional ephemeral cache TTL; the Anthropic adapter converts it to a content block of type mid_conv_system whose content is a single text block, attaching cache_control ephemeral with the given ttl only when a ttl is supplied; non-anthropic adapters render it as best-effort text or skip it without throwing; unit tests capture the emitted block shape for the ttl and no-ttl cases and prove a non-anthropic adapter tolerates the variant; typecheck, lint, and build pass and the suite shows only the documented flaky baseline failures.",
+      "assumptions": [
+        "mid_conv_system is a content block placed inside a message's content array (not a top-level role), shaped { type:'mid_conv_system', content:[{type:'text',text}], cache_control?:{type:'ephemeral',ttl} } per the API reference.",
+        "The SDK upgrade from sprint 2 types the mid_conv_system block so it can be constructed without a cast."
+      ],
+      "outOfScope": [
+        "effort parameter",
+        "role:'system' messages",
+        "orchestrator wiring that actually emits mid-conversation updates"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "In src/providers/types.ts add a new Message variant for a mid-conversation system instruction, e.g. interface SystemUpdateMessage { role: 'user'; systemUpdate: string; cacheTtl?: '5m' | '1h' } (the exact field names are your choice but it MUST carry the instruction text and an optional ephemeral ttl), and add it to the Message union. Update the conversion in src/providers/anthropic.ts (toAnthropicMessage) to emit a MessageParam whose content array contains a block: { type: 'mid_conv_system', content: [{ type: 'text', text: <instruction> }], ...(ttl ? { cache_control: { type: 'ephemeral', ttl } } : {}) }. Per the API reference this block sits inside a message's content array, positioned anywhere; it is NOT a top-level role. Confirm the upgraded SDK (sprint 2) types the mid_conv_system block (grep node_modules) so no cast is needed. For the non-anthropic adapters (openai.ts, google.ts, openai-compat.ts): map the variant to a plain text message (e.g. an OpenAI system or user message with the instruction) OR skip it — it MUST NOT throw. Mirror the existing anthropic.test.ts top-level vi.mock pattern to capture and assert the emitted block for ttl and no-ttl cases. Conventional commit: bober(sprint-4): add mid-conversation system blocks (mid_conv_system).",
+      "evaluatorNotes": "Read types.ts and confirm the new Message variant (text + optional ephemeral ttl) is in the union and handled in conversion (typecheck would fail on an unhandled union member). Read anthropic.ts and confirm toAnthropicMessage emits a mid_conv_system block with a text child equal to the instruction, and cache_control ephemeral with the ttl ONLY when a ttl is supplied. Run the unit tests: capture the request and assert the block shape for ttl and no-ttl cases. Confirm a non-anthropic adapter test passes the variant and returns normally with no throw. Verify NO role:'system' entry is emitted into the messages array. Run typecheck/lint/build (exit 0) and npm run test (only flaky baseline failures tolerated). Confirm changes are limited to types.ts, the adapters, and *.test.ts.",
+      "estimatedFiles": [
+        "src/providers/types.ts",
+        "src/providers/anthropic.ts",
+        "src/providers/openai.ts",
+        "src/providers/google.ts",
+        "src/providers/openai-compat.ts",
+        "src/providers/anthropic.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [
+        {
+          "iteration": 1,
+          "evalId": "eval-sprint-spec-20260529-opus-4-8-support-4-1",
+          "result": "pass",
+          "timestamp": "2026-05-29T19:40:00Z"
+        }
+      ],
+      "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-4-1",
+      "createdAt": "2026-05-29T18:00:00Z",
+      "updatedAt": "2026-05-29T19:40:00Z",
+      "startedAt": "2026-05-29T19:26:00Z",
+      "completedAt": "2026-05-29T19:40:00Z"
+    }
+  ]
+}

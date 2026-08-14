@@ -1,0 +1,247 @@
+{
+  "generatedFrom": {
+    "graphId": "coding",
+    "checksum": "sha256:a1df4bf023618df2fe0b19817924986ec290841b113381f5652aa98da2dd9aea"
+  },
+  "keys": [
+    {
+      "key": "branchStatus",
+      "writers": [
+        "gate_anchor_regression",
+        "gate_syntax",
+        "graceful_failure",
+        "sprint_exit",
+        "sprint_generate"
+      ],
+      "readers": [
+        "evaluate_global",
+        "fanout_sprints",
+        "finalize",
+        "gate_eval_in",
+        "gate_sprint_in",
+        "gate_sprint_out",
+        "graceful_failure",
+        "reduce_sprints",
+        "rework_route",
+        "supervisor",
+        "synthesize"
+      ],
+      "reducer": "lastWriteWinsByKey"
+    },
+    {
+      "key": "counters",
+      "writers": [
+        "context_compact",
+        "fanout_sprints",
+        "gate_mock_coverage",
+        "plan_clarify_check",
+        "reduce_sprints",
+        "research_reflect",
+        "research_route",
+        "rework_route",
+        "route_after_eval",
+        "sprint_correct",
+        "sprint_route",
+        "supervisor"
+      ],
+      "readers": [
+        "fanout_sprints",
+        "gate_mock_coverage",
+        "plan_clarify_check",
+        "reduce_sprints",
+        "research_route",
+        "rework_route",
+        "route_after_eval",
+        "sprint_correct",
+        "sprint_route",
+        "supervisor"
+      ],
+      "reducer": "maxNumber"
+    },
+    {
+      "key": "evaluations",
+      "writers": [
+        "evaluate_global",
+        "sprint_evaluate",
+        "sprint_review",
+        "sprint_security"
+      ],
+      "readers": [
+        "critique",
+        "documenter",
+        "evaluate_global",
+        "finalize",
+        "gate_eval_in",
+        "route_after_eval",
+        "sprint_correct",
+        "sprint_exit",
+        "sprint_route",
+        "supervisor",
+        "synthesize"
+      ],
+      "reducer": "appendById"
+    },
+    {
+      "key": "ledger",
+      "writers": [
+        "critique",
+        "documenter",
+        "evaluate_global",
+        "plan_draft",
+        "research_critique",
+        "research_explore",
+        "research_reflect",
+        "sprint_correct",
+        "sprint_curate_explain",
+        "sprint_curate_mocks",
+        "sprint_evaluate",
+        "sprint_generate",
+        "sprint_review",
+        "sprint_security",
+        "synthesize"
+      ],
+      "readers": [
+        "finalize"
+      ],
+      "reducer": "mergeLedger"
+    },
+    {
+      "key": "messages",
+      "writers": [
+        "commit",
+        "context_compact",
+        "critique",
+        "documenter",
+        "evaluate_global",
+        "graceful_failure",
+        "hitl_commit",
+        "plan_clarify",
+        "plan_draft",
+        "research_collect",
+        "research_critique",
+        "research_explore",
+        "research_reflect",
+        "sprint_correct",
+        "sprint_curate_explain",
+        "sprint_curate_mocks",
+        "sprint_evaluate",
+        "sprint_generate",
+        "sprint_review",
+        "sprint_security",
+        "synthesize"
+      ],
+      "readers": [
+        "commit",
+        "context_compact",
+        "critique",
+        "documenter",
+        "graceful_failure",
+        "hitl_commit",
+        "plan_clarify",
+        "plan_clarify_check",
+        "plan_draft",
+        "plan_materialize",
+        "research_collect",
+        "research_critique",
+        "research_explore",
+        "research_reflect",
+        "sprint_correct",
+        "sprint_curate_explain",
+        "sprint_curate_mocks",
+        "sprint_evaluate",
+        "sprint_generate",
+        "sprint_review",
+        "sprint_security",
+        "synthesize"
+      ],
+      "reducer": "appendById"
+    },
+    {
+      "key": "refs",
+      "writers": [
+        "context_compact",
+        "documenter",
+        "finalize",
+        "plan_materialize",
+        "research_collect",
+        "research_explore",
+        "sprint_correct",
+        "sprint_curate_explain",
+        "sprint_curate_mocks",
+        "sprint_generate"
+      ],
+      "readers": [
+        "context_compact",
+        "gate_mock_coverage",
+        "research_collect",
+        "research_critique",
+        "sprint_correct",
+        "sprint_curate_mocks",
+        "sprint_evaluate",
+        "sprint_generate",
+        "sprint_review",
+        "sprint_security"
+      ],
+      "reducer": "appendById"
+    },
+    {
+      "key": "spec",
+      "writers": [
+        "plan_materialize"
+      ],
+      "readers": [
+        "documenter",
+        "evaluate_global",
+        "gate_plan_in",
+        "gate_plan_out",
+        "plan_draft",
+        "sprint_curate_explain",
+        "sprint_generate",
+        "supervisor"
+      ],
+      "reducer": "replaceIfNewer"
+    },
+    {
+      "key": "specDraft",
+      "writers": [
+        "plan_draft"
+      ],
+      "readers": [],
+      "reducer": "replaceIfNewer"
+    },
+    {
+      "key": "sprintContracts",
+      "writers": [
+        "plan_materialize",
+        "sprint_exit"
+      ],
+      "readers": [
+        "fanout_sprints",
+        "gate_plan_out",
+        "gate_sprint_in",
+        "sprint_curate_explain",
+        "sprint_evaluate",
+        "sprint_generate"
+      ],
+      "reducer": "appendById"
+    },
+    {
+      "key": "testAnchors",
+      "writers": [
+        "sprint_evaluate"
+      ],
+      "readers": [
+        "gate_anchor_regression"
+      ],
+      "reducer": "setUnion"
+    },
+    {
+      "key": "verdict",
+      "writers": [
+        "finalize"
+      ],
+      "readers": [],
+      "reducer": "replaceIfNewer"
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 4,
+  "title": "Diagnose why a real plan still does not terminate, and fix it only if the cause is a ceiling",
+  "description": "Sprint 3 removed the byte-cap wall and revealed a second, independent one: with state.spec now populated, the run proceeds into the 14-contract fan-out and throws SuperstepLimitExceededError at DEFAULT_MAX_SUPERSTEPS=200 before reaching any terminal node. This sprint establishes BY MEASUREMENT which of two very different things is true \u2014 the ceiling is simply too low for a 14-sprint plan, or something in the fan-out fails to converge \u2014 and acts accordingly. The two outcomes have different consequences and only one of them is fixable here.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-3"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "A test runs PgeEngine over the committed 29 KB spec and its 14 contracts and asserts zero failures with errorClass StateBloatError \u2014 the half of the original criterion sprint 3 made true.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "The same run leaves state.spec non-null and state.sprintContracts holding all 14 contracts.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "The superstep cost of the run is MEASURED, not argued: the number of supersteps consumed before the ceiling, the per-superstep node activity, and how that cost scales with contract count (measure at least two different contract counts, e.g. 1 and 14, and report the relationship). The measurement is committed as data.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "From that measurement, the cause is determined and stated as one of exactly two verdicts, with the evidence that distinguishes them: (a) INSUFFICIENT CEILING \u2014 the superstep count scales with work and 200 is simply too low for 14 contracts; or (b) NON-CONVERGENCE \u2014 some node or loop re-enters without making progress, in which case the repeating pattern is identified by node id.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "If and ONLY IF the verdict is (a): the ceiling is raised to a value with a measured basis, pinned two-directionally like the channel caps (a function of measured cost, never a hand-picked literal), and the run then terminates at a node the artifact declares. Record explicitly that the terminal is NOT `finalize` \u2014 commit is still FAIL_CLOSED-refused under the autopilot noop mechanism, which is sprint 7's and a later sprint's territory, not this one.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "If the verdict is (b): the non-convergence is recorded with a minimal reproduction and the repeating node identified, the measurement is committed, and the sprint STOPS without attempting a fix. A convergence bug in the fan-out is a separate spec, and raising the ceiling to paper over it would be the single worst outcome available here.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "The committed measurement artifact is regenerated and its diff tells the story: rejections gone (sprint 3), and whatever this sprint established about termination.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": "docs/pge-graph.md is EDITED (not appended to \u2014 sprints 1, 2 and 3 all already wrote there) to state what is true after this sprint about whether the graph engine can execute a real plan.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-9",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Raising DEFAULT_MAX_SUPERSTEPS without a measured basis, or at all if the verdict is non-convergence.",
+    "Reaching the finalize node, or changing the checkpoint mechanism to reach it.",
+    "Touching PipelineResult (sprint 5) or adding the specDraft channel (sprint 7).",
+    "Editing any golden case.",
+    "Asserting anything about wall-clock time."
+  ],
+  "stopConditions": [
+    "The verdict is NON-CONVERGENCE \u2014 record it and stop; do not raise the ceiling.",
+    "The measurement cannot distinguish (a) from (b) \u2014 say so plainly rather than guessing, and report what further evidence would settle it.",
+    "Reaching a declared terminal would require editing a node body \u2014 stop and report."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [
+    "VERIFIED by sprint 3: DEFAULT_MAX_SUPERSTEPS = 200 at src/pge/runtime/interpreter.ts:386; the throw is at :1060 (`if (superstep >= maxSupersteps) throw new SuperstepLimitExceededError(maxSupersteps)`); ctx.maxSupersteps overrides it at :820.",
+    "VERIFIED by sprint 3: the committed measurement .bober/topology/measurements/real-workload.json now records engineOutcome {kind:'threw', errorClass:'SuperstepLimitExceededError'} with rejections/failures/terminalNodeId/status/verdict all null, because the interpreter throws before returning a GraphRunResult.",
+    "OPEN HAZARD from sprint 3, do not trip it: running BUILD_WORKLOAD_CORPUS=1 right now drops the verdict channel's only corpus entry, because workload-build.ts:343 skips it when the measurement's verdict is null. If this sprint makes the run terminate, that hazard resolves; if it does not, do NOT regenerate the corpus.",
+    "Sprint 3's harness (src/pge/engine/real-workload.test.ts) captures the interpreter's GraphRunResult through PgeEngineDeps.interpreterFactory and already handles the interpreter throwing before returning. Extend it; do not build a third measurement path."
+  ],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "The diagnostic question is the sprint. Do not start by raising the ceiling. Measure first: instrument the superstep loop (or read the trace spans, which already carry per-node records) to count supersteps and see WHICH nodes are active in each. If node activity keeps advancing through distinct contracts, the cost is real work and the ceiling is too low; if the same node id repeats without the branch set shrinking, it is non-convergence. Sprint 3 found that fanoutRetries, sprintIterations and the other loop counters live on NODES, not edges \u2014 check whether a counter that should bound a loop is being carried correctly across the fan-out. If you do raise the ceiling, pin it the way sprint 3 pinned the caps: as a function of measured cost with headroom, never a literal, so it fails in both directions.",
+  "evaluatorNotes": "The failure mode to hunt hardest is a ceiling raised to make a red test green. If the generator reports verdict (a) INSUFFICIENT CEILING, verify the scaling claim yourself by running at two contract counts and checking the relationship is real \u2014 a run that consumes ~the same supersteps regardless of contract count is NOT scaling with work and the verdict is wrong. If the generator reports (b), verify the repeating node is genuinely repeating from the trace, and confirm nothing was fixed or raised. Either way, confirm the measurement artifact was regenerated and that its diff matches the story told.",
+  "estimatedFiles": [
+    "src/pge/engine/real-workload.test.ts",
+    "src/pge/engine/__fixtures__/real-workload.ts",
+    ".bober/topology/measurements/real-workload.json",
+    "src/pge/runtime/interpreter.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-4-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T07:03:29Z"
+    }
+  ],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T07:03:29Z",
+  "completedAt": "2026-08-12T07:03:29Z",
+  "completionNote": "8 of 9 criteria met, 1 skipped by its own mutually-exclusive trigger (sc-4-6 applies only to verdict b). VERDICT: (a) INSUFFICIENT CEILING, independently re-derived by the evaluator at FIVE contract counts \u2014 1:39, 4:84, 7:129, 10:174, 14:234 supersteps \u2014 exactly 15 supersteps marginal per contract at every interval. The evaluator also read the raw trace to confirm sprint_body's 1,272 spans are 14 status-ok executions plus 1,258 status-serialized deferral records under concurrency 1 on a real dependsOn DAG, falsifying non-convergence. Fix: PGE_ENGINE_MAX_SUPERSTEPS = supersepsForMeasuredCost(234) = 512, wired into PgeEngine.run's RunContext and pinned two-directionally (a hand-edited literal breaks it; lowering to 200 reproduces the original throw). The interpreter's own DEFAULT_MAX_SUPERSTEPS=200 and throw site were NOT touched. MILESTONE: PgeEngine now executes this repository's own real 29 KB PlanSpec and its 14 real contracts END TO END, terminating at graceful_failure \u2014 explicitly not finalize, because commit remains FAIL_CLOSED-refused under the autopilot noop mechanism. No topology change (pge diff empty, graphVersion still 1.3.0). Suite 6877 -> 6879."
+}

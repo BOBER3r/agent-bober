@@ -1,0 +1,18 @@
+{"evalId":"eval-sprint-spec-20260812-terminal-vocabulary-2-1","contractId":"sprint-spec-20260812-terminal-vocabulary-2","specId":"spec-20260812-terminal-vocabulary","timestamp":"2026-08-12T16:32:40Z","iteration":1,"overallResult":"pass",
+"score":{"criteriaTotal":5,"criteriaPassed":5,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":5,"requiredFailed":0,"requiredTotal":5},
+"strategyResults":[
+{"strategy":"typecheck","required":true,"result":"pass","output":"exit 0"},
+{"strategy":"typecheck:tests","required":true,"result":"pass","output":"exit 0"},
+{"strategy":"lint","required":true,"result":"pass","output":"0 errors, 2 pre-existing warnings in eval-persist.test.ts"},
+{"strategy":"build","required":true,"result":"pass","output":"exit 0"},
+{"strategy":"unit-test","required":true,"result":"pass","output":"459 files / 6931 tests passed, 2 pre-existing skips. sprint-contract.test.ts 31 passed; sprint-corpus.test.ts 7 passed."},
+{"strategy":"golden-gate","required":true,"result":"pass","output":"6/6 (100%), exit 0"}],
+"criteriaResults":[
+{"criterionId":"sc-2-1","required":true,"result":"pass","evidence":"Exactly one line changed per file. Every cited justification independently checked and holds: history.jsonl:271-272 (plan-completed, sprintCount=4), CHANGELOG.md:59, README.md:784, COMMANDS.md:2263, VISION.md:304, and all five annotated tags — v0.16.0 points at 0a39fa8, the exact commit recorded in history.jsonl:272. history.jsonl:918-919 shows the parent spec's abandonedReason is 'superseded' (re-scoped into a 0.18.0 refresh), NOT 'never executed'."},
+{"criterionId":"sc-2-2","required":true,"result":"pass","evidence":"readdir + per-file JSON.parse + ContractStatusSchema.safeParse on the status field. Re-verified with a standalone script against the built schema: status-only failures across the real corpus = 0."},
+{"criterionId":"sc-2-3","required":true,"result":"pass","evidence":"Evaluator went beyond the generator's mkdtemp control: planted a canary file with status 'pending' into the REAL .bober/contracts/, guard failed naming it; deleted, green again, no residue. Also reverted the four files to 'pending' and confirmed the guard failed naming all four, then restored."},
+{"criterionId":"sc-2-4","required":true,"result":"pass","evidence":"Black-box proof via the canary: a brand-new file never referenced in the test source was picked up automatically and its removal reflected on the next run."},
+{"criterionId":"sc-2-5","required":true,"result":"pass","evidence":"All five gates plus the golden gate run independently and green."}],
+"regressions":[],
+"generatorFeedback":[{"priority":"low","category":"quality","description":"The four migrated contracts are now the ONLY status:'completed' contracts in the 256-file corpus lacking a completedAt key (verified: every other completed contract has one). Schema-legal (completedAt is optional at sprint-contract.ts:201) and a direct consequence of nonGoal 2. Residual data-quality outlier: a future sprint could backfill completedAt alongside reconciling the parent spec's now-stale 'abandoned' status — both stem from the same tension."}],
+"summary":"5/5 criteria pass, all gates green, golden 6/6. All three judgement calls upheld: 'completed' is fully evidenced (not a falsified record); omitting completedAt is the literal consequence of nonGoal 2; status-only validation is a faithful reading of sc-2-2 — the evaluator re-ran the whole-schema check and independently confirmed 60/256 fail for reasons unrelated to status and that the 196/256 strict-parse count is unchanged. The generator's correction to the contract's false premise (loadContract IS strict; listContracts is the silent-skip site) was independently verified."}

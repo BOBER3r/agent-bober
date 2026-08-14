@@ -3,7 +3,7 @@
   "specId": "spec-20260604-docs-correction",
   "sprintNumber": 4,
   "title": "Git release tags 0.12.0-0.16.0",
-  "status": "pending",
+  "status": "completed",
   "description": "Commit the doc changes on a feature branch and create the missing annotated release tags pointing at the correct commits. Local only — no push.",
   "filesInScope": ["README.md", "CHANGELOG.md", "package.json", "COMMANDS.md", "VISION.md", "docs/providers.md"],
   "successCriteria": [

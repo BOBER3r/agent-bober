@@ -57,6 +57,8 @@ export {
   resolveClarification,
 } from "./spec.js";
 
+export * from "./topology.js";
+
 export {
   // Zod schemas
   SeveritySchema,
@@ -72,3 +74,23 @@ export {
   aggregateResults,
   formatFeedback,
 } from "./eval-result.js";
+
+export {
+  // Zod schemas
+  SchemaIssueSchema,
+  ProblemReflectionSchema,
+  FeatureRequestSchema,
+  ResearchSectionsSchema,
+  ResearchDigestSchema,
+  // Types
+  type SchemaIssue,
+  type SchemaParse,
+  type ProblemReflection,
+  type FeatureRequest,
+  type ResearchSections,
+  type ResearchDigest,
+  // Helpers
+  schemaIssuesOf,
+  parseWithIssues,
+  parseProblemReflection,
+} from "./problem-reflection.js";

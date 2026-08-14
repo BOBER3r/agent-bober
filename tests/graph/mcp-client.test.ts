@@ -13,6 +13,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { TokensaveBackend } from "../../src/graph/backends/tokensave-backend.js";
 
 // ── tokensave availability probe ─────────────────────────────────────
 // Uses node:child_process (not execa) so the vi.mock("execa") below
@@ -165,7 +166,7 @@ describe("Circuit breaker rolling-window math (pure logic, no binary)", () => {
     });
 
     const cfg = { queryTimeoutMs: 500, enabled: true } as Parameters<typeof TokensaveMcpClient.prototype.call>[1] extends never ? never : { queryTimeoutMs: number; enabled: boolean };
-    const client = new TokensaveMcpClient(tmp, { enabled: true, queryTimeoutMs: 500 } as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never, incidents as never);
+    const client = new TokensaveMcpClient(tmp, { enabled: true, queryTimeoutMs: 500 } as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never, incidents as never, new TokensaveBackend().processSpec());
 
     // Bypass — we directly test the restart timestamp logic
     // Access private fields via type assertion for white-box testing
@@ -236,6 +237,7 @@ describe("JSON-RPC PendingMap correlation (pure logic)", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 2_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
 
     // Trigger handshake — the client writes an initialize request; reply by id
@@ -307,6 +309,7 @@ describe("Health state: graph.enabled=false", () => {
       tmp,
       { enabled: false, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
     expect(client.health()).toBe("starting");
   });
@@ -318,6 +321,7 @@ describe("Health state: graph.enabled=false", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 500 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
     // Health is 'starting' — not 'broken', not 'ready'
     await expect(client.call("tool", {})).rejects.toThrow(/GRAPH_ERROR/);
@@ -330,11 +334,76 @@ describe("Health state: graph.enabled=false", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 500 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
     // Force broken state
     (client as unknown as { healthState: string }).healthState = "broken";
     const err = await client.call("tool", {}).catch((e: Error) => e);
     expect((err as Error & { reason: string }).reason).toBe("GRAPH_UNAVAILABLE");
+  });
+});
+
+// ── Transport spawns from the backend's ProcessSpec (sc-2-2) ────────
+
+describe("Transport spawn argv is derived from the injected ProcessSpec (sc-2-2)", () => {
+  it("spawns execa(processSpec.binary, processSpec.serveArgs) for the tokensave backend", async () => {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+
+    const processSpec = new TokensaveBackend().processSpec();
+    expect(processSpec).toEqual({ binary: "tokensave", serveArgs: ["serve"] });
+
+    const { subprocess } = makeFakeSubprocess();
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000 } as never,
+      incidents as never,
+      processSpec,
+    );
+
+    // Don't await — the fake subprocess never replies to the handshake, so
+    // start() would hang until HANDSHAKE_TIMEOUT_MS. We only need the spawn call.
+    const startPromise = client.start().catch(() => {
+      // expected: handshake never resolves against this bare fake
+    });
+
+    expect((execa as unknown as Mock).mock.calls[0]?.[0]).toBe("tokensave");
+    expect((execa as unknown as Mock).mock.calls[0]?.[1]).toEqual(["serve"]);
+
+    startPromise.catch(() => {
+      /* expected */
+    });
+    await client.stop();
+  });
+
+  it("resolves the binary via cfg.tokensavePath when set, keeping processSpec.serveArgs", async () => {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+    const processSpec = new TokensaveBackend().processSpec();
+
+    const { subprocess } = makeFakeSubprocess();
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000, tokensavePath: "/custom/bin/tokensave" } as never,
+      incidents as never,
+      processSpec,
+    );
+
+    const startPromise = client.start().catch(() => {
+      // expected: handshake never resolves against this bare fake
+    });
+
+    expect((execa as unknown as Mock).mock.calls[0]?.[0]).toBe("/custom/bin/tokensave");
+    expect((execa as unknown as Mock).mock.calls[0]?.[1]).toEqual(["serve"]);
+
+    startPromise.catch(() => {
+      /* expected */
+    });
+    await client.stop();
   });
 });
 
@@ -355,6 +424,7 @@ describe("MCP initialize handshake (sc-1-2 / sc-1-3)", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 2_000 } as never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
 
     const startPromise = client.start();
@@ -403,6 +473,7 @@ describe("MCP initialize handshake (sc-1-2 / sc-1-3)", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 2_000 } as never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
 
     const startPromise = client.start();
@@ -436,6 +507,7 @@ describe("MCP initialize handshake (sc-1-2 / sc-1-3)", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 2_000 } as never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
 
     const startPromise = client.start();
@@ -500,6 +572,7 @@ describe("tools/call envelope + content unwrap (sc-1-4 / sc-1-5)", () => {
       tmp,
       { enabled: true, queryTimeoutMs: 2_000 } as never,
       incidents as never,
+      new TokensaveBackend().processSpec(),
     );
 
     const startPromise = client.start();
@@ -694,7 +767,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
         process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
-        "tokensave",
+        new TokensaveBackend().processSpec(),
       );
 
       const t0 = Date.now();
@@ -716,7 +789,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
         process.cwd(),
         { enabled: true, queryTimeoutMs: 10_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
-        "tokensave",
+        new TokensaveBackend().processSpec(),
       );
 
       await client.start();
@@ -743,7 +816,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
         process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
-        "tokensave",
+        new TokensaveBackend().processSpec(),
       );
 
       await client.start();
@@ -777,7 +850,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
         process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
-        "tokensave",
+        new TokensaveBackend().processSpec(),
       );
 
       await client.start();

@@ -1,0 +1,315 @@
+{
+  "entryId": "sprintContracts-spec-20260618-fleet-blackboard-exchange",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260618-fleet-blackboard-exchange-1.json",
+      ".bober/contracts/sprint-spec-20260618-fleet-blackboard-exchange-2.json",
+      ".bober/contracts/sprint-spec-20260618-fleet-blackboard-exchange-4.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+      "specId": "spec-20260618-fleet-blackboard-exchange",
+      "sprintNumber": 1,
+      "title": "SharedBlackboard module (WAL facts.db wrapper)",
+      "description": "Build the bounded inter-agent exchange wrapper over one shared facts.db opened with WAL + busy_timeout — the risk-first foundation (WAL concurrency is the highest unknown). New file src/fleet/shared-blackboard.ts exports: const BLACKBOARD_MAX_ROUNDS = 3; type BlackboardFinding = { childFolder: string; round: number; payload: string; confidence?: number }; class SharedBlackboard with a static/factory open(opts:{dbPath,namespace,busyTimeoutMs?,maxRounds}) that opens the shared db with PRAGMA journal_mode=WAL and PRAGMA busy_timeout, creating file+table if absent; publish(finding, now): writes a FactRecord via FactStore.insertFact (scope=namespace, subject=childFolder, predicate='finding', value=payload, confidence) and THROWS when finding.round > min(maxRounds, BLACKBOARD_MAX_ROUNDS); readSiblings(selfFolder): FactRecord[] = getActiveFacts(namespace, undefined, 'finding') filtered to subject !== selfFolder; readAll(): all active 'finding' facts in the namespace; close(). The WAL pragma must be enabled WITHOUT changing the behavior of existing FactStore callers — preferred mechanism: add an OPTIONAL second constructor arg to FactStore (e.g. `new FactStore(dbPath, { journalModeWal?: boolean; busyTimeoutMs?: number })`) that defaults to OFF (existing callers byte-identical), and SharedBlackboard constructs FactStore with { journalModeWal: true, busyTimeoutMs }. No engine/coordinator/CLI wiring this sprint.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors (npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "SharedBlackboard.open(dbPath) opens the db in WAL mode (a test reads `PRAGMA journal_mode` and asserts 'wal') and creates the facts file+table if absent.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "publish(finding, now) writes a FactRecord with scope=namespace, subject=childFolder, predicate='finding', value=payload; and THROWS when finding.round exceeds min(maxRounds, BLACKBOARD_MAX_ROUNDS=3). A test asserts both the written record and the round-cap throw.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "readSiblings(selfFolder) returns active 'finding' facts in the namespace excluding subject===selfFolder; readAll() returns all; both return [] when empty (no throw). A test with 2 subjects asserts each sees only the other's findings via readSiblings and both via readAll.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "Concurrent writers do not deadlock: a test issues N (>=5) concurrent publish() calls to one shared db (e.g. Promise.all) and asserts all N findings are present in readAll(). WAL + busy_timeout are enabled.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "Existing FactStore callers are unaffected: constructing FactStore WITHOUT the WAL option behaves exactly as before (default journal mode); the existing FactStore tests and the medical FactStore usage pass unchanged. A test asserts a default FactStore's journal_mode is the prior default (not forced to wal).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-8",
+          "description": "lint passes (npm run lint, zero errors); SharedBlackboard adds no network/SDK import (depends only on FactStore/better-sqlite3 via FactStore); change confined to shared-blackboard.ts (new), facts.ts (optional opts param), + tests.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT wire SharedBlackboard into the coordinator, runFleet, or any CLI (Sprints 2-4).",
+        "Do NOT add config.fleet, manifest.blackboard, or the `agent-bober blackboard` command (Sprint 2).",
+        "Do NOT change FactStore's DEFAULT behavior — the WAL option must be opt-in and default off.",
+        "Do NOT implement the rounds loop or synthesis (Sprints 3-4).",
+        "Do NOT add an LLM/network dependency."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "SharedBlackboard opens WAL, publish/readSiblings/readAll work, the round cap throws, concurrent writers succeed, existing FactStore callers are byte-identical, and build/typecheck/test/lint are green"
+      ],
+      "definitionOfDone": "src/fleet/shared-blackboard.ts exports BLACKBOARD_MAX_ROUNDS, BlackboardFinding, and SharedBlackboard (open with WAL+busy_timeout, publish with round cap, readSiblings, readAll, close). FactStore gains an optional opts param enabling WAL+busy_timeout (default off). Collocated tests cover WAL-mode, publish+round-cap, readSiblings/readAll, concurrency, and the unchanged default-FactStore path. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "FactStore.insertFact(input: FactInput) (facts.ts:164) is the write primitive and getActiveFacts(scope, subject?, predicate?) (facts.ts:213) the read; FactInput = {scope, subject, predicate, value(min1), confidence?(default 1)} (facts.ts:23-27).",
+        "FactStore currently opens `new Database(dbPath)` with no WAL (facts.ts:139-140); adding an optional opts param that, when set, runs db.pragma('journal_mode = WAL') + db.pragma('busy_timeout = ...') is the minimal way to give the blackboard WAL without affecting default callers.",
+        "better-sqlite3 is synchronous; 'concurrent' publish in a single process is interleaved async over one or more connections — the test exercises the WAL+busy_timeout path (multiple connections if needed to truly contend).",
+        "Findings live in the existing facts schema/table; no migration is needed — the shared db is just a facts.db opened in WAL mode."
+      ],
+      "outOfScope": [
+        "Coordinator rounds loop (Sprint 3)",
+        "config.fleet / manifest.blackboard / CLI (Sprint 2)",
+        "SynthesisStep (Sprint 4)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/state/facts.ts in FULL — the constructor (:139-157, where Database is opened and the table created), insertFact (:164), getActiveFacts (:213), FactInput/FactRecord (:23-46), factsDbPath/memoryDir (:74-90). Decide the WAL mechanism: the cleanest is an optional 2nd constructor arg `constructor(dbPath: string, opts?: { journalModeWal?: boolean; busyTimeoutMs?: number })` — when opts.journalModeWal, call this.db.pragma('journal_mode = WAL'); when opts.busyTimeoutMs, this.db.pragma(`busy_timeout = ${opts.busyTimeoutMs}`). Default (no opts) leaves the existing behavior byte-identical. Confirm existing callers (medical, memory) pass only dbPath.\n\nNew src/fleet/shared-blackboard.ts: export const BLACKBOARD_MAX_ROUNDS = 3; export interface BlackboardFinding { childFolder: string; round: number; payload: string; confidence?: number }. export class SharedBlackboard { private store: FactStore; private namespace: string; private maxRounds: number; constructor/open({dbPath, namespace, busyTimeoutMs = 5000, maxRounds}) { ensureDir(dirname(dbPath)); this.store = new FactStore(dbPath, { journalModeWal: true, busyTimeoutMs }); this.maxRounds = Math.min(maxRounds ?? BLACKBOARD_MAX_ROUNDS, BLACKBOARD_MAX_ROUNDS); } publish(finding, now) { if (finding.round > this.maxRounds) throw new Error(`blackboard round ${finding.round} exceeds cap ${this.maxRounds}`); return this.store.insertFact({ scope: this.namespace, subject: finding.childFolder, predicate: 'finding', value: finding.payload, confidence: finding.confidence ?? 1 }); } readSiblings(selfFolder) { return this.store.getActiveFacts(this.namespace, undefined, 'finding').filter(f => f.subject !== selfFolder); } readAll() { return this.store.getActiveFacts(this.namespace, undefined, 'finding'); } close() { this.store.close(); } }.\n\nTests (shared-blackboard.test.ts + facts.test.ts additions): use a tmp dir db path. Assert journal_mode is 'wal' after open (read via a raw better-sqlite3 or expose a tiny test seam). publish + round-cap throw. readSiblings/readAll with 2 subjects. Concurrency: Promise.all of N publish() (use distinct subjects/values so ids differ) then assert readAll().length===N. Default-FactStore unchanged: `new FactStore(tmp)` then assert its journal_mode is NOT 'wal' (the prior default), and the existing facts tests still pass. Follow ESM .js imports, import type, unicode section headers, no synchronous fs (use ensureDir).",
+      "evaluatorNotes": "sc-1-3: open a SharedBlackboard at a tmp path, then open a raw better-sqlite3 (or the store) and `PRAGMA journal_mode` → expect 'wal'; confirm the facts.db file exists. sc-1-4: publish a finding round=1 → assert a FactRecord with the right scope/subject/predicate/value; publish round=4 → expect throw. sc-1-5: two subjects A,B publish; readSiblings('A') returns only B's; readAll returns both; empty namespace → []. sc-1-6: Promise.all of >=5 publishes → readAll length matches. sc-1-7 (CRITICAL no-regression): `new FactStore(tmp)` (no opts) → journal_mode is the prior default (likely 'delete'/'memory', NOT 'wal'); run the existing facts + medical FactStore tests and confirm unchanged. sc-1-2: FULL suite, only 6 known cockpit failures. Build/typecheck/lint clean; grep shared-blackboard.ts for network/SDK imports (none).",
+      "estimatedFiles": [
+        "src/fleet/shared-blackboard.ts",
+        "src/fleet/shared-blackboard.test.ts",
+        "src/state/facts.ts",
+        "src/state/facts.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T19:30:00Z",
+      "updatedAt": "2026-06-18T19:30:00Z",
+      "completedAt": "2026-06-18T19:01:30Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-2",
+      "specId": "spec-20260618-fleet-blackboard-exchange",
+      "sprintNumber": 2,
+      "title": "config.fleet section + manifest.blackboard + path injection + `agent-bober blackboard` CLI",
+      "description": "Add the additive config/manifest surface and the explicit child seam. (1) src/config/schema.ts: add an OPTIONAL `fleet` section to BoberConfigSchema = { blackboardDbPath: z.string(); blackboardNamespace: z.string(); blackboardSubject: z.string(); maxRounds: z.number().int().min(1).max(3) } wrapped .optional() — needed because BoberConfigSchema strips unknown keys (schema.ts:405), so this is the child-visible channel. (2) src/fleet/manifest.ts: add optional blackboard { namespace: z.string().min(1); maxRounds: z.number().int().min(1).max(3).default(3) } to FleetManifestSchema. (3) src/fleet/index.ts (or a small helper): resolveBlackboardPath(manifest) returns join(resolve(rootDir),'.bober','memory',namespace,'facts.db') when manifest.blackboard is set, else undefined. (4) src/fleet/scaffolder.ts: when a blackboard is configured for the run, write the fleet section into each child's bober.config.json with blackboardDbPath=<the absolute shared path>, blackboardNamespace=namespace, blackboardSubject=child.folder, maxRounds; when not configured, write NO fleet section (byte-identical). (5) New `agent-bober blackboard` CLI command (registerBlackboardCommand, mirroring registerFleetCommand at cli/index.ts:321) with subcommands: `publish <value>` (loads cwd bober.config.json, opens SharedBlackboard at config.fleet.blackboardDbPath, publishes a finding with subject=config.fleet.blackboardSubject, round defaults to 1 or --round N) and `read [--all]` (prints siblings' findings, or all with --all). Both error clearly (printed message, exit 1, never throw) when no fleet section is present. The CLI reads the absolute path from config ONLY — never re-derives from cwd.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-fleet-blackboard-exchange-1"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "Full suite passes; only the 6 known cockpit-integration MCP failures may fail; existing config/manifest/scaffolder tests pass unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "BoberConfigSchema parses a config WITH a fleet section {blackboardDbPath,blackboardNamespace,blackboardSubject,maxRounds} and WITHOUT one (absent); a config with no fleet section parses identically to today (the field is optional and absent from output).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "FleetManifestSchema parses a manifest with blackboard {namespace,maxRounds} and without; maxRounds>3 is a ZodError; a no-blackboard manifest parses identically to today.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "resolveBlackboardPath returns the absolute join(resolve(rootDir),'.bober','memory',namespace,'facts.db') when blackboard set, else undefined; and the scaffolder writes the fleet section (with blackboardSubject=child.folder + the absolute path) into each child bober.config.json when configured, and omits it (byte-identical child config) when not.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "`agent-bober blackboard publish <value>` run in a cwd whose bober.config.json has a fleet section opens SharedBlackboard at config.fleet.blackboardDbPath and writes a finding with subject=blackboardSubject; with no fleet section it prints a clear message and exits 1 (no throw).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "`agent-bober blackboard read [--all]` prints sibling findings (or all with --all) and exits 0 with an empty result when none; a two-cwd test (two configs pointing at ONE shared blackboardDbPath) confirms each cwd sees the other's published finding (path comes from config, not cwd).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-8",
+          "description": "lint passes; the change is additive (config schema, manifest schema, scaffolder, a resolve helper, the new CLI command + registration) and the no-blackboard fleet path is byte-identical (scaffolder writes no fleet section).",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT implement the coordinator rounds loop (Sprint 3) — this sprint only injects config + provides the CLI seam.",
+        "Do NOT write fleet-synthesis.json (Sprint 4).",
+        "Do NOT auto-wire the blackboard into `agent-bober run` — participation is via the explicit `agent-bober blackboard` CLI only.",
+        "Do NOT change the no-blackboard scaffolder output (omit the fleet section entirely).",
+        "Do NOT re-derive the db path from cwd in the CLI — read it from config.fleet only."
+      ],
+      "stopConditions": [
+        "All eight success criteria pass",
+        "config.fleet + manifest.blackboard parse additively, resolveBlackboardPath + scaffolder inject the absolute path per child, the `agent-bober blackboard` publish/read CLI works across two cwds via one shared path, and the no-blackboard path is byte-identical"
+      ],
+      "definitionOfDone": "BoberConfigSchema has an optional fleet section; FleetManifestSchema has an optional blackboard block; resolveBlackboardPath returns the absolute shared path; the scaffolder writes the per-child fleet section when configured (omits it otherwise); `agent-bober blackboard publish|read` works against config.fleet.blackboardDbPath and fails clean with no fleet section. Collocated tests cover schema parse (with/without), resolveBlackboardPath, scaffolder injection + byte-identical-when-absent, the CLI publish/read, the no-config error path, and the two-cwd shared-visibility test. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "Sprint 1's SharedBlackboard (open/publish/readSiblings/readAll/close) is available and used by the CLI.",
+        "The scaffolder (src/fleet/scaffolder.ts:57-58) writes JSON.stringify(buildChildConfig(child)) to <absPath>/bober.config.json; the fleet section must be merged into that written config when a blackboard is configured (the run passes the resolved path + namespace + maxRounds + the child folder into the scaffold step).",
+        "CLI commands register via register*Command(program) (cli/index.ts:318-321); registerBlackboardCommand mirrors that. Loading the cwd config reuses the existing config loader; failure to find a fleet section is a clean exit-1 (printed), never a throw.",
+        "The package bin is `agent-bober` (COMMANDS.md uses it); the command is `agent-bober blackboard publish|read`."
+      ],
+      "outOfScope": [
+        "SharedBlackboard module internals (Sprint 1)",
+        "Coordinator rounds loop (Sprint 3)",
+        "SynthesisStep / fleet-synthesis.json (Sprint 4)"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read FIRST: src/config/schema.ts (MedicalSectionSchema is a good template for an optional section; add a FleetSectionSchema sibling and `fleet: FleetSectionSchema.optional()` on BoberConfigSchema ~:405-421); src/fleet/manifest.ts (FleetManifestSchema — add optional blackboard); src/fleet/scaffolder.ts (:1-65, where buildChildConfig is serialized to bober.config.json at :57-58 — you must merge the fleet section into that object BEFORE writeFile when a blackboard is configured; the scaffold signature/caller may need the resolved path+namespace+maxRounds threaded in); src/fleet/index.ts (runFleet — where resolveBlackboardPath is computed and passed to the coordinator/scaffolder; Sprint 3 wires the loop, but resolveBlackboardPath + the scaffolder threading land here); src/cli/index.ts (:38-40 imports, :318-321 registerMedicalCommand/registerFleetCommand — add registerBlackboardCommand); src/fleet/shared-blackboard.ts (Sprint 1) for the CLI to use; the config loader (how to load a bober.config.json from cwd — see how `run`/`fleet` load config).\n\nFleetSectionSchema = z.object({ blackboardDbPath: z.string(), blackboardNamespace: z.string(), blackboardSubject: z.string(), maxRounds: z.number().int().min(1).max(3) }). resolveBlackboardPath(manifest): manifest.blackboard ? join(resolve(manifest.rootDir), '.bober', 'memory', manifest.blackboard.namespace, 'facts.db') : undefined.\n\nScaffolder: thread an optional { fleet?: {dbPath, namespace, maxRounds} } into scaffold(); when present, after building the child config object, set config.fleet = { blackboardDbPath: dbPath, blackboardNamespace: namespace, blackboardSubject: child.folder, maxRounds } before JSON.stringify+writeFile. When absent, write exactly as today (no fleet key).\n\nCLI src/cli/commands/blackboard.ts: registerBlackboardCommand(program) adds `blackboard` with subcommands publish <value> [--round N] and read [--all]. Both: load cwd bober.config.json; if !config.fleet → console.error a clear message + process.exitCode=1 (no throw); else open SharedBlackboard({dbPath: config.fleet.blackboardDbPath, namespace: config.fleet.blackboardNamespace, maxRounds: config.fleet.maxRounds}); publish → sb.publish({childFolder: config.fleet.blackboardSubject, round: opts.round ?? 1, payload: value}, nowIso); read → print sb.readSiblings(config.fleet.blackboardSubject) (or sb.readAll() with --all) as lines `[subject] value`; close in finally.\n\nTests: schema (with/without fleet + blackboard, maxRounds>3 ZodError); resolveBlackboardPath; scaffolder (injects fleet section with correct subject+path when configured; byte-identical no-fleet output otherwise); CLI publish/read via the core function (export a testable runBlackboard core like runFleet does, DI the cwd/config); two-cwd shared-visibility (two temp dirs, two configs with the SAME blackboardDbPath, publish from one, read from the other). Follow ESM .js imports, import type, unicode section headers.",
+      "evaluatorNotes": "sc-2-3/sc-2-4: parse configs/manifests with and without the new optional blocks; assert a no-fleet config and no-blackboard manifest are byte-identical to prior parse; maxRounds=4 → ZodError. sc-2-5: resolveBlackboardPath returns an ABSOLUTE path containing '.bober/memory/<ns>/facts.db'; scaffold a child with a blackboard configured → read the written bober.config.json and assert config.fleet.blackboardSubject===child.folder and blackboardDbPath===the absolute shared path; scaffold without → assert no 'fleet' key. sc-2-6: invoke the blackboard publish core in a cwd with a fleet config → a finding is written (verify via SharedBlackboard.readAll at that path); in a cwd with no fleet section → exit code 1 + a printed message, no throw. sc-2-7: two temp cwds sharing one blackboardDbPath: publish 'hello' from cwd A (subject A), read --all from cwd B → sees A's 'hello'; read (siblings) from cwd B (subject B) → sees A's. sc-2-2: FULL suite, only 6 known cockpit failures; existing config/manifest/scaffolder tests unchanged. Build/typecheck/lint clean.",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/config/schema.test.ts",
+        "src/fleet/manifest.ts",
+        "src/fleet/manifest.test.ts",
+        "src/fleet/scaffolder.ts",
+        "src/fleet/scaffolder.test.ts",
+        "src/fleet/index.ts",
+        "src/cli/commands/blackboard.ts",
+        "src/cli/commands/blackboard.test.ts",
+        "src/cli/index.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T19:30:00Z",
+      "updatedAt": "2026-06-18T19:30:00Z",
+      "completedAt": "2026-06-18T19:17:30Z"
+    },
+    {
+      "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-4",
+      "specId": "spec-20260618-fleet-blackboard-exchange",
+      "sprintNumber": 4,
+      "title": "SynthesisStep + fleet-synthesis.json artifact",
+      "description": "After the rounds complete, assemble a PURE data bundle of the final-round child results plus all blackboard findings and write it to a separate <rootDir>/.bober/fleet-synthesis.json for the head to synthesize. New file src/fleet/synthesis.ts exports: type SynthesisBundle = { rounds: number; childResults: <the final executions/outcomes shape used by the reporter>; findings: FactRecord[] }; function collect(blackboard: SharedBlackboard | null, childResults, rounds): SynthesisBundle — findings = blackboard ? blackboard.readAll() : []; returns the bundle; performs NO LLM call and no network. Wire into runFleet: when a blackboard was used, after the rounds + the existing fleet-report.json write, call collect(...) and atomically write fleet-synthesis.json (tmp+rename, mirroring the report writer); when no blackboard, write NOTHING (byte-identical). The existing fleet-report.json remains unchanged in shape and is always written.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260618-fleet-blackboard-exchange-3"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "Full suite passes; only the 6 known cockpit-integration MCP failures may fail; existing fleet report/index tests pass unchanged.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "SynthesisStep.collect(blackboard, childResults, rounds) returns { rounds, childResults, findings } where findings===blackboard.readAll(); when blackboard is null it returns findings:[] and the caller writes NO file. A test asserts both branches.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "On a blackboard-enabled run, <rootDir>/.bober/fleet-synthesis.json is written containing the final-round childResults + all findings + the round count; the existing fleet-report.json is also written and unchanged in shape. A test runs a blackboard fleet and asserts both files exist with the expected content.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "SynthesisStep performs NO LLM/network call — a test asserts no provider/client is constructed and no network import exists in synthesis.ts.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "When no blackboard is configured, NO fleet-synthesis.json is written and the run output is byte-identical to Phase A (the existing fleet tests pass unchanged; a test asserts the file is absent on a no-blackboard run).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "lint passes; the synthesis write is additive + gated on a blackboard being used; the fleet-report.json shape/behavior is unchanged.",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT perform any LLM synthesis — collect is pure data; the head/dynamic-workflow synthesizes.",
+        "Do NOT change the fleet-report.json shape or stop writing it.",
+        "Do NOT write fleet-synthesis.json on a no-blackboard run.",
+        "Do NOT add network/SDK imports.",
+        "Do NOT change the rounds loop (Sprint 3) or the blackboard module (Sprint 1)."
+      ],
+      "stopConditions": [
+        "All seven success criteria pass",
+        "fleet-synthesis.json is written (final childResults + all findings + rounds) only on a blackboard run, collect is pure (no LLM), the report is unchanged, the no-blackboard path is byte-identical, and build/typecheck/test/lint are green"
+      ],
+      "definitionOfDone": "src/fleet/synthesis.ts exports SynthesisBundle + collect (pure, no LLM/network). runFleet writes <rootDir>/.bober/fleet-synthesis.json (atomic tmp+rename) on a blackboard run after the report; writes nothing extra otherwise; fleet-report.json unchanged. Collocated tests cover collect (blackboard + null), the written synthesis file content, the no-LLM assertion, and the no-file-on-no-blackboard byte-identical path. Build/typecheck/test/lint green.",
+      "assumptions": [
+        "Sprint 3 made the rounds available and exposes the final-round executions/outcomes (the same shape the reporter consumes) and the round count to runFleet.",
+        "SharedBlackboard.readAll() (Sprint 1) returns FactRecord[]; collect just bundles it — no transformation beyond shaping the JSON.",
+        "The atomic writer pattern (tmp filename via randomBytes + rename) used for fleet-report.json / fleet-expand.json is reused for fleet-synthesis.json.",
+        "fleet-report.json continues to be written for every run (blackboard or not); fleet-synthesis.json is ADDITIONAL and only on blackboard runs."
+      ],
+      "outOfScope": [
+        "SharedBlackboard (Sprint 1)",
+        "config.fleet/CLI (Sprint 2)",
+        "Coordinator rounds loop (Sprint 3)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/fleet/index.ts (runFleet — the report build+write at :124, and the Sprint-3 rounds wiring; you add the synthesis write right after the report write, gated on the blackboard being used); src/fleet/reporter.ts (PortfolioReport shape — reuse for childResults in the bundle); src/fleet/shared-blackboard.ts (readAll); src/state/facts.ts (FactRecord shape); the atomic write helper used for fleet-report.json / manifest-write.ts (tmp+rename). arch SynthesisStep component (CP3) — it is PURE data assembly, NOT an LLM call.\n\nNew src/fleet/synthesis.ts: export interface SynthesisBundle { rounds: number; childResults: <PortfolioReport or the outcomes array>; findings: FactRecord[] }; export function collect(blackboard: SharedBlackboard | null, childResults, rounds): SynthesisBundle { return { rounds, childResults, findings: blackboard ? blackboard.readAll() : [] }; }. No imports of providers/network.\n\nrunFleet: after writing fleet-report.json, if (dbPath /* blackboard used */) { const bundle = collect(bb, report /*or outcomes*/, roundsRun); const out = join(rootDir, '.bober', 'fleet-synthesis.json'); atomic tmp+rename write JSON.stringify(bundle, null, 2); }. Ensure bb is still open (readAll) before close — sequence: run rounds → build+write report → collect+write synthesis → bb.close(). Adjust the Sprint-3 finally so close happens after synthesis.\n\nTests (synthesis.test.ts + index.test.ts additions): collect with a real SharedBlackboard (tmp db, seed findings) → bundle.findings matches readAll; collect(null, ...) → findings:[]; a blackboard fleet run (DI fakes) → assert .bober/fleet-synthesis.json exists with rounds+childResults+findings AND fleet-report.json exists unchanged; a no-blackboard run → assert fleet-synthesis.json is ABSENT; grep synthesis.ts for provider/network imports (none). Follow ESM .js imports, import type, unicode section headers, no synchronous fs.",
+      "evaluatorNotes": "sc-4-3: collect with a seeded blackboard → findings===readAll(); collect(null,...) → findings:[]. sc-4-4: run a blackboard fleet (DI) → assert .bober/fleet-synthesis.json exists and parses to {rounds, childResults, findings}; assert fleet-report.json still written and its shape unchanged. sc-4-5: grep synthesis.ts for '@anthropic-ai/sdk'|'openai'|'fetch'|'node:http'|'node:net' (none); assert collect constructs no client. sc-4-6 (byte-identical): a no-blackboard run → assert NO fleet-synthesis.json is created and the existing fleet index/report tests pass unchanged. sc-4-2: FULL suite, only 6 known cockpit failures. Build/typecheck/lint clean.",
+      "estimatedFiles": [
+        "src/fleet/synthesis.ts",
+        "src/fleet/synthesis.test.ts",
+        "src/fleet/index.ts",
+        "src/fleet/index.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-06-18T19:30:00Z",
+      "updatedAt": "2026-06-18T19:30:00Z",
+      "completedAt": "2026-06-18T19:45:30Z"
+    }
+  ]
+}

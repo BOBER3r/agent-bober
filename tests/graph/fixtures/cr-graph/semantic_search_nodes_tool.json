@@ -1,0 +1,47 @@
+{
+  "status": "ok",
+  "query": "add",
+  "search_mode": "fts",
+  "summary": "Found 1 node(s) matching 'add'",
+  "results": [
+    {
+      "name": "add",
+      "qualified_name": "/repo/src/math_utils.py::add",
+      "kind": "Function",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 1,
+      "line_end": 1,
+      "language": "python",
+      "params": "(a, b)",
+      "return_type": null,
+      "signature": "def add((a, b))",
+      "score": 0.016393
+    }
+  ],
+  "_hints": {
+    "next_steps": [
+      {
+        "tool": "query_graph",
+        "suggestion": "Inspect callers/callees of a search result"
+      },
+      {
+        "tool": "get_flow",
+        "suggestion": "See the execution flow through a matched node"
+      },
+      {
+        "tool": "get_impact_radius",
+        "suggestion": "Check the blast radius from matched nodes"
+      }
+    ],
+    "related": [],
+    "warnings": []
+  },
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}

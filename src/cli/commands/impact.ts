@@ -15,12 +15,17 @@ import type { Command } from "commander";
 
 import { loadConfig } from "../../config/loader.js";
 import { findProjectRoot } from "../../utils/fs.js";
-import { TokensavePrereqCheck } from "../../graph/prereq.js";
+import { GenericPrereqCheck } from "../../graph/prereq.js";
 import { GraphArtifactStore } from "../../graph/artifact-store.js";
 import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
+import {
+  resolveGraphBackend,
+  binaryForBackend,
+  processSpecForBackend,
+} from "../../graph/backends/registry.js";
 import type { NodeRef } from "../../graph/types.js";
 
 // ── Architecture doc link ──────────────────────────────────────────
@@ -97,12 +102,17 @@ export function registerImpactCommand(program: Command): void {
         return;
       }
 
+      // Resolve which engine to run — explicit config.graph.backend wins,
+      // else auto-detect (tokensave preferred when both are installed).
+      const backend = await resolveGraphBackend(config);
+      const binary = binaryForBackend(backend, config);
+
       // Prereq check
-      const checker = new TokensavePrereqCheck(graphCfg.tokensavePath ?? "tokensave");
+      const checker = new GenericPrereqCheck(binary, backend.prereqSpec());
       const prereq = await checker.check();
       if (!prereq.ok) {
         process.stderr.write(
-          `tokensave is not available. To install:\n  ${prereq.hint}\n`,
+          `${backend.id} is not available. To install:\n  ${prereq.hint}\n`,
         );
         process.exitCode = 1;
         return;
@@ -114,12 +124,14 @@ export function registerImpactCommand(program: Command): void {
       const incidents = new IncidentLog(projectRoot);
       const fallback = new GraphFallback("dual");
 
-      // Spawn a short-lived MCP client
+      // Spawn a short-lived MCP client (processSpecForBackend threads a
+      // per-backend binary override — e.g. graph.codeReviewGraphPath — into
+      // the serve subprocess).
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        graphCfg.tokensavePath ?? "tokensave",
+        processSpecForBackend(backend, config),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
@@ -142,6 +154,7 @@ export function registerImpactCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
+          backend,
         );
 
         process.stdout.write(chalk.cyan(`Analysing impact for: ${target}\n`));

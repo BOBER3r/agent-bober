@@ -380,28 +380,11 @@ export async function writeAbortMarker(
   logger.info(`[feedback-router] Abort marker written to ${markerPath}`);
 }
 
-/**
- * Write a completion marker to .bober/runs/<runId>.completed.json atomically.
- * Creates parent directories as needed.
- */
-export async function writeCompletionMarker(
-  projectRoot: string,
-  runId: string,
-  summary: Record<string, unknown>,
-): Promise<void> {
-  const runsDir = join(projectRoot, ".bober", "runs");
-  await mkdir(runsDir, { recursive: true });
-  const markerPath = join(runsDir, `${runId}.completed.json`);
-  const payload = {
-    runId,
-    completedAt: new Date().toISOString(),
-    ...summary,
-  };
-  const tmpPath = `${markerPath}.tmp`;
-  await writeFile(tmpPath, JSON.stringify(payload, null, 2) + "\n", "utf-8");
-  await rename(tmpPath, markerPath);
-  logger.info(`[feedback-router] Completion marker written to ${markerPath}`);
-}
+// The completion marker (`.completed.json`) used to be written here too. It now
+// has exactly ONE writer — `writeCompletionMarker` in src/orchestrator/finalize.ts,
+// alongside the pipeline-complete history event it must stay consistent with.
+// Importing it back here would form a module cycle (finalize.ts → this file), so
+// callers import it from finalize.ts directly.
 
 // ── Route outcome ────────────────────────────────────────────────────────────
 

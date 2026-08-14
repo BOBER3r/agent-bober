@@ -1,0 +1,45 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-2",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober pluggable graph backend, Sprint 2. Sprint 1 (commit ae1bde7) already introduced the GraphBackend interface (src/graph/backends/types.ts) + TokensaveBackend (src/graph/backends/tokensave-backend.ts) holding the tokensave_* tool catalog + narrows; GraphClient delegates. Sprint 2 extends the GraphBackend abstraction with the REMAINING engine-specific surface: ProcessSpec (binary + serveArgs), PrereqSpec (version cmd + compatible predicate + install hint), CliMap (init/sync/status + parsers). Parameterize the MCP transport to spawn binary+serveArgs from the backend. Still tokensave-only; behavior byte-identical.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-1", "title": "GraphBackend interface + extract TokensaveBackend", "summary": "GraphBackend abstraction + TokensaveBackend (tool catalog + narrows moved out of client.ts); GraphClient delegates {tool,params,narrow}. Byte-identical. Commit ae1bde7." }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "relevantFiles": [
+      "src/graph/backends/types.ts",
+      "src/graph/backends/tokensave-backend.ts",
+      "src/graph/mcp-client.ts",
+      "src/graph/prereq.ts",
+      "src/graph/cli.ts",
+      "src/graph/pipeline-lifecycle.ts",
+      "tests/graph/mcp-client.test.ts",
+      "tests/graph/prereq.test.ts",
+      "tests/graph/cli.test.ts"
+    ],
+    "keyNotes": [
+      "mcp-client.ts spawnAndHandshake spawns execa(this.binary, ['serve']) — replace ['serve'] with serveArgs from the backend's ProcessSpec; KEEP the handshake/tools-call/breaker/health logic untouched (nonGoal).",
+      "prereq.ts TokensavePrereqCheck: TOKENSAVE_VERSION_RANGE '>=6.0.0-beta.1 <7.0.0' + the brew/scoop/cargo install hints are marked VERBATIM — move them INTO the tokensave backend's PrereqSpec unchanged.",
+      "cli.ts TokensaveCli parseSyncOutput + status JSON parsing must move into the tokensave backend's CliMap and keep all cases (added+modified sum, legacy {indexed}, 'N files', 'indexed: N').",
+      "Construction sites still hardcode the tokensave backend this sprint (auto-detect is Sprint 3)."
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-2.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run",
+      "testScoped": "npx vitest run tests/graph/"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, zero type errors hard gate. ESM .js import specifiers, no CommonJS. `import type`. No `any` without justification. No synchronous fs (node:fs/promises). Unicode box section headers. Small focused utils. Conventional commits `bober(sprint-N): ...`. execa argv-array spawn (no shell, ADR-10). Never touch main. Keep tokensave install-hint strings verbatim.",
+  "evaluatorFeedback": null
+}

@@ -2,7 +2,8 @@ import { readFile, writeFile, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
-import type { SprintContract } from "../contracts/sprint-contract.js";
+import type { ContractStatus, SprintContract } from "../contracts/sprint-contract.js";
+import { isSettledContractStatus } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { ensureDir } from "./helpers.js";
 import { rotateIfNeeded, historyArchivePath } from "./history-rotation.js";
@@ -190,7 +191,11 @@ export async function updateProgress(
     lines.push("No sprints yet.");
     lines.push("");
   } else {
-    const passed = contracts.filter((c) => c.status === "passed").length;
+    // "Passed" row: sprints that settled successfully (passed OR completed —
+    // the two engines' words for the same outcome). "Failed" stays a
+    // SEPARATE, literal count below — folding it into the settled predicate
+    // would double-count every failed sprint in this table.
+    const passed = contracts.filter((c) => isSettledContractStatus(c.status)).length;
     const failed = contracts.filter((c) => c.status === "failed").length;
     const inProgress = contracts.filter(
       (c) => c.status === "in-progress" || c.status === "evaluating",
@@ -247,18 +252,21 @@ export async function updateProgress(
   await writeFile(progressPath(projectRoot), lines.join("\n"), "utf-8");
 }
 
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case "passed":
-      return "[PASS]";
-    case "failed":
-      return "[FAIL]";
-    case "in-progress":
-    case "evaluating":
-      return "[WIP]";
-    case "needs-rework":
-      return "[REWORK]";
-    default:
-      return "[PENDING]";
-  }
+/**
+ * Exported (not local) so the mapping can be pinned directly against
+ * `SETTLED_CONTRACT_STATUSES` rather than a hardcoded literal — see
+ * history.test.ts. Before sprint 5 of spec-20260812-terminal-vocabulary this
+ * switched on the bare literal `"passed"`, so once `runSprintCycle` and the
+ * workflow flusher started writing `"completed"` for a settled sprint, every
+ * settled row in `.bober/progress.md` silently fell through to the
+ * `default: "[PENDING]"` branch. Routed through `isSettledContractStatus`
+ * (the sprint-1 predicate) instead of a literal so a THIRD settled word
+ * cannot reintroduce the same defect.
+ */
+export function getStatusIcon(status: ContractStatus): string {
+  if (status === "failed") return "[FAIL]";
+  if (status === "in-progress" || status === "evaluating") return "[WIP]";
+  if (status === "needs-rework") return "[REWORK]";
+  if (isSettledContractStatus(status)) return "[PASS]";
+  return "[PENDING]";
 }

@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-3-2",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-3",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "full suite 5018 passed / 1 skip / 0 fail (baseline 5006, +12 new); no regressions" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "optional backend enum; golden snapshot unchanged (untouched by iter2)" },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "registry.test.ts branch coverage (untouched by iter2)" },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "neither -> combined hint (untouched)" },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "explicit wins, no fallback (untouched)" },
+    { "criterionId": "sc-3-6", "required": true, "result": "pass", "evidence": "FIXED: cli.ts injects backend (default TokensaveBackend), cliMap lazy; graph.ts init/sync/status + pipeline-lifecycle hook-sync construct CLI from resolved backend/binary. 3 new test files (12 tests) with ctor-arg spies prove backend.id='code-review-graph' reaches all 4 sites and NOT_IMPL surfaces (execa never called); cli.test.ts byte-identical (empty diff), still green." },
+    { "criterionId": "sc-3-7", "required": true, "result": "pass", "evidence": "legacy manifest reads backend='tokensave' (untouched by iter2)" },
+    { "criterionId": "sc-3-8", "required": true, "result": "pass", "evidence": "full suite 0 failures; lint clean; tokensave path byte-identical" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Iteration-2 surgical fix for sc-3-6 verified correct: backend injection + lazy cliMap; all 4 CLI-construction sites honor the resolved backend; cr-graph NOT_IMPL surfaces cleanly; tokensave byte-identical. All 8 criteria pass, no regressions (5018/0-fail). Commits 77bb53c + 6fc5a00.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite + per-site git-show diff + new-test inspection + byte-identical cli.test.ts diff)"
+}

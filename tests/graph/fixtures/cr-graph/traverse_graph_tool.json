@@ -1,0 +1,84 @@
+{
+  "start_node": "/repo/src/math_utils.py::Calculator.compute",
+  "mode": "bfs",
+  "max_depth": 3,
+  "nodes_visited": 9,
+  "traversal": [
+    {
+      "name": "compute",
+      "qualified_name": "/repo/src/math_utils.py::Calculator.compute",
+      "kind": "Function",
+      "file": "/repo/src/math_utils.py",
+      "depth": 0
+    },
+    {
+      "name": "multiply",
+      "qualified_name": "/repo/src/math_utils.py::multiply",
+      "kind": "Function",
+      "file": "/repo/src/math_utils.py",
+      "depth": 1
+    },
+    {
+      "name": "add",
+      "qualified_name": "/repo/src/math_utils.py::add",
+      "kind": "Function",
+      "file": "/repo/src/math_utils.py",
+      "depth": 1
+    },
+    {
+      "name": "Calculator",
+      "qualified_name": "/repo/src/math_utils.py::Calculator",
+      "kind": "Class",
+      "file": "/repo/src/math_utils.py",
+      "depth": 1
+    },
+    {
+      "name": "run",
+      "qualified_name": "/repo/src/main.py::run",
+      "kind": "Function",
+      "file": "/repo/src/main.py",
+      "depth": 1
+    },
+    {
+      "name": "/repo/src/math_utils.py",
+      "qualified_name": "/repo/src/math_utils.py",
+      "kind": "File",
+      "file": "/repo/src/math_utils.py",
+      "depth": 2
+    },
+    {
+      "name": "/repo/src/main.py",
+      "qualified_name": "/repo/src/main.py",
+      "kind": "File",
+      "file": "/repo/src/main.py",
+      "depth": 2
+    },
+    {
+      "name": "helper",
+      "qualified_name": "/repo/src/main.py::helper",
+      "kind": "Function",
+      "file": "/repo/src/main.py",
+      "depth": 2
+    },
+    {
+      "name": "another",
+      "qualified_name": "/repo/src/main.py::another",
+      "kind": "Function",
+      "file": "/repo/src/main.py",
+      "depth": 3
+    }
+  ],
+  "truncated": false,
+  "next_tool_suggestions": [
+    "query_graph callers_of -- focused relationship query",
+    "get_impact_radius -- blast radius analysis"
+  ],
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}

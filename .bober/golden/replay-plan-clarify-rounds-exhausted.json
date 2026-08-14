@@ -1,0 +1,468 @@
+{
+  "formatVersion": 1,
+  "caseId": "replay-plan-clarify-rounds-exhausted",
+  "title": "a plan that never settles exhausts planClarifyRounds and reports failure",
+  "intent": "Pin the previously-uncapturable defect fixed by sprint 7 of spec-20260812-pge-real-workload-errors: a planner that never accepts an answer exhausts plan_clarify_check's planClarifyRounds bound of 3 and reaches graceful_failure with state.spec still null. commit.finalize now falls back to state.specDraft and resolves with success false, needsClarification true and a populated errors array, instead of throwing FinalizeWithoutSpecError.",
+  "tags": [
+    "replay",
+    "region:plan",
+    "loop:planClarifyRounds",
+    "bounded-exit",
+    "needsClarification"
+  ],
+  "enforcement": "replay",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.4.0"
+  },
+  "input": {
+    "featureRequest": "Accept an optional retry block in the pipeline config and validate it.",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Accept an optional retry block in the pipeline config and validate it.",
+        "projectRoot": "<projectRoot>",
+        "promptRef": "research/reflect",
+        "model": "opus"
+      },
+      "response": {
+        "goal": "wire the research region onto the graph",
+        "inputs": [
+          "the feature request",
+          "the committed topology artifact"
+        ],
+        "outputs": [
+          "a research document under .bober/research/"
+        ],
+        "rules": [
+          "the shipped agents are not modified"
+        ],
+        "constraints": [
+          "the PGE layer stays unreachable from every shipped execution path"
+        ]
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept an optional retry block in the pipeline config and validate it.\n\nGoal: wire the research region onto the graph",
+        "projectRoot": "<projectRoot>",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-region",
+        "timestamp": "2026-08-05T00:00:00.000Z",
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "sections": {
+          "architectureOverview": "superstep interpreter",
+          "existingPatterns": "commit boundary",
+          "keyFiles": "src/pge/runtime/interpreter.ts",
+          "integrationPoints": "src/pge/registry/index.ts",
+          "testCoverage": "src/pge/nodes/",
+          "riskAreas": "artifact drift"
+        },
+        "filesExplored": [
+          "src/pge/runtime/interpreter.ts"
+        ],
+        "questionsAnswered": 1
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-region",
+        "reflection": {
+          "goal": "wire the research region onto the graph",
+          "inputs": [
+            "the feature request",
+            "the committed topology artifact"
+          ],
+          "outputs": [
+            "a research document under .bober/research/"
+          ],
+          "rules": [
+            "the shipped agents are not modified"
+          ],
+          "constraints": [
+            "the PGE layer stays unreachable from every shipped execution path"
+          ]
+        },
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "questionsAnswered": 1,
+        "reflexionRound": 1,
+        "promptRef": "research/critique",
+        "model": "sonnet"
+      },
+      "response": {
+        "critique": null
+      }
+    },
+    {
+      "nodeId": "research_collect",
+      "branchKey": null,
+      "effectName": "research.collect",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "doc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        }
+      },
+      "response": {
+        "researchId": "research-20260805-region",
+        "documentId": "research-20260805-region"
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept an optional retry block in the pipeline config and validate it.",
+        "projectRoot": "<projectRoot>",
+        "researchDoc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        },
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "needs-clarification",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-retry-scope",
+              "category": "scope",
+              "question": "Should the retry block apply to every provider or only the default one?",
+              "ambiguityWeight": 5
+            }
+          ],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 1,
+      "request": {
+        "userPrompt": "Accept an optional retry block in the pipeline config and validate it.",
+        "projectRoot": "<projectRoot>",
+        "researchDoc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        },
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "needs-clarification",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-retry-scope",
+              "category": "scope",
+              "question": "Should the retry block apply to every provider or only the default one?",
+              "ambiguityWeight": 5
+            }
+          ],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 2,
+      "request": {
+        "userPrompt": "Accept an optional retry block in the pipeline config and validate it.",
+        "projectRoot": "<projectRoot>",
+        "researchDoc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        },
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "needs-clarification",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-retry-scope",
+              "category": "scope",
+              "question": "Should the retry block apply to every provider or only the default one?",
+              "ambiguityWeight": 5
+            }
+          ],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "artifact": {
+          "formatVersion": 1,
+          "runId": "golden",
+          "reason": "Unknown",
+          "supersteps": 18,
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "branches": []
+        }
+      },
+      "response": {
+        "path": "<projectRoot>/.bober/failures/golden.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "post-plan",
+          "editDeltaSummary": null,
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "approved"
+        },
+        {
+          "checkpointId": "post-plan",
+          "editDeltaSummary": null,
+          "iteration": 2,
+          "mechanism": "noop",
+          "outcome": "approved"
+        }
+      ],
+      "briefings": [],
+      "completionMarker": [],
+      "contracts": [],
+      "evalResults": [],
+      "history": [],
+      "pipelineResult": [
+        {
+          "completedSprints": [],
+          "errors": [
+            {
+              "branchKey": null,
+              "errorClass": "LoopExhausted",
+              "message": "loop counter \"planClarifyRounds\" reached the declared bound of 3; routing to \"graceful_failure\" instead of re-entering the cycle",
+              "nodeId": "plan_clarify_check"
+            }
+          ],
+          "failedSprints": [],
+          "needsClarification": true,
+          "spec": {
+            "assumptions": [],
+            "clarificationQuestions": [
+              {
+                "ambiguityWeight": 5,
+                "category": "scope",
+                "question": "Should the retry block apply to every provider or only the default one?",
+                "questionId": "q-retry-scope"
+              }
+            ],
+            "constraints": [],
+            "description": "The single golden spec both engines are compared on.",
+            "features": [
+              {
+                "acceptanceCriteria": [
+                  "the region compiles",
+                  "the region runs"
+                ],
+                "dependencies": [],
+                "description": "Compile and run the plan region end to end.",
+                "featureId": "feat-1",
+                "priority": "must-have",
+                "title": "Wire the region"
+              }
+            ],
+            "mode": "greenfield",
+            "nonFunctionalRequirements": [],
+            "outOfScope": [],
+            "resolvedClarifications": [],
+            "specId": "spec-20260805-pge-conformance",
+            "status": "needs-clarification",
+            "techStack": [],
+            "title": "PGE conformance fixture",
+            "version": 1
+          },
+          "success": false
+        }
+      ],
+      "progress": [],
+      "reviews": [],
+      "runState": [],
+      "specs": []
+    },
+    "notes": "Before sprint 7 this scenario could not be captured at all — captureGoldenCase cannot record a run that never produces a result, and this run used to throw. The pinned call count on plan_draft IS the assertion: exactly three planner calls, matching plan_clarify_check's declared bound; a fourth would mean the bound did not bite. See docs/pge-graph.md's 'A defect this coverage work surfaced' section for the full history."
+  }
+}

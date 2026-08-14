@@ -1,0 +1,248 @@
+{
+  "formatVersion": 1,
+  "caseId": "sprint-anchor-regression-gate-routes-to-correct",
+  "title": "gate_anchor_regression sends a green-but-regressed sprint back",
+  "intent": "Pin gate_anchor_regression's onFail target: a passing verdict whose anchor tests regressed routes to sprint_correct, not to sprint_exit.",
+  "tags": [
+    "sprint",
+    "gate:gate_anchor_regression",
+    "anchors",
+    "region:sprint"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "sprint_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": true,
+        "score": 92,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": true,
+            "score": 92,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": true,
+                "message": "Covered by a unit test."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_correct",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "success": true,
+        "notes": "Restored the two anchor tests the change broke.",
+        "filesChanged": [
+          "src/fixture/sprint-1.ts",
+          "src/fixture/sprint-1.test.ts"
+        ],
+        "turnsUsed": 7
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "evaluator.sprint",
+      "callIndex": 1,
+      "request": {
+        "handoff": {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "specId": "spec-20260805-golden-fixture",
+          "projectRoot": "/tmp/golden-run"
+        },
+        "projectRoot": "/tmp/golden-run"
+      },
+      "response": {
+        "passed": true,
+        "score": 92,
+        "results": [
+          {
+            "evaluator": "agent",
+            "passed": true,
+            "score": 92,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": true,
+                "message": "Covered by a unit test."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_exit",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "sprint.exit",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "contract": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "sprint_exit",
+    "artifacts": {
+      "contracts": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      ],
+      "evalResults": [
+        {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "details": [
+            {
+              "criterion": "sc-1-1",
+              "message": "Covered by src/fixture/sprint-1.test.ts",
+              "passed": true
+            }
+          ],
+          "evaluator": "agent",
+          "feedback": "",
+          "iteration": 1,
+          "passed": true,
+          "score": 92,
+          "summary": "All criteria verified against the diff."
+        },
+        {
+          "contractId": "spec-20260805-golden-fixture-1",
+          "details": [
+            {
+              "criterion": "sc-1-1",
+              "message": "Covered by src/fixture/sprint-1.test.ts",
+              "passed": true
+            }
+          ],
+          "evaluator": "agent",
+          "feedback": "",
+          "iteration": 2,
+          "passed": true,
+          "score": 92,
+          "summary": "All criteria verified against the diff."
+        }
+      ]
+    },
+    "notes": "The gate declares check anchor-tests-still-green and onFail sprint_correct. A passing evaluation is therefore NOT sufficient to exit, which is exactly the fail-open this case forbids."
+  }
+}

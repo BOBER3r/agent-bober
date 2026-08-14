@@ -9,7 +9,7 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 
 import { configExists, loadConfig } from "../../config/loader.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
-import { updateContractStatus } from "../../contracts/sprint-contract.js";
+import { updateContractStatus, isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import {
   createHandoff,
   summarizeOlderSprints,
@@ -144,7 +144,7 @@ export function registerSprintTool(): void {
           `[bober_sprint] Starting sprint: ${nextSprint.title} (${nextSprint.contractId})\n`,
         );
 
-        const completedContracts = contracts.filter((c) => c.status === "passed");
+        const completedContracts = contracts.filter((c) => isSettledContractStatus(c.status));
         const maxIterations = config.evaluator.maxIterations;
         let currentContract = updateContractStatus(nextSprint, "in-progress");
         await updateContract(projectRoot, currentContract);
@@ -252,7 +252,7 @@ export function registerSprintTool(): void {
           lastEvalScore = evaluation.score;
 
           if (evaluation.passed) {
-            currentContract = updateContractStatus(currentContract, "passed");
+            currentContract = updateContractStatus(currentContract, "completed");
             currentContract = {
               ...currentContract,
               evaluatorFeedback: evaluation.summary,

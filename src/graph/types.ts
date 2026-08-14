@@ -12,7 +12,12 @@ export type PrereqResult =
 
 export type GraphManifest = {
   schemaVersion: 1;
+  /** Kept for back-compat — always written when the backend is tokensave. */
   tokensaveVersion: string;
+  /** Resolved engine id, e.g. "tokensave" | "code-review-graph". */
+  backend: string;
+  /** Resolved engine version (mirrors tokensaveVersion for the tokensave backend). */
+  backendVersion: string;
   createdAt: string;
   lastSyncAt: string;
   indexedFileCount: number;
@@ -29,6 +34,18 @@ export type StalenessVerdict =
       detail: string;
       newerFiles?: string[];
     };
+
+// ── Short-lived CLI result shapes (backend CliMap.parseSync/parseStatus) ──
+
+export interface SyncResult {
+  indexed: number;
+}
+
+export interface StatusResult {
+  ready: boolean;
+  indexedFileCount: number;
+  tokensaveVersion: string;
+}
 
 // ── Graph result contract (ADR-3) ──────────────────────────────────
 

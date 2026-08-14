@@ -1,0 +1,776 @@
+{
+  "entryId": "sprintContracts-spec-20260726-graph-backend-choice",
+  "channel": "sprintContracts",
+  "provenance": {
+    "kind": "file-group",
+    "paths": [
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-1.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-2.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-3.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-4.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-5.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-6.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-7.json",
+      ".bober/contracts/sprint-spec-20260726-graph-backend-choice-8.json"
+    ]
+  },
+  "value": [
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-1",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 1,
+      "title": "GraphBackend interface + extract TokensaveBackend (tokensave byte-identical)",
+      "description": "Introduce a GraphBackend abstraction that owns the per-engine tool catalog, param builders, and response-shape adapters, and refactor GraphClient to delegate to an injected backend. Move the tokensave-specific pieces out of src/graph/client.ts — TOOL (client.ts:31-37), QUERY_TOOL (40-45), the Ts*Row raw types (52-109), and toNodeRef (116-131) — into a new src/graph/backends/tokensave-backend.ts implementing the interface. GraphClient keeps ALL of its cross-cutting logic (runWithSandbox/runRaw, sandbox keepNode, staleness cache, health short-circuit, GRAPH_DISABLED/UNAVAILABLE, GraphFallback, prefetch dispatch) and instead of a hardcoded TOOL name + inline narrow, asks the backend for {tool, params, narrow} per operation. Construction sites keep passing a concrete TokensaveBackend so behavior is byte-identical. No config, detection, or code-review-graph work in this sprint.",
+      "status": "completed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "Build + typecheck pass with zero errors (npm run build, npm run typecheck).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "A GraphBackend interface (new src/graph/backends/types.ts or similar) declares, for each logical operation used by GraphClient (search, query[callers_of|callees_of|imports_of|tests_for], impact, reviewContext, overview, changes), a way to obtain the MCP tool name, build the params object, and narrow the raw MCP payload into the shared type (SearchHit[] | NodeRef[] | ImpactReport | string). It also carries an engine `id` (e.g. 'tokensave').",
+          "verificationMethod": "typecheck",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "src/graph/backends/tokensave-backend.ts implements GraphBackend and contains the tokensave_* tool names + Ts*Row narrowing that previously lived in client.ts, producing identical outputs (same NodeRef/SearchHit/ImpactReport values for the same raw input).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "GraphClient no longer references any tokensave_* string or Ts*Row type; it delegates tool-name/params/narrow to the injected backend. Its public method signatures (search/query/impact/reviewContext/overview/changes/prefetch) and GraphResult return shapes are unchanged. A grep for `tokensave_` over src/graph/client.ts returns zero matches; over src/graph/backends/tokensave-backend.ts it returns the catalog.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "Cross-cutting behavior is preserved: sandbox post-filter (keepNode), staleness cache (checkStaleness), GRAPH_DISABLED short-circuit when config.enabled=false, GRAPH_UNAVAILABLE on broken/restarting health, toFailureResult mapping, and prefetch dispatch all behave exactly as before. Existing tests/graph/client.test.ts passes unchanged (adjusting only the construction to inject a TokensaveBackend).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "The full existing test suite is green with no NEW failures (pre-existing unrelated failures such as cockpit-integration MCP E2E may remain). With backend=tokensave the graph path is byte-identical.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "lint passes (zero errors); ESM .js import specifiers, `import type`, unicode section-header comments, no synchronous fs are preserved.",
+          "verificationMethod": "lint",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do NOT add config.graph.backend, auto-detection, or resolveGraphBackend — that is Sprint 3.",
+        "Do NOT touch the MCP transport serveArgs, prereq, or CLI wrapper yet — that is Sprint 2.",
+        "Do NOT add any code-review-graph code, tool names, or fixtures.",
+        "Do NOT change GraphClient public method signatures, the GraphResult union, or NodeRef/SearchHit/ImpactReport in src/graph/types.ts.",
+        "Do NOT change GraphFallback, the circuit breaker, PID/orphan handling, or the sandbox algorithm."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "GraphClient delegates every tool-name/params/narrow to an injected GraphBackend; TokensaveBackend reproduces the old behavior; build/typecheck/test/lint green; tokensave path byte-identical"
+      ],
+      "definitionOfDone": "A GraphBackend interface exists; TokensaveBackend implements it holding the tokensave_* catalog + Ts*Row narrows extracted from client.ts; GraphClient delegates to the injected backend while keeping all sandbox/staleness/health/fallback/prefetch logic and its public signatures; existing tests pass unchanged (with a TokensaveBackend injected at construction); build/typecheck/test green, lint clean.",
+      "assumptions": [
+        "client.ts today hardcodes TOOL (31-37) and QUERY_TOOL (40-45) and does per-method narrowing inline (search 168-186, query 188-245, impact 247-268, reviewContext 270-273, overview 275-281, changes 283-294). runWithSandbox (366-401) already isolates the call+narrow+sandbox pattern; the cleanest refactor is to have each public method ask the backend for a {tool, params, narrow} triple and pass narrow into runWithSandbox unchanged.",
+        "toNodeRef (116-131) + NODE_KINDS (114) coercion move into the tokensave backend (they are tokensave-row-shaped). The shared types NodeRef/SearchHit/ImpactReport stay in types.ts.",
+        "GraphClient's constructor currently takes (projectRoot, mcpClient, artifactStore, fallback, incidents, config). Add the backend as an injected dependency (constructor param or setter). Update the two construction sites that build GraphClient directly — pipeline-lifecycle.ts getGraphClient (222-249) and cli/commands/onboard.ts (107-114) — to pass a `new TokensaveBackend()`.",
+        "The mcpClient.call<unknown>(tool, params) contract (client.ts:387) is unchanged; only WHERE the tool string + params + narrow come from changes.",
+        "tests/graph/client.test.ts makeClient (line 70) constructs a GraphClient; it will need to inject a TokensaveBackend. The raw MCP responses the test feeds stay identical, so assertions on the narrowed output stay identical."
+      ],
+      "outOfScope": [
+        "Transport serveArgs, prereq, CLI wrapper (Sprint 2)",
+        "Config + detection + manifest fields (Sprint 3)",
+        "Any code-review-graph module (Sprints 4-6)"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST in full: src/graph/client.ts (all of it — the TOOL/QUERY_TOOL maps, the Ts*Row types, every public method, runWithSandbox/runRaw, keepNode), src/graph/types.ts (shared types), tests/graph/client.test.ts (makeClient + the per-method assertions). This is a pure refactor: same inputs -> same outputs.\n\nDESIGN the GraphBackend interface to expose, per operation, either (a) a method returning {tool: string, params: unknown, narrow: (raw:unknown)=>T}, or (b) direct methods the client calls. Recommended shape: an object with `id: string` and one method per op, e.g. `searchPlan(q, opts) -> {tool, params, narrow}`, `queryPlan(pattern, target) -> {tool, params, narrow}`, `impactPlan(target)`, `reviewContextPlan(nodes)`, `overviewPlan()`, `changesPlan(since)`. GraphClient's method bodies then become: `const {tool, params, narrow} = this.backend.searchPlan(q, opts); return this.runWithSandbox(tool, params, (raw)=>narrow(raw).filter(h=>this.keepNode(h.node,'search')))`. Keep the sandbox filtering IN GraphClient (it needs projectRoot + incidents); the backend only produces the raw-typed value.\n\nMOVE to src/graph/backends/tokensave-backend.ts: TOOL, QUERY_TOOL, all Ts*Row types, toNodeRef, NODE_KINDS. Implement each *Plan method to return the same tool + params + narrow logic that client.ts currently inlines (e.g. searchPlan.narrow maps TsSearchRow[] -> SearchHit[] via toNodeRef, applies the opts.kind post-filter). Put the interface in src/graph/backends/types.ts (or fold into src/graph/types.ts if cleaner) and export GraphBackend.\n\nWIRE construction: pipeline-lifecycle.ts getGraphClient and cli/commands/onboard.ts pass `new TokensaveBackend()`. Update tests/graph/client.test.ts makeClient to inject it.\n\nVERIFY: `npm run build && npm run typecheck && npx vitest run tests/graph/` then the full suite. grep -n 'tokensave_' src/graph/client.ts must be empty. Commit `bober(sprint-1): GraphBackend interface + extract TokensaveBackend, GraphClient delegates`.",
+      "evaluatorNotes": "This sprint's whole point is BYTE-IDENTICAL tokensave behavior via a new seam. sc-1-4: `grep -n 'tokensave_' src/graph/client.ts` MUST be empty and the same grep over src/graph/backends/tokensave-backend.ts must show the catalog — confirm the extraction actually happened (not just an alias re-export from client.ts). sc-1-3/1-5: read tokensave-backend.ts and confirm the narrow logic matches the old client.ts (same toNodeRef coercion, same opts.kind post-filter in search, same callers/callees/imports/tests mapping, same impact root/affected/testsAffected partition, same changes mapping). sc-1-5: confirm keepNode/sandbox, staleness, GRAPH_DISABLED, GRAPH_UNAVAILABLE, prefetch dispatch still live in GraphClient and are unchanged. sc-1-6: run the full suite; assert NO new failures vs baseline (git stash to compare if unsure). Reject if any tokensave_* string or Ts*Row type remains in client.ts, or if any public GraphClient signature changed.",
+      "estimatedFiles": [
+        "src/graph/client.ts",
+        "src/graph/backends/types.ts",
+        "src/graph/backends/tokensave-backend.ts",
+        "src/graph/pipeline-lifecycle.ts",
+        "src/cli/commands/onboard.ts",
+        "tests/graph/client.test.ts",
+        "tests/graph/backends/tokensave-backend.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-2",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 2,
+      "title": "Fold process spec + prereq + CLI map into the backend; parameterize the transport (tokensave byte-identical)",
+      "description": "Extend the GraphBackend abstraction (Sprint 1) with the remaining engine-specific surface so a backend fully describes how to run its engine: a ProcessSpec (binary name + serve args), a PrereqSpec (version command, compatible-version predicate, install hint), and a CliMap (init/sync/status commands + output parsers). Parameterize the MCP transport so it spawns `binary + serveArgs` from the backend's ProcessSpec instead of the hardcoded execa(this.binary, ['serve']) at mcp-client.ts:242. Make TokensavePrereqCheck (src/graph/prereq.ts) and TokensaveCli (src/graph/cli.ts) either driven by, or produced from, the tokensave backend's specs. Still tokensave-only; construction sites keep building a TokensaveBackend. Behavior byte-identical.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-1"
+      ],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "GraphBackend gains a ProcessSpec {binary, serveArgs} accessor. The MCP transport spawns `execa(spec.binary, spec.serveArgs)` derived from the backend; for tokensave this resolves to binary 'tokensave' (or cfg.tokensavePath) and serveArgs ['serve'] — identical to today. A unit test asserts the spawn argv for the tokensave backend is ['serve'].",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "GraphBackend gains a PrereqSpec: version command args (['--version']), a compatible-version predicate (tokensave: semver satisfies '>=6.0.0-beta.1 <7.0.0'), and an install hint (tokensave: the existing brew/scoop/cargo per-platform strings, VERBATIM). The prereq check derives these from the backend; the tokensave hints and range are unchanged. A unit test (execa mocked) asserts tokensave version 6.1.1 passes and an out-of-range version fails with the existing incompatible hint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "GraphBackend gains a CliMap describing init/sync/status commands + output parsers. For tokensave: init->['init'], sync->['sync', ...paths], status->['status','--json'], with the existing parseSyncOutput/status parsing. The short-lived CLI wrapper runs the backend's commands. A unit test asserts tokensave sync output '3 added, 1 modified, 0 removed' parses to indexed=4 (unchanged behavior).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "The transport class no longer contains the engine-specific literal 'tokensave' default binary or ['serve'] literal in a way that other engines can't override; engine specifics come from the injected backend. (The class may keep a generic name; tokensave strings live only in the tokensave backend module.)",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "The full existing test suite is green with no NEW failures; with backend=tokensave the prereq, transport spawn, init/sync/status, and query paths are byte-identical. Real-binary skipIf integration tests still pass against tokensave 6.1.1 when present (start handshake + a tokensave_status round-trip).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "lint passes; diff confined to the graph layer (backends/*, mcp-client.ts, prereq.ts, cli.ts + their tests) plus the construction sites that already inject the backend.",
+          "verificationMethod": "lint",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do NOT add config.graph.backend or auto-detection yet — that is Sprint 3 (this sprint only makes the backend able to DESCRIBE its process/prereq/cli).",
+        "Do NOT add code-review-graph specs.",
+        "Do NOT change the circuit-breaker math, health-state machine, PID/orphan handling, or the MCP initialize/tools-call wire protocol.",
+        "Do NOT change public GraphClient signatures or shared types."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "A tokensave backend fully describes its process/prereq/cli specs, the transport spawns from ProcessSpec, and tokensave behavior is byte-identical with build/typecheck/test/lint green"
+      ],
+      "definitionOfDone": "GraphBackend carries ProcessSpec + PrereqSpec + CliMap; the transport spawns binary+serveArgs from the backend; prereq and init/sync/status run the backend's specs; tokensave strings (binary, serve, version range, install hints, cli verbs) live only in the tokensave backend module; existing tests + skipIf integration tests pass unchanged.",
+      "assumptions": [
+        "Transport spawn: mcp-client.ts spawnAndHandshake (line 242) does `execa(this.binary, ['serve'], ...)`. Replace ['serve'] with serveArgs sourced from the backend's ProcessSpec; keep the binary resolution (cfg.tokensavePath ?? spec.binary). Everything else in the transport (handshake, tools/call envelope, breaker, health) stays identical.",
+        "Prereq: prereq.ts TokensavePrereqCheck runs `<binary> --version` (13), matches a semver (25), checks TOKENSAVE_VERSION_RANGE (5,34-38), and returns per-platform install hints (48-58). Refactor so a generic prereq check takes the backend's PrereqSpec {versionArgs, isCompatible(version), installHint()}; keep TOKENSAVE_VERSION_RANGE + the exact hint strings inside the tokensave backend (they are marked 'verbatim, DO NOT paraphrase').",
+        "CLI: cli.ts TokensaveCli runs init/sync/status with tokensave-specific args and parseSyncOutput (187-220) + status JSON parsing (128-174). Refactor so a generic short-lived CLI takes the backend's CliMap {initArgs, syncArgs(paths), statusArgs, parseSync(output), parseStatus(stdout)}; keep tokensave parsing inside the tokensave backend.",
+        "Construction sites (pipeline-lifecycle.ts:77-79,95-100,105-109; onboard.ts:70,87-92; plus mcp/server.ts, cli/impact.ts, cli/graph.ts) currently pass cfg.tokensavePath ?? 'tokensave' into these classes. After this sprint they pass the tokensave backend (or its specs). Auto-selection of WHICH backend is Sprint 3 — here they still hardcode the tokensave backend.",
+        "The class name TokensaveMcpClient may be kept for now (a rename to a generic name is optional and can be a follow-up); what matters is it takes serveArgs from the backend, not a hardcoded ['serve']."
+      ],
+      "outOfScope": [
+        "config.graph.backend + resolveGraphBackend + manifest fields (Sprint 3)",
+        "code-review-graph specs/adapters/fixtures (Sprints 4-6)",
+        "MCP wire-protocol changes"
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "Read FIRST: src/graph/mcp-client.ts (spawnAndHandshake spawn line 242; constructor binary param 117-122), src/graph/prereq.ts (all — version check + hints), src/graph/cli.ts (all — init/sync/status + parseSyncOutput), src/graph/pipeline-lifecycle.ts (77-117 where these are constructed), and the Sprint-1 GraphBackend interface + tokensave-backend.ts.\n\nEXTEND GraphBackend with: `processSpec(): {binary: string; serveArgs: string[]}`, `prereqSpec(): {versionArgs: string[]; isCompatible(v: string): boolean; installHint(platform: NodeJS.Platform): string}`, `cliMap(): {initArgs(opts): string[]; syncArgs(paths): string[]; statusArgs: string[]; parseSync(out: string): number; parseStatus(stdout: string): StatusResult}`. Implement all in tokensave-backend.ts by MOVING the existing logic (TOKENSAVE_VERSION_RANGE, the brew/scoop/cargo hints verbatim, parseSyncOutput, the status JSON parsing).\n\nREFACTOR mcp-client.ts to read serveArgs from the injected backend/spec. REFACTOR prereq.ts and cli.ts into backend-driven generic helpers (either a GenericPrereqCheck(spec) / GenericGraphCli(cliMap) or keep the class names but have them accept a spec). Preserve every behavior: idempotent init 'already initialized' (cli.ts:59), timeout handling (84-88), status not-throwing on non-zero (142-146), the ANSI-strip in parseSyncOutput (190).\n\nKeep construction hardcoded to the tokensave backend for now. Run `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite; confirm skipIf integration tests still pass against tokensave 6.1.1. Commit `bober(sprint-2): fold process/prereq/cli specs into GraphBackend; transport spawns from ProcessSpec`.",
+      "evaluatorNotes": "Byte-identical tokensave is the bar. sc-2-2: assert the tokensave backend's serveArgs is exactly ['serve'] and the transport uses it. sc-2-3: mock execa; a '--version' output 'tokensave 6.1.1' passes; '5.9.0' fails INCOMPATIBLE with the existing range string; confirm the brew/scoop/cargo hint strings are unchanged character-for-character (they were marked verbatim). sc-2-4: '3 added, 1 modified, 0 removed' -> 4; legacy '{\"indexed\":42}' -> 42; a full-index 'N files' summary -> N (parseSyncOutput cases preserved). sc-2-6: run full suite (no new failures) and, if tokensave present, the skipIf integration tests (handshake + tokensave_status round-trip). Reject if any tokensave literal (version range, install hints, cli verbs, 'serve') leaked outside the tokensave backend module, or if the initialize/tools-call wire protocol changed.",
+      "estimatedFiles": [
+        "src/graph/backends/types.ts",
+        "src/graph/backends/tokensave-backend.ts",
+        "src/graph/mcp-client.ts",
+        "src/graph/prereq.ts",
+        "src/graph/cli.ts",
+        "src/graph/pipeline-lifecycle.ts",
+        "tests/graph/mcp-client.test.ts",
+        "tests/graph/prereq.test.ts",
+        "tests/graph/cli.test.ts",
+        "tests/graph/backends/tokensave-backend.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-3",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 3,
+      "title": "Backend selection: graph.backend config + auto-detection + wire construction sites + additive manifest",
+      "description": "Add an optional graph.backend config field and a resolveGraphBackend() that decides which engine to run: an explicit graph.backend value wins; otherwise auto-detect by probing each engine's version command (tokensave preferred when both succeed); when neither is installed, surface a combined install hint naming both. Wire all five construction sites (pipeline-lifecycle.ts, mcp/server.ts, cli/impact.ts, cli/graph.ts, cli/onboard.ts) to resolve the backend instead of hardcoding the tokensave backend. Evolve GraphManifest additively to record `backend` + `backendVersion` (keep tokensaveVersion; old manifests default backend='tokensave'). A CodeReviewGraphBackend stub is registered so detection can select it, but its adapters/fixtures come in Sprints 4-6.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-2"
+      ],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "GraphSectionSchema gains an optional `backend` enum ('tokensave' | 'code-review-graph'), default undefined (=auto-detect). A config with no backend field loads and validates exactly as before (schema back-compat).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "resolveGraphBackend(config, {probe}) returns the tokensave backend when graph.backend='tokensave' or when unset and only tokensave is detected; returns the code-review-graph backend when graph.backend='code-review-graph' or when unset and only code-review-graph is detected; prefers tokensave when unset and BOTH are detected. Unit-tested with the version probe mocked (no real binaries).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "When graph.backend is unset and NEITHER binary is detected, resolution fails with a combined install hint that names BOTH engines (tokensave install hint AND `pip install code-review-graph`). Unit-tested with both probes failing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "An explicit graph.backend value short-circuits detection (no probe of the other engine) and is honored even if that engine's binary is missing (the prereq check then fails with that engine's install hint, not a combined one). Unit-tested.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "All five construction sites resolve the backend via resolveGraphBackend and pass it into the transport/prereq/cli/GraphClient: src/graph/pipeline-lifecycle.ts, src/mcp/server.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/cli/commands/onboard.ts. With graph.backend unset + tokensave installed, every one behaves byte-identically to today.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "GraphManifest adds `backend: string` and `backendVersion: string` additively; GraphArtifactStore reads legacy manifests (missing backend -> 'tokensave', backendVersion falls back to tokensaveVersion) without error. Unit-tested with an old-shape manifest fixture.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-8",
+          "description": "Full suite green (no NEW failures); lint clean. With graph.backend unset and tokensave present, `agent-bober onboard`/`impact`/`graph` and the run pipeline are byte-identical to before this spec.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT implement code-review-graph response adapters, tool catalog, or fixtures — a stub backend (id + process/prereq/cli specs only, adapters throwing GRAPH_UNAVAILABLE / marked TODO) is enough for detection to select it. Adapters land in Sprints 4-6.",
+        "Do NOT change the tokensave path behavior when backend is unset or 'tokensave'.",
+        "Do NOT add per-command --backend CLI flags (config field + auto-detect only, per the selection decision).",
+        "Do NOT remove tokensaveVersion from the manifest (kept for back-compat)."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "graph.backend config + resolveGraphBackend auto-detection wire all five construction sites; combined-hint-when-neither; tokensave path byte-identical when unset; manifest evolves additively; build/typecheck/test/lint green"
+      ],
+      "definitionOfDone": "An optional graph.backend enum + resolveGraphBackend (explicit-wins, else auto-detect with tokensave preference, combined install hint when neither) drives all five construction sites; the CodeReviewGraphBackend stub is registered for detection; the manifest carries additive backend/backendVersion with legacy read; the tokensave path is byte-identical when backend is unset; suite + lint green.",
+      "assumptions": [
+        "Schema: src/config/schema.ts GraphSectionSchema (394-417). Add `backend: z.enum(['tokensave','code-review-graph']).optional()`. Also consider an optional `codeReviewGraphPath: z.string().optional()` mirroring tokensavePath for a custom cr-graph binary path (additive).",
+        "Detection probe = run `<binary> --version` (reuse the prereq versionArgs) and treat exit 0 + a parseable version as 'installed'. resolveGraphBackend takes an injectable probe(binary, args)->{ok, version} so tests mock it. Registry: a list of known backends [tokensaveBackend, codeReviewGraphBackend], each exposing id + processSpec.binary + prereqSpec.",
+        "Preference order when unset + both installed: tokensave first (explicit product decision). When exactly one installed: that one. When none: throw/return a structured failure whose hint concatenates both backends' installHint() for the current platform.",
+        "Construction sites all currently read cfg.tokensavePath ?? 'tokensave' (pipeline-lifecycle.ts:77,95-100,105-109; onboard.ts:70,87-92; and the impact/graph/mcp-server sites). Replace each with `const backend = await resolveGraphBackend(config, ...)` then pass backend down. The binary override becomes backend-specific (tokensavePath for tokensave, codeReviewGraphPath for cr-graph).",
+        "Manifest: src/graph/types.ts GraphManifest (13-22) + GraphArtifactStore read/write. Add backend + backendVersion; when reading a manifest lacking backend, default backend='tokensave' and backendVersion = existing tokensaveVersion. Keep tokensaveVersion written for tokensave for now.",
+        "The pipeline-lifecycle stub GraphSection object (pipeline-lifecycle.ts:230-248) already hardcodes a config; ensure it doesn't override the resolved backend — the backend is a separate injected dependency from the GraphSection config."
+      ],
+      "outOfScope": [
+        "code-review-graph adapters + fixtures (Sprints 4-6)",
+        "Docs (Sprint 8)",
+        "Per-command --backend flags"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read FIRST: src/config/schema.ts (GraphSectionSchema 394-417), src/graph/pipeline-lifecycle.ts (start() 61-139 + getGraphClient 215-252), src/cli/commands/onboard.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/mcp/server.ts (backend construction), and the Sprint-1/2 GraphBackend + tokensave-backend.\n\nADD schema field(s): backend enum optional (+ optional codeReviewGraphPath). Regenerate any golden config snapshot if one exists (there is a dogfood golden snapshot in this repo — update it if the schema default output changes; backend is optional so default output should be unchanged).\n\nWRITE src/graph/backends/registry.ts (or resolve.ts): export resolveGraphBackend(config, deps?) with an injectable version probe. Logic: if config.graph.backend set -> return that backend (no probe of others). Else probe each known backend's prereqSpec.versionArgs; collect installed; if tokensave installed -> tokensave; else if cr-graph installed -> cr-graph; else throw a structured error with combined hints.\n\nADD a CodeReviewGraphBackend STUB in src/graph/backends/code-review-graph-backend.ts: real id ('code-review-graph'), processSpec {binary:'code-review-graph', serveArgs:['serve']}, prereqSpec {versionArgs:['--version'], isCompatible: accept-any-for-now (or a documented TODO range), installHint: 'pip install code-review-graph'}, cliMap TODO, and *Plan adapter methods that THROW/return a TODO marker (they are filled in Sprints 4-6). It only needs to be selectable + prereq-checkable this sprint.\n\nWIRE all five construction sites to resolveGraphBackend. EVOLVE the manifest additively (types.ts + artifact-store read/write) with legacy fallback.\n\nVERIFY: unit-test resolveGraphBackend with a mocked probe for all branches (tokensave-only, crgraph-only, both->tokensave, neither->combined hint, explicit-wins). Run full suite + lint. Confirm a no-backend config is byte-identical for tokensave. Commit `bober(sprint-3): graph.backend config + auto-detect resolveGraphBackend + additive manifest`.",
+      "evaluatorNotes": "sc-3-2: a config WITHOUT graph.backend must still parse and produce the same effective config (assert no golden-snapshot drift, or that backend is undefined). sc-3-3/3-4/3-5: drive resolveGraphBackend with a MOCKED probe — verify each branch, especially: both installed -> tokensave; neither -> error hint contains BOTH the tokensave platform hint AND 'pip install code-review-graph'; explicit 'code-review-graph' does NOT probe tokensave and does NOT fall back to tokensave when cr-graph is missing. sc-3-6: confirm all five sites call resolveGraphBackend (grep for it) and no site still hardcodes a bare 'tokensave' backend for the run/onboard/impact/graph/mcp paths. sc-3-7: feed a legacy manifest (no backend field) and confirm read yields backend='tokensave', backendVersion=tokensaveVersion, no throw. sc-3-8: full suite no new failures; with tokensave present and no backend set, onboard still writes 5 files (byte-identical path). Reject if an explicit backend value triggers a probe of the other engine, or if the tokensave-unset path changed behavior.",
+      "estimatedFiles": [
+        "src/config/schema.ts",
+        "src/graph/backends/registry.ts",
+        "src/graph/backends/code-review-graph-backend.ts",
+        "src/graph/types.ts",
+        "src/graph/artifact-store.ts",
+        "src/graph/pipeline-lifecycle.ts",
+        "src/mcp/server.ts",
+        "src/cli/commands/impact.ts",
+        "src/cli/commands/graph.ts",
+        "src/cli/commands/onboard.ts",
+        "tests/graph/backends/registry.test.ts",
+        "tests/graph/artifact-store.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-4",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 4,
+      "title": "code-review-graph backend: process/prereq/CLI specs + capture live fixtures",
+      "description": "Flesh out CodeReviewGraphBackend's non-adapter surface and capture ground-truth fixtures. Implement its ProcessSpec (binary 'code-review-graph', serveArgs ['serve']), PrereqSpec (versionArgs ['--version'], a compatible-version predicate, installHint 'pip install code-review-graph'), and CliMap (init->build, sync->update, status->detect-changes/status with output parsers). Then PROBE the locally-installed `code-review-graph serve` to capture the REAL MCP tool output JSON for every tool the adapters will need, and commit those as fixtures under tests/graph/fixtures/cr-graph/. Use `git show 6ed3f77~1:src/graph/client.ts` (agent-bober's original code-review-graph adapter) as a shape reference. No response adapters yet — those consume these fixtures in Sprints 5-6.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-3"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "CodeReviewGraphBackend.processSpec = {binary:'code-review-graph' (overridable via config.graph.codeReviewGraphPath), serveArgs:['serve']}; prereqSpec.installHint = 'pip install code-review-graph'; the generalized prereq detects a real `code-review-graph --version` (skipIf-gated integration test) and, with execa mocked, a valid version passes and a clearly-incompatible one fails with the pip install hint.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "CliMap maps init->['build'], sync->['update', ...paths] (or the documented incremental verb), status->the detect-changes/status verb, each with an output parser. parseSync/parseStatus are unit-tested against captured CLI output samples.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "Real MCP tool output JSON is captured from a live `code-review-graph serve` (via the initialize + tools/call probe) for every tool the adapters need — at minimum semantic_search_nodes_tool, get_impact_radius_tool, get_review_context_tool, get_architecture_overview_tool, detect_changes_tool, query_graph_tool, traverse_graph_tool — and committed as tests/graph/fixtures/cr-graph/<tool>.json. Each fixture is the exact unwrapped payload (result.content[].text parsed) the transport would hand an adapter.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "resolveGraphBackend selects the code-review-graph backend when config.graph.backend='code-review-graph' and, in an integration context, when only cr-graph is installed. A skipIf-gated integration test starts a real `code-review-graph serve` and completes the MCP initialize handshake through the (Sprint-2 parameterized) transport.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "If the live cr-graph binary cannot be located during this sprint, the sprint DOES NOT invent shapes: it records the blocker in the sprint notes, seeds fixtures from the git-history reference (6ed3f77~1) marked as provisional, and leaves a documented follow-up to refresh them from a live run. (This criterion is satisfied by either a real capture OR an explicit, documented provisional-fixture fallback — never by silently guessed JSON.)",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "Full suite green (no NEW failures); tokensave path unaffected; lint clean.",
+          "verificationMethod": "unit-test",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do NOT implement the response adapters (search/impact/etc. narrowing) — Sprints 5-6 consume these fixtures.",
+        "Do NOT add a live cr-graph test to the DEFAULT CI path — cr-graph integration tests must be skipIf-gated on the binary being present.",
+        "Do NOT modify the tokensave backend or the shared transport wire protocol.",
+        "Do NOT install code-review-graph for the user or add it as an npm/pip dependency of this project."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "CodeReviewGraphBackend has real process/prereq/cli specs, real (or explicitly-provisional) fixtures are committed for every needed tool, detection selects it, and the transport can initialize-handshake a real cr-graph serve; suite + lint green"
+      ],
+      "definitionOfDone": "CodeReviewGraphBackend describes its process/prereq/cli; committed fixtures under tests/graph/fixtures/cr-graph/ capture the real MCP output for every adapter tool (or documented-provisional from git history if the binary was unreachable, with a follow-up); detection + a skipIf live handshake work; tokensave path untouched; suite + lint green.",
+      "assumptions": [
+        "code-review-graph is a Python 3.10+ package exposing `code-review-graph serve` (MCP) and CLI verbs build/update/watch/serve/detect-changes/daemon (per its README). Its ~30 MCP tools include semantic_search_nodes_tool, get_impact_radius_tool, get_review_context_tool, query_graph_tool, detect_changes_tool, traverse_graph_tool, get_architecture_overview_tool, build_or_update_graph_tool. Store dir is .code-review-graph/.",
+        "The binary was NOT on this shell's PATH at plan time (likely a venv/pipx install). The generator must LOCATE it: try `command -v code-review-graph`, `python -m code_review_graph --version`, common venv paths, or ask via config.graph.codeReviewGraphPath. If truly unreachable, invoke the sc-4-6 provisional-fixture fallback.",
+        "Probe technique (same pattern as the tokensave probe in the 6-1-compat sprint): pipe an initialize request, a notifications/initialized, then a tools/call for each tool into `code-review-graph serve` and capture stdout; unwrap result.content[].text and JSON.parse it. Save each parsed payload as a fixture. Tools/call arguments for cr-graph may differ from tokensave (e.g. a query string, a file path, a node id) — capture the argument shape too.",
+        "git history reference: `git show 6ed3f77~1:src/graph/client.ts` shows the ORIGINAL adapter with TOOL {search:'semantic_search_nodes', query:'query_graph', impact:'get_impact_radius', reviewContext:'get_review_context', overview:'get_architecture_overview', changes:'detect_changes'} and the row types it expected — a strong prior for shapes, though names now carry a `_tool` suffix and JSON may have evolved.",
+        "PrereqSpec compatibility for cr-graph: without a documented supported range, accept any parseable version for now and record the tested version; tightening the range is a follow-up. installHint is 'pip install code-review-graph'.",
+        "config.graph.codeReviewGraphPath (added in Sprint 3, optional) overrides the binary name, mirroring tokensavePath."
+      ],
+      "outOfScope": [
+        "Response adapters / narrowing (Sprints 5-6)",
+        "onboard / CLI parity (Sprint 7)",
+        "Docs (Sprint 8)",
+        "A default-CI live cr-graph test"
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Read FIRST: the Sprint-3 CodeReviewGraphBackend stub + registry, the Sprint-2 process/prereq/cli specs on the tokensave backend (as the template), src/graph/mcp-client.ts (probe technique), and `git show 6ed3f77~1:src/graph/client.ts` (original cr-graph shapes).\n\nSTEP 1 — LOCATE the binary: `command -v code-review-graph` || check config.graph.codeReviewGraphPath || try a venv/pipx path || `python -m code_review_graph --version`. Record the resolved path. If unreachable, go to STEP 4b.\n\nSTEP 2 — implement CodeReviewGraphBackend process/prereq/cli specs by analogy to tokensave-backend: processSpec {binary, serveArgs:['serve']}, prereqSpec {versionArgs:['--version'], isCompatible, installHint:'pip install code-review-graph'}, cliMap {initArgs:['build'], syncArgs:(p)=>['update',...p], statusArgs, parseSync, parseStatus}. Capture a couple of real `code-review-graph build`/`update` output samples to write parseSync against.\n\nSTEP 3 — CAPTURE MCP fixtures: for each needed tool, run the initialize+tools/call probe against the located `code-review-graph serve` (on THIS repo so nodes exist), unwrap result.content[].text, JSON.parse, and write tests/graph/fixtures/cr-graph/<tool>.json (the parsed payload). Also note each tool's argument shape in a small README or a fixtures/cr-graph/_args.json. Cover: semantic_search_nodes_tool, get_impact_radius_tool, get_review_context_tool, get_architecture_overview_tool, detect_changes_tool, query_graph_tool, traverse_graph_tool.\n\nSTEP 4 — tests: unit-test the prereq (execa mocked) + parseSync/parseStatus against captured CLI samples; add a skipIf(!crGraphAvailable) integration test that initialize-handshakes a real serve. STEP 4b (fallback only): if the binary was unreachable, seed fixtures from the git-history shapes, mark them `// PROVISIONAL — refresh from live run` and add the follow-up note; keep the skipIf test so a later live run validates.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-4): code-review-graph process/prereq/cli specs + captured MCP fixtures`.",
+      "evaluatorNotes": "The integrity bar here is NO INVENTED SHAPES. sc-4-4: open the committed tests/graph/fixtures/cr-graph/*.json — they must be plausible real cr-graph outputs (not hand-written stubs mirroring tokensave's shape). If the generator claims a live capture, spot-check that the fixtures differ structurally from tokensave's Ts*Row shapes (cr-graph is a different engine) and match the original 6ed3f77~1 field names where applicable. sc-4-6: if the generator took the provisional fallback, CONFIRM the fixtures are explicitly marked provisional AND a follow-up is recorded — do not accept silently-guessed JSON presented as real. sc-4-2/4-3: mock execa; pip install hint present; parseSync handles the captured cr-graph 'build'/'update' output. sc-4-5: if cr-graph is installed, the skipIf integration test must complete the handshake; if absent it must skip (not fail). sc-4-7: tokensave path + full suite unaffected. Reject if fixtures look like tokensave outputs with renamed keys, or if the cr-graph binary was reachable but the generator skipped live capture.",
+      "estimatedFiles": [
+        "src/graph/backends/code-review-graph-backend.ts",
+        "tests/graph/fixtures/cr-graph/",
+        "tests/graph/backends/code-review-graph-backend.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-5",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 5,
+      "title": "code-review-graph read adapters: search, reviewContext, overview, impact, changes",
+      "description": "Implement the CodeReviewGraphBackend response adapters for the five non-query operations, validated against the fixtures captured in Sprint 4. search -> semantic_search_nodes_tool (SearchHit[] with NodeRef + score/snippet, kind coercion), reviewContext -> get_review_context_tool (string), overview -> get_architecture_overview_tool (string), impact -> get_impact_radius_tool (ImpactReport with root/affected/testsAffected partition), changes -> detect_changes_tool (NodeRef[]). Each adapter's *Plan method returns {tool, params, narrow} exactly like the tokensave backend, so GraphClient's sandbox/staleness/health/fallback logic is reused unchanged.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-4"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "search: CodeReviewGraphBackend.searchPlan returns {tool:'semantic_search_nodes_tool', params: <query+limit shape>, narrow}, and narrow(fixture) yields SearchHit[] whose NodeRef carries symbol/file/line with kind coerced to the NodeRef kind set, and score/snippet populated where the fixture provides them. Unit-tested against tests/graph/fixtures/cr-graph/semantic_search_nodes_tool.json.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "reviewContext (get_review_context_tool) and overview (get_architecture_overview_tool) narrows return the correct string payload from their fixtures (matching how GraphClient.reviewContext/overview consume a string).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "impact: impactPlan narrow(fixture from get_impact_radius_tool) yields an ImpactReport with a root NodeRef and affected vs testsAffected partitioned by the test/spec heuristic (or cr-graph's own test edges if the fixture distinguishes them). Unit-tested.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "changes: changesPlan narrow(fixture from detect_changes_tool) yields NodeRef[] of changed symbols. Unit-tested.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "End-to-end through GraphClient: with the code-review-graph backend injected and the transport mocked to return the captured fixtures, GraphClient.search/reviewContext/overview/impact/changes return GraphResult.ok=true with correctly-narrowed data, and the sandbox post-filter + kind coercion apply identically to the tokensave path. Unit-tested.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "Full suite green (no NEW failures); tokensave path unaffected; lint clean.",
+          "verificationMethod": "unit-test",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do NOT implement the four query sub-patterns (callers/callees/imports/tests) — Sprint 6.",
+        "Do NOT change GraphClient, the transport, or the tokensave backend adapters.",
+        "Do NOT normalize cr-graph's scoring/ranking to match tokensave — map the shape faithfully, keep the engine's own semantics.",
+        "Do NOT add new fixtures by guessing — use the Sprint-4 captured fixtures; if one is missing/insufficient, capture it live and note it, do not fabricate."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "cr-graph search/reviewContext/overview/impact/changes adapters narrow the captured fixtures correctly and return ok GraphResults through GraphClient; suite + lint green"
+      ],
+      "definitionOfDone": "CodeReviewGraphBackend implements searchPlan/reviewContextPlan/overviewPlan/impactPlan/changesPlan producing SearchHit[]/string/string/ImpactReport/NodeRef[] validated against Sprint-4 fixtures; GraphClient returns ok results through the cr-graph backend with sandbox + kind coercion intact; tokensave path unchanged; suite + lint green.",
+      "assumptions": [
+        "GraphClient.search consumes SearchHit{node:NodeRef, score, snippet}; reviewContext/overview consume a string (client.ts:270-281); impact consumes an ImpactReport{root, affected, testsAffected} (247-268); changes consumes NodeRef[] (283-294). The cr-graph narrows must produce those exact shapes.",
+        "Original cr-graph field names (from 6ed3f77~1) and the live fixtures (Sprint 4) drive the narrows. semantic search likely returns rows with name/file/line/score fields; impact likely returns an affected-node set; review/overview likely return a text/markdown blob. Confirm against the actual fixtures — do not assume.",
+        "Kind coercion: reuse the NODE_KINDS set concept (function/class/module/symbol; unknown->symbol) from the tokensave backend. Factor a shared toNodeRef-like helper if cr-graph rows share the name/file/line/kind shape, or keep a cr-graph-specific one.",
+        "impact test/non-test partition: the tokensave backend splits affected vs testsAffected via a /test|spec/i heuristic on file path (client.ts:260-261). If the cr-graph impact fixture already tags test edges, prefer that; else reuse the same path heuristic.",
+        "The transport is mocked in unit tests (feed the fixture as the unwrapped payload) so these tests are deterministic and need no live binary."
+      ],
+      "outOfScope": [
+        "query sub-patterns (Sprint 6)",
+        "onboard / CLI parity (Sprint 7)",
+        "Docs (Sprint 8)"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read FIRST: tests/graph/fixtures/cr-graph/*.json (the captured shapes — THESE are your source of truth), the tokensave-backend *Plan methods (the template for {tool, params, narrow}), GraphClient's search/reviewContext/overview/impact/changes (how each result is consumed), and `git show 6ed3f77~1:src/graph/client.ts` (original cr-graph narrows).\n\nIMPLEMENT on CodeReviewGraphBackend: searchPlan(q, opts) -> {tool:'semantic_search_nodes_tool', params (query + limit — match the captured arg shape), narrow: rows->SearchHit[]}; reviewContextPlan(nodes) -> {tool:'get_review_context_tool', params, narrow: raw->string}; overviewPlan() -> {tool:'get_architecture_overview_tool', params, narrow: raw->string (JSON.stringify if it returns an object, matching how tokensave overview stringifies module_api)}; impactPlan(target) -> {tool:'get_impact_radius_tool', params (node id / symbol — match capture), narrow: raw->ImpactReport}; changesPlan(since) -> {tool:'detect_changes_tool', params, narrow: raw->NodeRef[]}.\n\nWRITE the narrows to consume the ACTUAL fixture fields. Add a fixture-driven unit test per operation: load the JSON, call narrow, assert the produced SearchHit/ImpactReport/etc. Add an end-to-end test that injects the cr-graph backend into GraphClient with a mocked transport returning the fixture, asserting GraphResult.ok=true and sandbox filtering applies.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-5): code-review-graph read adapters (search/reviewContext/overview/impact/changes)`.",
+      "evaluatorNotes": "sc-5-2..5-5: for each op, open the fixture and independently trace that the narrow maps the RIGHT fixture fields (e.g. semantic search score -> SearchHit.score, node name -> NodeRef.symbol). Reject adapters that ignore the fixture and hardcode/guess. sc-5-4: confirm impact partitions affected vs tests sensibly and root is populated. sc-5-6: confirm the end-to-end GraphClient test uses the cr-graph backend (not tokensave) and that sandbox keepNode still drops out-of-repo files. sc-5-7: tokensave tests + full suite unaffected. Reject if any narrow was written against an assumed shape that contradicts the committed fixture, or if scoring was 'normalized' to tokensave rather than mapped faithfully.",
+      "estimatedFiles": [
+        "src/graph/backends/code-review-graph-backend.ts",
+        "tests/graph/backends/code-review-graph-backend.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-6",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 6,
+      "title": "code-review-graph query sub-patterns (full parity): callers_of, callees_of, imports_of, tests_for",
+      "description": "Complete full-parity by mapping GraphClient's four query sub-patterns to code-review-graph tools. callers_of and callees_of map to a graph traversal (traverse_graph_tool, edge direction distinguishing inbound callers vs outbound callees); imports_of and tests_for map to query_graph_tool (file dependents / test coverage) or the closest cr-graph equivalent. Each pattern's narrow produces NodeRef[] exactly as the tokensave query() does, validated against Sprint-4 fixtures with explicit edge-direction assertions.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-5"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-6-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-2",
+          "description": "callers_of and callees_of map to cr-graph traversal tools (e.g. traverse_graph_tool) with the correct edge direction, and their narrows produce NodeRef[]. A fixture-driven unit test asserts callers_of returns the INBOUND neighbors and callees_of the OUTBOUND neighbors of the same target (they must not be identical for a node with distinct in/out edges).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-3",
+          "description": "imports_of maps to a cr-graph tool (query_graph_tool file-dependents or equivalent) and narrows to NodeRef[] of dependent files/modules. Unit-tested against a fixture.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-4",
+          "description": "tests_for maps to a cr-graph tool (test-coverage/query) and narrows to NodeRef[] of test files (falling back to uncovered symbols only if that matches cr-graph's shape). Unit-tested against a fixture.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-5",
+          "description": "End-to-end: GraphClient.query(pattern, target) with the cr-graph backend + mocked transport returns GraphResult.ok=true NodeRef[] for all four patterns, with sandbox filtering applied. If cr-graph genuinely cannot express one pattern, the adapter returns a typed GraphResult.ok=false (GRAPH_UNAVAILABLE) with a clear detail rather than wrong data — but the target is a real mapping for all four (full parity).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-6-6",
+          "description": "With both backends exercised, GraphClient.query behaves consistently: same NodeRef shape, same sandbox behavior, only the underlying tool differs. Full suite green (no NEW failures); tokensave query path unchanged; lint clean.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT change the read adapters from Sprint 5 or the tokensave query mapping.",
+        "Do NOT invent traversal semantics — capture/confirm the real traverse_graph_tool + query_graph_tool argument+output shapes (extend Sprint-4 fixtures if a needed one is missing, via live capture, not guessing).",
+        "Do NOT change GraphClient.query's public signature or the QueryPattern union.",
+        "Do NOT add onboard/CLI/doc changes (Sprints 7-8)."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "All four query sub-patterns map to real cr-graph tools with correct edge direction and produce NodeRef[]; end-to-end through GraphClient works; suite + lint green"
+      ],
+      "definitionOfDone": "CodeReviewGraphBackend.queryPlan handles callers_of/callees_of/imports_of/tests_for via cr-graph tools with correct edge direction, validated against fixtures and end-to-end through GraphClient; full parity achieved (or a documented, typed GRAPH_UNAVAILABLE for any pattern cr-graph cannot express); tokensave query path unchanged; suite + lint green.",
+      "assumptions": [
+        "tokensave query() maps callers_of->tokensave_callers, callees_of->tokensave_callees, imports_of->tokensave_file_dependents, tests_for->tokensave_test_map (client.ts QUERY_TOOL 40-45), each narrowing to NodeRef[] (client.ts:188-245). The cr-graph equivalents come from its traverse_graph_tool (neighbor traversal with direction) and query_graph_tool (structured queries incl. dependents/coverage), confirmed by the Sprint-4 fixtures.",
+        "Edge direction is the key correctness risk: callers = nodes that call the target (inbound call edges); callees = nodes the target calls (outbound). traverse_graph_tool almost certainly takes a direction/edge-kind argument — capture both directions as fixtures and assert they differ.",
+        "imports_of in tokensave takes a FILE and returns dependent file paths as module NodeRefs (client.ts:200-217). tests_for takes a FILE and returns test_files as module NodeRefs, falling back to uncovered symbol rows (218-241). Map cr-graph's equivalents to the same NodeRef output; if cr-graph keys on symbol rather than file, adapt params accordingly and note it.",
+        "The original 6ed3f77~1 client.ts mapped query -> 'query_graph' (a single tool with a pattern arg). Current cr-graph splits into query_graph_tool + traverse_graph_tool; pick per pattern based on the captured tool schemas.",
+        "If a pattern has no faithful cr-graph mapping, returning GRAPH_UNAVAILABLE with a specific detail is acceptable ONLY as a documented last resort — the user asked for full parity, so exhaust traverse_graph_tool/query_graph_tool options first."
+      ],
+      "outOfScope": [
+        "onboard / CLI parity (Sprint 7)",
+        "Docs (Sprint 8)",
+        "tokensave query mapping changes"
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "Read FIRST: client.ts query() (188-245) + QUERY_TOOL (the tokensave template), the Sprint-4 cr-graph fixtures (esp. traverse_graph_tool + query_graph_tool), and `git show 6ed3f77~1:src/graph/client.ts` (original query->'query_graph' shape).\n\nIF the Sprint-4 capture lacks a directional traverse fixture or a dependents/coverage query fixture, CAPTURE them now from the live `code-review-graph serve` (initialize + tools/call with the right arguments): a callers-direction traversal, a callees-direction traversal, a file-dependents query, and a test-coverage query — commit as new tests/graph/fixtures/cr-graph/ files. Do NOT guess these shapes.\n\nIMPLEMENT queryPlan(pattern, target) on CodeReviewGraphBackend returning {tool, params, narrow} per pattern: callers_of -> traverse_graph_tool with inbound direction; callees_of -> traverse_graph_tool with outbound direction; imports_of -> the dependents query on target.file; tests_for -> the coverage query on target.file. narrow each raw payload -> NodeRef[] (reuse the toNodeRef helper; module-style NodeRefs for file paths as tokensave does).\n\nADD fixture-driven unit tests per pattern, INCLUDING an explicit assertion that callers_of and callees_of yield different neighbor sets for a node with distinct in/out edges (edge-direction correctness). ADD an end-to-end GraphClient.query test with the cr-graph backend + mocked transport for all four patterns.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-6): code-review-graph query sub-patterns (callers/callees/imports/tests) — full parity`.",
+      "evaluatorNotes": "Edge direction is where this sprint fails silently if rushed. sc-6-2: verify callers_of uses an INBOUND traversal and callees_of an OUTBOUND one (read the params), and the test proves they differ for a real node — reject if both call the same tool with the same args (that would make callers==callees, a classic bug). sc-6-3/6-4: confirm imports_of/tests_for key on the right entity (file) and produce module NodeRefs like the tokensave path. sc-6-5: if any pattern returns GRAPH_UNAVAILABLE, confirm it's a documented genuine limitation, not a shortcut — the ask was full parity. Check that any newly-added fixtures are real captures (structurally cr-graph, not invented). sc-6-6: tokensave query path + full suite unaffected. Reject on callers/callees direction confusion or guessed traversal shapes.",
+      "estimatedFiles": [
+        "src/graph/backends/code-review-graph-backend.ts",
+        "tests/graph/fixtures/cr-graph/",
+        "tests/graph/backends/code-review-graph-backend.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-7",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 7,
+      "title": "Command parity: onboard, graph/impact CLI, external MCP + backend-status readout",
+      "description": "Ensure every graph-consuming surface works through the resolved backend and expose which engine is active. Verify `agent-bober onboard` produces all 5 artifacts on the code-review-graph backend (version line sourced from backendVersion, not tokensave), that `agent-bober impact` and `agent-bober graph` and src/mcp/server.ts construct and use the resolved backend, and add a backend-status readout (e.g. `agent-bober graph status`) printing the active engine id + version. All verified with fixtures/mocked transport per the fixtures-now decision.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-6"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-7-1",
+          "description": "Build + typecheck pass with zero errors.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-2",
+          "description": "onboard: with the code-review-graph backend + mocked transport returning cr-graph search fixtures, `agent-bober onboard` writes all 5 markdown artifacts (README, architecture-overview, hotspots, knowledge-gaps, communities) to .bober/onboarding/, and the status/version line shows the cr-graph backendVersion (onboard.ts:134 no longer assumes manifest.tokensaveVersion for a non-tokensave backend). Unit/integration-tested.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-3",
+          "description": "impact + graph CLIs: src/cli/commands/impact.ts and src/cli/commands/graph.ts resolve and use the active backend; a test forcing graph.backend='code-review-graph' shows they operate through the cr-graph backend (mocked transport) and produce their reports.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-4",
+          "description": "External MCP server: src/mcp/server.ts exposes its graph tools backed by the resolved backend (not a hardcoded tokensave client). Verified by a test that constructs the server with graph.backend='code-review-graph'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-5",
+          "description": "A backend-status readout exists (e.g. `agent-bober graph status`) that prints the active engine id and version (backendVersion), and indicates whether it was chosen by explicit config or auto-detection. Tested for both backends.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-7-6",
+          "description": "Selecting each backend in turn (graph.backend='tokensave' then 'code-review-graph') produces a working graph layer for that engine across onboard/impact/graph in tests. tokensave remains byte-identical. Full suite green (no NEW failures); lint clean.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT rework onboard.ts's data-gathering strategy (it keeps its 5 search() calls); only its backend source + version line change.",
+        "Do NOT add a live cr-graph run to default CI (fixtures/mocked transport for these tests).",
+        "Do NOT change the adapters from Sprints 5-6 or the tokensave path.",
+        "Do NOT add new graph capabilities beyond the backend-status readout."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "onboard/impact/graph/mcp-server all work through the resolved backend for both engines; a backend-status readout shows the active engine; tokensave byte-identical; suite + lint green"
+      ],
+      "definitionOfDone": "Every graph-consuming surface (onboard, impact, graph, external MCP) operates through the resolved backend; onboard's version line uses backendVersion; a `graph status`-style readout prints the active engine id + version + selection source; both backends are exercised end-to-end via fixtures; tokensave byte-identical; suite + lint green.",
+      "assumptions": [
+        "onboard.ts already gathers all data via graphClient.search() (119-126) and maps SearchHit -> OnboardingInputs (137-185), so it is backend-agnostic EXCEPT status.tokensaveVersion (134). Change that to manifest.backendVersion ?? prereq.version, and (optional) the DISABLED_MSG/arch-doc references can mention either engine.",
+        "impact.ts, graph.ts, mcp/server.ts were switched to resolveGraphBackend in Sprint 3; this sprint confirms they actually EXERCISE the resolved backend end-to-end (not just construct it) and adds coverage forcing the cr-graph backend.",
+        "The backend-status readout can extend the existing `graph` command group (src/cli/commands/graph.ts) with a `status` subcommand, or augment an existing status output, printing {engine id, version, selectedBy: 'config'|'auto-detect'}.",
+        "Tests mock the transport (feed cr-graph fixtures) so no live binary is needed; a skipIf live onboard against cr-graph is optional and, if added, must skip when the binary is absent.",
+        "onboard writes to .bober/onboarding/; tests can run it against a temp project root or assert on the composed artifacts in-memory to avoid polluting the repo."
+      ],
+      "outOfScope": [
+        "Docs (Sprint 8)",
+        "onboard data-strategy rework",
+        "Live-CI cr-graph integration"
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "Read FIRST: src/cli/commands/onboard.ts (full — esp. 119-185 gather+map and 134 version), src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/mcp/server.ts (graph tool wiring), the Sprint-3 resolveGraphBackend, and the Sprint-5/6 cr-graph adapters + fixtures.\n\nonboard: change status.tokensaveVersion source to backendVersion (manifest.backendVersion ?? prereq.version). Confirm onboard already flows through resolveGraphBackend (Sprint 3); if it still builds a bare tokensave backend, switch it. Add a test that runs onboard with the cr-graph backend + a mocked transport returning the semantic_search_nodes_tool fixture for the 5 search calls, asserting all 5 artifacts are written and the version line shows the cr-graph version.\n\nimpact/graph/mcp-server: add tests forcing graph.backend='code-review-graph' and assert the resolved backend is used end-to-end (mock transport). Fix any site that still assumes tokensave.\n\nbackend-status: add a `graph status` subcommand (or extend status output) printing engine id + version + selectedBy. Test for both backends.\n\nRun `npm run build && npm run typecheck && npx vitest run` (full) + lint. Confirm tokensave onboard/impact/graph byte-identical. Commit `bober(sprint-7): command parity (onboard/impact/graph/mcp) through resolved backend + graph status readout`.",
+      "evaluatorNotes": "sc-7-2: confirm onboard's version line no longer hardcodes/assumes tokensaveVersion for a cr-graph backend, and all 5 files are produced from cr-graph fixtures. sc-7-3/7-4: verify the tests actually FORCE graph.backend='code-review-graph' and that impact/graph/mcp-server use the cr-graph backend (not silently tokensave). sc-7-5: run the status readout for both backends and confirm it names the right engine + version + selection source. sc-7-6: flip the backend and confirm each engine yields a working graph layer; tokensave path byte-identical (existing onboard/impact/graph tests unchanged). Full suite: no new failures. Reject if any surface still hardcodes tokensave, or if onboard shows a tokensave version while running cr-graph.",
+      "estimatedFiles": [
+        "src/cli/commands/onboard.ts",
+        "src/cli/commands/impact.ts",
+        "src/cli/commands/graph.ts",
+        "src/mcp/server.ts",
+        "tests/graph/onboard.test.ts",
+        "tests/cli/graph-status.test.ts"
+      ],
+      "estimatedDuration": "medium",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    },
+    {
+      "contractId": "sprint-spec-20260726-graph-backend-choice-8",
+      "specId": "spec-20260726-graph-backend-choice",
+      "sprintNumber": 8,
+      "title": "Documentation + deferred live-smoke follow-up + final byte-identical check",
+      "description": "Document the pluggable backend: generalize the README 'Graph (Tokensave) Integration' section to cover both engines — how selection works (auto-detect + optional graph.backend override + optional codeReviewGraphPath), install commands for tokensave and code-review-graph, and a parity table of which GraphClient operations map to which tool on each engine. Record the deferred live `code-review-graph serve` smoke run (what it is, how to run it manually, why it's not in CI). Do a final confirmation that the tokensave path is byte-identical and code-review-graph is selectable end-to-end via fixtures.",
+      "status": "completed",
+      "dependsOn": [
+        "sprint-spec-20260726-graph-backend-choice-7"
+      ],
+      "features": [
+        "feat-6"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-8-1",
+          "description": "Build + typecheck pass with zero errors (docs-only sprint must not break the build; any code touched is trivial/status-string level).",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-2",
+          "description": "README's graph section is generalized to both engines: it explains auto-detection (tokensave preferred when both installed), the optional graph.backend override, the optional codeReviewGraphPath, install commands for BOTH tokensave (brew/scoop/cargo) and code-review-graph (`pip install code-review-graph`, Python 3.10+), and a parity table listing each GraphClient operation (search/reviewContext/overview/impact/changes/callers/callees/imports/tests) with its tool name on each engine.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-3",
+          "description": "The deferred live-smoke follow-up is documented (in the README/docs and/or a follow-ups note): what the manual `code-review-graph serve` end-to-end smoke run verifies, the exact command(s) to run it, and a note that CI relies on committed fixtures. Any provisional fixtures from Sprint 4 (if that fallback was used) are called out with their refresh instructions.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-4",
+          "description": "Final verification: with graph.backend unset/tokensave and tokensave installed, the full existing graph + CLI suite is green and byte-identical (no behavior drift across the 8 sprints); with graph.backend='code-review-graph' + mocked/fixture transport, onboard/impact/graph/query all work. Documented in the sprint record.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-8-5",
+          "description": "Full suite green (no NEW failures); lint clean; docs render (no broken internal links/anchors in the edited README section).",
+          "verificationMethod": "lint",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do NOT change adapter/selection/transport behavior — this sprint is docs + a final verification pass (plus at most cosmetic status-string tweaks).",
+        "Do NOT add the live cr-graph smoke test to default CI — it stays a documented manual step.",
+        "Do NOT paraphrase the tokensave install hints away from their verbatim strings.",
+        "Do NOT claim live cr-graph verification unless a real run was actually performed and recorded."
+      ],
+      "stopConditions": [
+        "All required success criteria pass",
+        "README + docs describe backend selection, both install paths, a parity table, and the deferred live-smoke follow-up; final byte-identical-tokensave + cr-graph-selectable check recorded; suite + lint green"
+      ],
+      "definitionOfDone": "The README graph section documents both engines (selection, install, parity table), the deferred live-smoke follow-up is written down with the manual command, the final verification (tokensave byte-identical + cr-graph selectable via fixtures) is recorded, and suite + lint are green.",
+      "assumptions": [
+        "README currently has a 'Graph (Tokensave) Integration' section (README.md:161) and a CLI section (README.md:507). Generalize the heading + body; keep tokensave-specific detail but frame it as one of two backends.",
+        "The parity table should be sourced from the actual tool mappings in the two backend modules (tokensave-backend.ts and code-review-graph-backend.ts) so it stays accurate: search, reviewContext, overview, impact, changes, callers_of, callees_of, imports_of, tests_for.",
+        "The deferred follow-up mirrors how the tokensave integration documents skipIf real-binary tests; the manual smoke is: install code-review-graph, `code-review-graph build` in a repo, set graph.backend='code-review-graph', run `agent-bober onboard` and confirm 5 artifacts.",
+        "If Sprint 4 used the provisional-fixture fallback (binary unreachable), this sprint must surface that prominently as an open follow-up with refresh steps.",
+        "This is a low-risk docs sprint; the only code changes (if any) are cosmetic (e.g. a status string), so build/lint gates are mostly guarding against accidental breakage."
+      ],
+      "outOfScope": [
+        "Any behavioral change to selection/adapters/transport",
+        "Adding live cr-graph tests to CI",
+        "New features"
+      ],
+      "ambiguityScore": 2,
+      "generatorNotes": "Read FIRST: README.md around the graph section (161) and CLI section (507), the two backend modules (for the accurate tool→operation parity table), the Sprint-3 selection logic (for the auto-detect + override + codeReviewGraphPath description), and the Sprint-4 fixture notes (to know if the provisional fallback was used).\n\nWRITE: rename/expand the README graph section to 'Graph Integration (tokensave or code-review-graph)'. Cover: (1) how selection works — auto-detect with tokensave preference, explicit graph.backend override, optional per-engine binary paths (tokensavePath / codeReviewGraphPath); (2) install — tokensave (brew/scoop/cargo, verbatim) and code-review-graph (`pip install code-review-graph`, Python 3.10+); (3) a parity table: rows = GraphClient operations, columns = tokensave tool | code-review-graph tool; (4) a 'Verification & live smoke' subsection documenting the deferred manual smoke run + that CI uses fixtures. If provisional fixtures exist, add an explicit follow-up callout.\n\nDo the FINAL check: run the full suite with tokensave (byte-identical) and the cr-graph fixture tests; record the outcome in the sprint doc. Keep code changes to at most cosmetic status strings.\n\nRun `npm run build && npm run typecheck && npx vitest run` + lint. Commit `bober(sprint-8): document pluggable graph backend + parity table + deferred live-smoke follow-up`.",
+      "evaluatorNotes": "sc-8-2: read the edited README — confirm it actually documents auto-detect + override + BOTH install paths + a parity table that matches the real tool mappings in the backend modules (spot-check 2-3 rows against code-review-graph-backend.ts). sc-8-3: confirm the deferred live-smoke is written with a concrete manual command, and any provisional fixtures are flagged. sc-8-4: confirm the sprint record states the final tokensave-byte-identical result and cr-graph-selectable result with evidence (test output). sc-8-5: full suite no new failures; lint clean; no broken README anchors. Reject if the parity table is fabricated rather than derived from the code, or if live cr-graph verification is claimed without an actual recorded run.",
+      "estimatedFiles": [
+        "README.md",
+        "docs/graph-backends.md"
+      ],
+      "estimatedDuration": "small",
+      "iterationHistory": [],
+      "createdAt": "2026-07-26T00:00:00Z",
+      "updatedAt": "2026-07-27T00:00:00Z",
+      "completedAt": "2026-07-27T00:00:00Z"
+    }
+  ]
+}

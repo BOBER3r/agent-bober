@@ -1,0 +1,185 @@
+{
+  "formatVersion": 1,
+  "caseId": "commit-refused-fail-closed-under-noop-gate",
+  "title": "The commit node is refused fail-closed under the shipped autopilot gate, and the refusal is now reportable",
+  "intent": "Pin sprint 13's most consequential finding, corrected for what sprint 5 and sprint 6 of spec-20260812-pge-real-workload-errors changed about it: under autopilot the gate mechanism is noop, noop grants nothing, and the git-effect node is refused FAIL_CLOSED exactly as before. What is NEW is that the refusal is no longer invisible — success STILL reports true (Option A: deriveRunSuccess is sprint-split based and does not move for a terminal-node refusal that is not a sprint), but PipelineResult.errors now carries the refusal as a PipelineFailure, and two downstream consumers act on it: `bober run` sets process.exitCode 1 and prints a 'Refused:' block naming the failing node and its errorClass (src/cli/commands/run.ts), and the MCP RunManager sets RunState.status to 'failed' and populates .error with a one-line description (src/mcp/run-manager.ts). A caller must still check errors, never success, to see any of this — the finding is corrected, not reversed.",
+  "tags": [
+    "commit",
+    "fail-closed",
+    "hitl:end-of-pipeline",
+    "error-channel"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "hitl_commit",
+    "config": {
+      "autopilot": true
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "documenter",
+      "branchKey": null,
+      "effectName": "documenter.summary",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 92,
+          "results": [
+            {
+              "evaluator": "agent",
+              "passed": true,
+              "score": 92,
+              "details": [
+                {
+                  "criterion": "sc-1-1",
+                  "passed": true,
+                  "message": "Covered by a unit test."
+                }
+              ]
+            }
+          ]
+        },
+        "projectRoot": "/tmp/golden-run",
+        "generatorResult": {
+          "success": true,
+          "notes": "Added the block schema and the typed error, plus tests for both branches.",
+          "filesChanged": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "turnsUsed": 7
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "sprintDocPath": "docs/sprints/sprint-1.md",
+        "relatedDocsUpdated": [
+          {
+            "path": "docs/config.md",
+            "reason": "documents the new block"
+          }
+        ],
+        "concerns": [],
+        "summary": "Documented the new config block and its typed error."
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "end-of-pipeline",
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "aborted"
+        }
+      ],
+      "pipelineResult": [
+        {
+          "completedSprints": [
+            {
+              "ambiguityScore": 3,
+              "assumptions": [
+                "The parser already exists and only the new branch is added."
+              ],
+              "contractId": "spec-20260805-golden-fixture-1",
+              "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+              "dependsOn": [],
+              "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+              "estimatedDuration": "small",
+              "estimatedFiles": [
+                "src/fixture/sprint-1.ts",
+                "src/fixture/sprint-1.test.ts"
+              ],
+              "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+              "features": [
+                "feat-1"
+              ],
+              "generatorNotes": "Reuse the existing parser; do not fork it.",
+              "iterationHistory": [],
+              "nonGoals": [
+                "Do not change the public CLI surface."
+              ],
+              "outOfScope": [
+                "Performance tuning."
+              ],
+              "specId": "spec-20260805-golden-fixture",
+              "sprintNumber": 1,
+              "status": "passed",
+              "stopConditions": [
+                "Every success criterion has a passing test."
+              ],
+              "successCriteria": [
+                {
+                  "criterionId": "sc-1-1",
+                  "description": "Sprint 1's behaviour is covered by a unit test.",
+                  "required": true,
+                  "verificationMethod": "unit-test"
+                }
+              ],
+              "title": "Fixture sprint 1"
+            }
+          ],
+          "errors": [
+            {
+              "branchKey": null,
+              "errorClass": "FailClosed",
+              "message": "FAIL_CLOSED: node \"commit\" declares effects (git) and there is no recorded approval for checkpoint \"end-of-pipeline\". The node was not executed.",
+              "nodeId": "commit"
+            }
+          ],
+          "failedSprints": [],
+          "spec": {
+            "ambiguityScore": 3,
+            "assumptions": [
+              "The fixture repository is a TypeScript package with Vitest."
+            ],
+            "clarificationQuestions": [],
+            "constraints": [],
+            "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+            "features": [
+              {
+                "acceptanceCriteria": [
+                  "A malformed block produces a typed error rather than a crash."
+                ],
+                "dependencies": [],
+                "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+                "estimatedComplexity": "low",
+                "featureId": "feat-1",
+                "priority": "must-have",
+                "title": "Parse the new config block"
+              }
+            ],
+            "mode": "brownfield",
+            "nonFunctionalRequirements": [],
+            "outOfScope": [
+              "Migrating existing configs."
+            ],
+            "resolvedClarifications": [],
+            "specId": "spec-20260805-golden-fixture",
+            "status": "ready",
+            "techStack": [
+              "typescript",
+              "vitest"
+            ],
+            "title": "Fixture plan for the golden dataset",
+            "version": 1
+          },
+          "success": true
+        }
+      ]
+    },
+    "notes": "git.commit is ABSENT from the pinned responses and that absence is still the primary assertion: the interpreter refuses to dispatch a git-effect node without a recorded approval, and the noop mechanism records none. What sprint 5 and sprint 6 of spec-20260812-pge-real-workload-errors added is the pinned pipelineResult above: success stays true (Option A — deriveRunSuccess never moves for a terminal-node refusal that is not a sprint) but errors gains exactly one PipelineFailure — nodeId 'commit', errorClass 'FailClosed', branchKey null, and the message the interrupt controller writes at the fail-closed branch (src/pge/runtime/interrupt.ts) naming the checkpoint and the declared effect. Neither the CLI exit code nor the MCP RunState.status is a conformance field collectRunArtifacts collects, so neither is representable as a pinned artifact here; both are documented in this case's intent instead, and are under direct test at src/cli/commands/run.test.ts and src/mcp/run-manager.test.ts (sc-6-1..sc-6-4). A future change that made autopilot commit would produce a git.commit call this case does not pin and fail; a future change that stopped populating errors for this exact refusal would change the pinned pipelineResult and fail this case too."
+  }
+}

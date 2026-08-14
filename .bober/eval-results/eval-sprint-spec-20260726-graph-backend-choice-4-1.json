@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-4-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-4",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "full suite 5038 passed / 2 skip (default PATH; live cr-graph test skips) / 0 fail; +20 vs 5018 baseline; live test PASSES with PATH exported (real MCP handshake 1256ms)" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "processSpec/prereqSpec correct; pip install hint; prereq mocked 2.3.7 passes, non-zero->MISSING with pip hint" },
+    { "criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "cliMap build/update/status --json; parsers against real 'Full build: 2 files, 8 nodes, 15 edges' + status --json object; 10 tests + real-argv assertions" },
+    { "criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "REAL fixtures: capitalized Kind, line_start/line_end, qualified_name, _graph envelope, _hints — structurally distinct from tokensave; deeply cross-consistent (identical built_at_sha/timestamps, matching node/edge IDs + totals across 7+ fixtures); no leaked /Users/ paths; .code-review-graph not committed" },
+    { "criterionId": "sc-4-5", "required": true, "result": "pass", "evidence": "skipIf live test skips on default PATH, PASSES with PATH exported (real code-review-graph serve initialize handshake, health='ready')" },
+    { "criterionId": "sc-4-6", "required": true, "result": "pass", "evidence": "real-capture path taken (binary reachable); no provisional/invented JSON" },
+    { "criterionId": "sc-4-7", "required": false, "result": "pass", "evidence": "full suite 0 fail; tokensave-backend.ts + mcp-client.ts untouched by commit; lint clean" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "low", "category": "quality", "file": "src/graph/backends/code-review-graph-backend.ts", "line": 121, "description": "isCompatible() is accept-any (documented TODO); INCOMPATIBLE path only via unparseable version, then surfaces incompatibleHint TODO not pip hint. Matches the Sprint-2 PrereqSpec split, not a new deviation. Non-blocking; revisit when pinning a real cr-graph version range." }
+  ],
+  "summary": "All 6 required + 1 optional pass. Fixtures independently confirmed GENUINELY REAL cr-graph captures (structural + cross-file-consistency evidence), live MCP handshake verified. cliMap build/update/status real with fixture-validated parsers. NonGoals respected (adapters still NOT_IMPL; tokensave untouched; no new dep; skipIf-gated). Commit ed7d9cf. Follow-up: cr-graph `update` diff-base vs positional-path reconciliation deferred to Sprint 7; isCompatible version range TODO.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite both PATH modes + fixture-integrity forensic inspection + live handshake run)"
+}

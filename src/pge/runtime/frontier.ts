@@ -1,0 +1,261 @@
+import { createHash } from "node:crypto";
+
+import { canonicalJson } from "../registry/reducers.js";
+
+/**
+ * The frontier planner: which of the ready tasks may run TOGETHER this superstep.
+ *
+ * ── What admission is for ──
+ *
+ * Concurrency here is a CORRECTNESS-PRESERVING capability, never a performance one. The
+ * measured dependsOn-aware parallel ceiling across the repository's own history is 1.34x,
+ * and in the best case concurrently-schedulable sprint pairs collide on the same files in
+ * 8 of 10 pairs. So `cap` defaults to 1 and nothing in this module — or in any test that
+ * exercises it — is justified by wall-clock time. What the planner buys is that when a
+ * caller DOES raise the cap, two hard preconditions still hold:
+ *
+ *   1. dependsOn — a task is not admitted until every contract it declares a dependency
+ *      on has COMMITTED. This module is the first consumer of `SprintContract.dependsOn`
+ *      anywhere in the repository; the field has been declared and read by no scheduler.
+ *   2. file disjointness — two branches whose declared file sets intersect never execute
+ *      concurrently. They are serialized, not isolated: per-branch worktrees are
+ *      deliberately out of scope.
+ *
+ * Both are checked BEFORE admission, and both record their reason, so a deferral is a
+ * fact in the trace rather than an absence.
+ *
+ * ── Determinism ──
+ *
+ * `plan` sorts the frontier into a total order that does not depend on arrival order
+ * (`nodeId`, then `branchKey`, then `taskKey`). Two runs of the same graph therefore
+ * admit the same tasks in the same order at every cap, which is what makes the
+ * concurrency-1-versus-8 artifact comparison decidable rather than flaky.
+ *
+ * ── Empty file sets ──
+ *
+ * A contract that declares NO `estimatedFiles` has told us nothing about what it will
+ * touch, so at any cap above 1 it is treated as conflicting with everything: silence is
+ * not a claim of disjointness. At cap 1 the question does not arise, because a single
+ * admitted task never runs concurrently with anything.
+ */
+
+// ── Task identity ───────────────────────────────────────────────────
+
+function sha256Hex(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/** Content hash of a task input, over its canonical form so key order cannot move it. */
+export function hashInput(input: unknown): string {
+  return sha256Hex(canonicalJson(input));
+}
+
+/**
+ * `sha256(nodeId + branchKey + inputHash)`.
+ *
+ * NUL-separated so a node id that happens to end in a branch key's prefix cannot collide
+ * with a different (node, branch) pair. Sprint 8 uses this key for resume; here it is
+ * identity and the key the file-conflict ledger is written against.
+ */
+export function computeTaskKey(nodeId: string, branchKey: string | null, input: unknown): string {
+  return sha256Hex([nodeId, branchKey ?? "", hashInput(input)].join("\u0000"));
+}
+
+// ── Shapes ──────────────────────────────────────────────────────────
+
+export const ADMISSION_REASONS = ["dependsOn", "fileConflict", "concurrencyCap"] as const;
+export type AdmissionReason = (typeof ADMISSION_REASONS)[number];
+
+/**
+ * One unit of work waiting for a slot.
+ *
+ * `contractId`, `dependsOn` and `files` are the branch's facts, copied off the
+ * `SprintContract` the branch was dispatched with and carried by EVERY task in that
+ * branch — not just its first. A branch whose second node no longer declared its file set
+ * could be admitted alongside a conflicting branch halfway through, which is precisely
+ * the interleaving the serialization exists to prevent.
+ */
+export interface PendingTask {
+  readonly taskKey: string;
+  readonly nodeId: string;
+  readonly branchKey: string | null;
+  readonly input: unknown;
+  readonly contractId?: string;
+  readonly dependsOn: readonly string[];
+  readonly files: readonly string[];
+}
+
+export interface DeferredTask {
+  readonly task: PendingTask;
+  readonly reason: AdmissionReason;
+  /**
+   * What blocked it: unmet dependency ids for `dependsOn`, the conflicting task's
+   * contract id (or task key) for `fileConflict`, the already-admitted task keys for
+   * `concurrencyCap`.
+   */
+  readonly blockedBy: string[];
+  /** The intersecting paths, set only for `fileConflict`. */
+  readonly files?: string[];
+}
+
+export interface AdmissionDecision {
+  readonly admit: PendingTask[];
+  readonly defer: DeferredTask[];
+}
+
+export interface FrontierPlanner {
+  /**
+   * @param pending every task whose predecessor has committed.
+   * @param done every identifier that has COMMITTED — task keys, and the contract id of
+   *   every branch that has left the fan-out region. `dependsOn` is resolved against it.
+   * @param cap maximum tasks admitted for this superstep. Values below 1 are read as 1.
+   */
+  plan(pending: readonly PendingTask[], done: ReadonlySet<string>, cap: number): AdmissionDecision;
+}
+
+// ── Construction ────────────────────────────────────────────────────
+
+export interface PendingTaskInput {
+  nodeId: string;
+  branchKey?: string | null;
+  input: unknown;
+  contractId?: string;
+  dependsOn?: readonly string[];
+  files?: readonly string[];
+}
+
+/** A task with its `taskKey` derived rather than supplied, so the two cannot disagree. */
+export function createPendingTask(spec: PendingTaskInput): PendingTask {
+  const branchKey = spec.branchKey ?? null;
+  return {
+    taskKey: computeTaskKey(spec.nodeId, branchKey, spec.input),
+    nodeId: spec.nodeId,
+    branchKey,
+    input: spec.input,
+    ...(spec.contractId === undefined ? {} : { contractId: spec.contractId }),
+    dependsOn: [...(spec.dependsOn ?? [])],
+    files: [...(spec.files ?? [])],
+  };
+}
+
+// ── Ordering ────────────────────────────────────────────────────────
+
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The total order the frontier is admitted in.
+ *
+ * Not "arrival order": the frontier is assembled from the previous superstep's routing
+ * decisions, and under concurrency those settle in whatever order the event loop chose.
+ * Sorting is what makes admission — and therefore the trace, and therefore the artifacts —
+ * a function of the graph and its inputs alone.
+ */
+export function compareTasks(a: PendingTask, b: PendingTask): number {
+  return (
+    compareStrings(a.nodeId, b.nodeId) ||
+    compareStrings(a.branchKey ?? "", b.branchKey ?? "") ||
+    compareStrings(a.taskKey, b.taskKey)
+  );
+}
+
+// ── File conflicts ──────────────────────────────────────────────────
+
+/** How one task conflicts with an already-admitted one, or `null` when it does not. */
+interface FileConflict {
+  /** The already-admitted task this one collides with. */
+  readonly with: PendingTask;
+  /** The intersecting paths; empty when the collision is caused by an undeclared file set. */
+  readonly files: string[];
+}
+
+function intersect(a: readonly string[], b: ReadonlySet<string>): string[] {
+  const shared = new Set<string>();
+  for (const path of a) {
+    if (b.has(path)) shared.add(path);
+  }
+  return [...shared].sort();
+}
+
+function findConflict(task: PendingTask, admitted: readonly PendingTask[]): FileConflict | null {
+  for (const other of admitted) {
+    // Silence is not a claim of disjointness — see the module header.
+    if (task.files.length === 0 || other.files.length === 0) {
+      return { with: other, files: [] };
+    }
+    const shared = intersect(task.files, new Set(other.files));
+    if (shared.length > 0) return { with: other, files: shared };
+  }
+  return null;
+}
+
+/** How a blocking task is named in a deferral: its contract id when it has one. */
+function identify(task: PendingTask): string {
+  return task.contractId ?? task.taskKey;
+}
+
+// ── Planner ─────────────────────────────────────────────────────────
+
+/**
+ * A stateless planner.
+ *
+ * Stateless on purpose: every input it needs — the frontier, what has committed, the cap —
+ * is passed in, so the same call on a resumed run in a fresh process produces the same
+ * decision. A planner holding its own memory of what it admitted last time would be the
+ * one component whose behaviour a checkpoint could not restore.
+ */
+export function createFrontierPlanner(): FrontierPlanner {
+  return {
+    plan(pending, done, cap): AdmissionDecision {
+      const limit = Math.max(1, Math.trunc(cap));
+      const ordered = [...pending].sort(compareTasks);
+      const admit: PendingTask[] = [];
+      const defer: DeferredTask[] = [];
+
+      for (const task of ordered) {
+        // ── 1. dependsOn, first and unconditionally ──
+        //
+        // Checked before the cap so a task blocked on an uncommitted dependency reports
+        // WHY it is blocked rather than being masked by backpressure. The distinction
+        // matters: `concurrencyCap` clears on its own next superstep, `dependsOn` does
+        // not, and only the second can deadlock.
+        const unmet = task.dependsOn.filter((id) => !done.has(id));
+        if (unmet.length > 0) {
+          defer.push({ task, reason: "dependsOn", blockedBy: [...unmet].sort() });
+          continue;
+        }
+
+        if (admit.length >= limit) {
+          defer.push({
+            task,
+            reason: "concurrencyCap",
+            blockedBy: admit.map(identify),
+          });
+          continue;
+        }
+
+        // ── 3. file disjointness, only where it can bite ──
+        //
+        // A task admitted into an EMPTY batch runs alone, so there is nothing for it to
+        // collide with and no conflict to record. That is why cap 1 never serializes on
+        // files: the precondition "two branches with intersecting file sets do not run
+        // concurrently" is already satisfied.
+        const conflict = admit.length === 0 ? null : findConflict(task, admit);
+        if (conflict) {
+          defer.push({
+            task,
+            reason: "fileConflict",
+            blockedBy: [identify(conflict.with)],
+            files: conflict.files,
+          });
+          continue;
+        }
+
+        admit.push(task);
+      }
+
+      return { admit, defer };
+    },
+  };
+}

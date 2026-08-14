@@ -1,6 +1,6 @@
 import type { BoberConfig } from "../config/schema.js";
 import type { ContextHandoff } from "./context-handoff.js";
-import { serializeHandoff } from "./context-handoff.js";
+import { serializeHandoffForPrompt } from "./context-handoff.js";
 import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
@@ -72,7 +72,7 @@ export async function runGenerator(
     config.generator.providerConfig,
     config.generator.model,
   );
-  const handoffJson = serializeHandoff(handoff);
+  const handoffJson = serializeHandoffForPrompt(handoff);
 
   // Check if a Sprint Briefing exists for this contract
   const briefingPath = `.bober/briefings/${contractId}-briefing.md`;

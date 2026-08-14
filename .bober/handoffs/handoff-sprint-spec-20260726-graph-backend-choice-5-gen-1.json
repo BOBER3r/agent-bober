@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-5",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 5: implement the CodeReviewGraphBackend RESPONSE ADAPTERS for the 5 non-query operations (search, reviewContext, overview, impact, changes), validated against the REAL fixtures captured in Sprint 4 (tests/graph/fixtures/cr-graph/*.json). Each adapter's *Plan method returns {tool, params, narrow} exactly like TokensaveBackend, so GraphClient's sandbox/staleness/health/fallback logic is reused unchanged. The 4 query sub-patterns (callers/callees/imports/tests) are Sprint 6 — leave queryPlan throwing NOT_IMPL this sprint.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-1", "title": "GraphBackend + TokensaveBackend", "summary": "ae1bde7" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-2", "title": "process/prereq/CLI specs", "summary": "129d841" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-3", "title": "backend selection + auto-detect", "summary": "77bb53c+6fc5a00" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-4", "title": "cr-graph CLI map + live fixtures", "summary": "ed7d9cf — 8 real fixtures under tests/graph/fixtures/cr-graph/" }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "crGraphFixtureShape": {
+      "note": "cr-graph output differs from tokensave Ts*Row. Confirmed real shapes (see fixtures + _args.json): nodes carry capitalized Kind ('Function'|'Class'|'File'), line_start/line_end (NOT a single `line`), qualified_name, parent_name, is_test; edges carry confidence/confidence_tier; every payload has a `_graph` staleness envelope + `_hints.next_steps`. The MCP tool names are all `_tool`-suffixed: semantic_search_nodes_tool, get_impact_radius_tool, get_review_context_tool, get_architecture_overview_tool, detect_changes_tool (query_graph_tool + traverse_graph_tool are Sprint 6).",
+      "mappingTargets": "GraphClient consumes: search->SearchHit[]{node:NodeRef,score,snippet}; reviewContext->string; overview->string; impact->ImpactReport{root,affected,testsAffected}; changes->NodeRef[]. NodeRef={id,kind:('function'|'class'|'module'|'symbol'),file,line,symbol}. Map cr-graph Kind->lowercase kind (coerce unknown->'symbol' like tokensave NODE_KINDS); line_start->line; name/qualified_name->symbol. Reuse a toNodeRef-style helper; keep engine scoring semantics faithful (do NOT normalize to tokensave)."
+    },
+    "relevantFiles": [
+      "src/graph/backends/code-review-graph-backend.ts",
+      "tests/graph/fixtures/cr-graph/semantic_search_nodes_tool.json",
+      "tests/graph/fixtures/cr-graph/get_impact_radius_tool.json",
+      "tests/graph/fixtures/cr-graph/get_review_context_tool.json",
+      "tests/graph/fixtures/cr-graph/get_architecture_overview_tool.json",
+      "tests/graph/fixtures/cr-graph/detect_changes_tool.json",
+      "tests/graph/fixtures/cr-graph/_args.json",
+      "src/graph/backends/tokensave-backend.ts",
+      "src/graph/client.ts",
+      "src/graph/types.ts"
+    ],
+    "keyReference": "`git show 6ed3f77~1:src/graph/client.ts` = the ORIGINAL cr-graph narrows (semantic_search_nodes/get_impact_radius/etc.) — a strong prior, but ALWAYS validate against the ACTUAL committed fixtures (shapes evolved since then)."
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-5.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run", "testScoped": "npx vitest run tests/graph/" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, ESM .js imports, import type, no any, no sync fs, conventional commits. Never main. Baseline entering this sprint: 5038 passed / 2 skipped / 0 failures (default PATH). Commit BEFORE final response. Do NOT invent fixtures — narrows must consume the committed Sprint-4 captures; if a needed shape is missing, capture it live (cr-graph at /Users/bober4ik/Library/Python/3.12/bin/code-review-graph) and note it, never fabricate.",
+  "evaluatorFeedback": null
+}

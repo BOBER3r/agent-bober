@@ -1,0 +1,18 @@
+{
+  "entryId": "evaluations-eval-sprint-spec-20260628-telegram-frontend-7-1",
+  "channel": "evaluations",
+  "provenance": {
+    "kind": "file",
+    "path": ".bober/eval-results/eval-sprint-spec-20260628-telegram-frontend-7-1.json"
+  },
+  "value": {
+    "id": "eval-sprint-spec-20260628-telegram-frontend-7-1",
+    "seq": 0,
+    "contractId": "sprint-spec-20260628-telegram-frontend-7",
+    "sprintNumber": 7,
+    "iteration": 1,
+    "verdict": "pass",
+    "summary": "Sprint 7 (FINAL) passes all 6 required criteria. Build/typecheck 0; suite 3686 green (+8). renderFleetView groups by FactRecord.subject (one section/agent: label+summary+round+confidence+count); header+section round from bundle.rounds (FactRecord has no round field); empty/null reader → graceful 'no recent fleet run' (no throw); over-long value truncated to one line + routed via sendSafe (verbatim never reaches transport); non-whitelisted /fleet denied with id-echo + injected reader NEVER called; shared renderFleetView feeds BOTH /fleet and streamFleetView. TYPE-ONLY imports verified: compiled dist/telegram/fleet-view.js has ZERO runtime coupling to fleet/synthesis or better-sqlite3 (erased at compile). package.json unchanged; diff confined to src/telegram/.",
+    "evalId": "eval-sprint-spec-20260628-telegram-frontend-7-1"
+  }
+}

@@ -7,19 +7,34 @@
  */
 
 /**
+ * The 9 pipeline decision points, as data.
+ *
+ * The array is the single source of truth and {@link CheckpointId} is derived from it, so
+ * a consumer that must VALIDATE an id read from a topology artifact (the PGE graph
+ * runtime does) checks membership here instead of spelling a tenth id of its own.
+ */
+export const CHECKPOINT_IDS = [
+  "post-research",
+  "post-plan",
+  "post-sprint-contract",
+  "pre-curator",
+  "pre-generator",
+  "pre-evaluator",
+  "pre-code-reviewer",
+  "post-sprint",
+  "end-of-pipeline",
+] as const;
+
+/**
  * One of the 9 pipeline decision points. Sprints 8-14 may add overrides per id;
  * the registry resolves an id → mechanism.
  */
-export type CheckpointId =
-  | "post-research"
-  | "post-plan"
-  | "post-sprint-contract"
-  | "pre-curator"
-  | "pre-generator"
-  | "pre-evaluator"
-  | "pre-code-reviewer"
-  | "post-sprint"
-  | "end-of-pipeline";
+export type CheckpointId = (typeof CHECKPOINT_IDS)[number];
+
+/** True when `value` is one of the nine documented checkpoint ids. */
+export function isCheckpointId(value: string): value is CheckpointId {
+  return (CHECKPOINT_IDS as readonly string[]).includes(value);
+}
 
 /**
  * Opaque artifact passed to a mechanism. The shape varies per CheckpointId.

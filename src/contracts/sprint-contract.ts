@@ -48,6 +48,75 @@ export const ContractStatusSchema = z.enum([
 ]);
 export type ContractStatus = z.infer<typeof ContractStatusSchema>;
 
+// ── Terminal status ────────────────────────────────────────────────
+
+/**
+ * Statuses meaning a sprint settled SUCCESSFULLY — you do not need to redo it.
+ * This is the "is this sprint done and good" reading. It is what
+ * `resume-cursor.ts` used to spell out as `status === "passed" || status ===
+ * "completed"` inline, and what the five contract-terminal readers mean by
+ * "completed": mcp/tools/sprint.ts, mcp/tools/eval.ts, cli/commands/sprint.ts,
+ * cli/commands/eval.ts (all build a `completedContracts` list fed into a
+ * handoff's `sprintHistory`), and state/history.ts's "Passed" row in
+ * `.bober/progress.md`.
+ *
+ * Deliberately EXCLUDES "failed": a failed sprint has stopped (see
+ * TERMINAL_CONTRACT_STATUSES below) but it is not something a resumed run
+ * should skip over, and state/history.ts counts it in a SEPARATE "Failed"
+ * row — folding it in here would double-count every failed sprint in
+ * progress.md.
+ */
+export const SETTLED_CONTRACT_STATUSES: ReadonlySet<ContractStatus> = new Set([
+  "passed",
+  "completed",
+]);
+
+/**
+ * Statuses meaning a sprint has STOPPED — success or not. This is the
+ * "is this sprint over" reading `updateContractStatus` used to spell out
+ * inline (below) to decide whether to stamp `completedAt`: a sprint that
+ * failed is just as over as one that passed.
+ *
+ * Built ON TOP of SETTLED_CONTRACT_STATUSES (adds "failed") rather than as an
+ * independent list, so the two sets cannot silently diverge — there is
+ * exactly one place, this file, where the vocabulary is defined.
+ */
+export const TERMINAL_CONTRACT_STATUSES: ReadonlySet<ContractStatus> = new Set([
+  ...SETTLED_CONTRACT_STATUSES,
+  "failed",
+]);
+
+/**
+ * A sprint you do not need to redo: it settled successfully.
+ *
+ * Use this for "successful sprint history" reads — the shape
+ * `resume-cursor.ts:22` used to compute independently, and what the five
+ * contract-terminal readers (mcp/tools/sprint.ts, mcp/tools/eval.ts,
+ * cli/commands/sprint.ts, cli/commands/eval.ts, and state/history.ts's
+ * "Passed" counter) all mean when they build a completed/passed list.
+ *
+ * NOT the predicate for "is this sprint over" — a failed sprint is over too.
+ * Use isTerminalContractStatus for that.
+ */
+export function isSettledContractStatus(status: ContractStatus): boolean {
+  return SETTLED_CONTRACT_STATUSES.has(status);
+}
+
+/**
+ * A sprint that has stopped — success or not.
+ *
+ * Use this for "is this sprint over" reads, e.g. deciding whether to stamp a
+ * completion timestamp. This is what `updateContractStatus` below uses.
+ *
+ * NOT the predicate for "is this sprint done and good" — state/history.ts
+ * counts "failed" in a separate row from "passed"/"completed", and folding
+ * it into a single successful-history filter would double-count it. Use
+ * isSettledContractStatus for that reading.
+ */
+export function isTerminalContractStatus(status: ContractStatus): boolean {
+  return TERMINAL_CONTRACT_STATUSES.has(status);
+}
+
 /**
  * Strict enum of verification methods the evaluator can actually execute.
  * Free-form strings here cause the evaluator to silently skip checks.
@@ -124,6 +193,25 @@ export const SprintContractSchema = z.object({
   iterationHistory: z.array(z.unknown()).default([]),
   lastEvalId: z.string().nullable().optional(),
   evalResults: z.array(z.unknown()).optional(),
+  /**
+   * ── `version` is the ordering discriminator, not decoration ──
+   *
+   * Read by `versionRank` (`src/pge/registry/reducers.ts:366-393`), the shared rank
+   * function `appendById` (the `sprintContracts` channel, since sprint 4 of
+   * spec-20260812-terminal-vocabulary) and `replaceIfNewer` both resolve a conflict
+   * through: a missing/non-finite `version` ranks `0`, so any settled contract with
+   * `version >= 1` outranks a seeded one without a fight over `updatedAt` (which the
+   * golden harness's fixed clock can make byte-identical between seeded and settled
+   * copies, making it useless as a tiebreak on its own).
+   *
+   * DELIBERATELY `.optional()`, never `.default(...)`. A default would
+   * materialise `version` on the SEEDED copy too (every parse, including
+   * `OverallStateSchema.parse` at every commit boundary), collapsing seeded
+   * and settled to the same rank and destroying the exact ordering this
+   * field exists to provide. All ~250 committed contracts predate this
+   * field and must stay valid with it absent.
+   */
+  version: z.number().int().min(0).optional(),
 
   // Timestamps
   createdAt: z.string().datetime({ offset: true }).optional(),
@@ -213,12 +301,7 @@ export function updateContractStatus(
     updates.startedAt = now;
   }
 
-  if (
-    (status === "passed" ||
-      status === "failed" ||
-      status === "completed") &&
-    !contract.completedAt
-  ) {
+  if (isTerminalContractStatus(status) && !contract.completedAt) {
     updates.completedAt = now;
   }
 

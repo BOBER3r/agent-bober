@@ -1,0 +1,12 @@
+{
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-1",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["7af1119 - bober(sprint-1): add settled/terminal contract-status predicates", "f07d3f3 - bober(sprint-1): migrate the five contract-terminal readers to the settled predicate; pin the corpus bug closed"],
+  "designDecision": "TWO predicates over one shared base: isSettledContractStatus (passed|completed) for the five readers + resume-cursor; isTerminalContractStatus (passed|failed|completed) for updateContractStatus only. TERMINAL derived from SETTLED + 'failed' so they cannot diverge. history.ts 'Failed' counter left as a literal deliberately.",
+  "scopeDecision": "Eight further contract-status literal sites (pipeline.ts:1052, flusher.ts:76, pge/runtime/interpreter.ts:728, pge/runtime/commit.ts:531, pge/nodes/sprint-curate.ts:254, sprint-generate.ts:133, documenter.ts:83, sprint-review.ts:203) ALLOWLISTED with per-entry reasons rather than migrated, to keep the sprint's promise of no writer changes.",
+  "flaggedForPlanner": "pge/runtime/interpreter.ts:728 is a live instance of the same bug class (PGE writes 'completed', never 'passed', so that verdict counter undercounts for graph runs).",
+  "testsAdded": ["src/contracts/status-vocabulary.invariant.test.ts", "src/mcp/tools/sprint-corpus.test.ts", "src/contracts/sprint-contract.test.ts (extended)"],
+  "knownFlake": "run-manager.test.ts ENOTEMPTY tmpdir cleanup race — reproduced once in a full-suite run, passed 40/40 in isolation and on a second full-suite run. run-manager.ts untouched by this sprint.",
+  "blockers": []
+}

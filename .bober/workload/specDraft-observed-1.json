@@ -1,0 +1,38 @@
+{
+  "entryId": "specDraft-observed-1",
+  "channel": "specDraft",
+  "provenance": {
+    "kind": "observed",
+    "source": "node \"plan_draft\" writing \"specDraft\" during a wholeGraphBindings run of the coding graph (run run-workload-observe)"
+  },
+  "value": {
+    "specId": "spec-20260805-pge-conformance",
+    "version": 1,
+    "title": "PGE conformance fixture",
+    "description": "The single golden spec both engines are compared on.",
+    "status": "ready",
+    "mode": "greenfield",
+    "features": [
+      {
+        "featureId": "feat-1",
+        "title": "Wire the region",
+        "description": "Compile and run the plan region end to end.",
+        "priority": "must-have",
+        "acceptanceCriteria": [
+          "the region compiles",
+          "the region runs"
+        ],
+        "dependencies": []
+      }
+    ],
+    "assumptions": [],
+    "outOfScope": [],
+    "clarificationQuestions": [],
+    "resolvedClarifications": [],
+    "techStack": [],
+    "nonFunctionalRequirements": [],
+    "constraints": [],
+    "createdAt": "2026-08-05T00:00:00.000Z",
+    "updatedAt": "2026-08-05T00:00:00.000Z"
+  }
+}
