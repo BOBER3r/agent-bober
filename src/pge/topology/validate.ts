@@ -1091,7 +1091,7 @@ function collectNodePolicyRules(
         out.push(
           diag(
             "InterruptInsideFanOut",
-            `Node "${node.id}" raises a human-in-the-loop interrupt but is reachable only through a fan-out edge.`,
+            `Node "${node.id}" raises a human-in-the-loop interrupt but is reachable only through a fan-out edge, so it runs once per concurrently-dispatched branch; the runtime holds one pending interrupt and one grant per checkpoint scope, so a second branch's approval evicts the first and the run cannot converge (arch-20260814-pge-full-convergence-adr-1). Move the interrupt to a node reachable only after the fan-out has joined.`,
             [node.id],
             [],
             ["nodes", i, "hitl"],

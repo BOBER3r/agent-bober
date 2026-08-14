@@ -1340,8 +1340,22 @@ them this spec's to do (`nonGoals`):**
    `InterruptInsideFanOut` (`src/pge/topology/validate.ts:1089-1099`) is a BLOCKING
    validation error (`severity: "error"`) by ADR-6
    (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`) — they cannot be
-   declared there at any sprint's discretion, only by revisiting the ADR. A correction folded
-   in with this record: the committed artifact declares **two** HITL checkpoint ids, not
+   declared there. **`spec-20260814-pge-full-convergence` sprint 1 revisited that ADR**
+   (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) and concluded the
+   fan-out clause STANDS, now for a runtime-grounded reason ADR-6 itself never gave:
+   `Checkpoint.interrupt` holds one pending interrupt (`checkpointer.ts:247`), `grantScope`
+   carries no branch key so a sibling branch's arrival evicts a prior branch's grant
+   (`interrupt.ts:268,371-375,485`), and `resumeMessageId` collapses every branch's decision
+   onto one message row (`interrupt.ts:332`, consumed at `nodes/plan.ts:142-144`) — a defect
+   that is concurrency-dependent (`frontier.ts:13,29-32`), colliding with this graph's
+   byte-identical-at-cap-1-and-8 determinism criterion. Only the sixth undeclared checkpoint
+   id, which sits outside the region, remains open to a later sprint; the other five are
+   RECOMMENDED FOR PERMANENT ACCEPTANCE for that runtime-grounded reason, not merely an
+   unrevisited rule. The revisit also corrected ADR-6's own record: its Consequences claimed
+   `hitl_commit` "sits at the fan-in barrier" — false for the shipped artifact, whose only
+   in-region barrier gate, `reduce_sprints`, could not host a HITL node under ADR-6's own
+   rule either. A further correction folded in with this record: the committed artifact
+   declares **two** HITL checkpoint ids, not
    one — `hitl_commit -> end-of-pipeline` and `plan_clarify -> post-plan`
    (`src/pge/topology/coding.graph.ts:483`) — but only `end-of-pipeline` is ever *evaluated*
    on the golden fixture, because a settled plan takes `e-plan-ok`, never the

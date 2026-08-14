@@ -954,6 +954,15 @@ function assertFlipPrerequisitesStated(doc: string): void {
     "the permanent-acceptance disposition for history/audits must be stated",
   ).toContain("permanent acceptance");
   expect(doc, "audits' ADR-6 fan-out ground must be named").toContain("InterruptInsideFanOut");
+  // sc-1-3/sc-1-4 (spec-20260814-pge-full-convergence sprint 1) — the ground is no longer
+  // merely "unrevisited": the ADR WAS revisited and concluded the rule stands for a
+  // runtime-grounded reason ADR-6 never gave. Both the citation and the reason must survive.
+  expect(doc, "the sprint-1 ADR revisit must be cited by id").toContain(
+    "arch-20260814-pge-full-convergence-adr-1",
+  );
+  expect(doc, "the runtime-grounded reason the revisit found must be named").toContain(
+    "Checkpoint.interrupt",
+  );
 
   // (b) Option B success semantics — the term of art, named as such, with its consequence.
   expect(doc, "Option B success semantics must be named").toContain("Option B");
@@ -1095,6 +1104,24 @@ describe("the document's changelog, disposition and stated limitations", () => {
 
   it("FAILS when the permanent-acceptance disposition for history/audits is edited out", () => {
     const gutted = shippedDoc.split("permanent acceptance").join("open work");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when the sprint-1 ADR revisit citation is edited out (sc-1-3/sc-1-4)", () => {
+    const gutted = shippedDoc
+      .split("arch-20260814-pge-full-convergence-adr-1")
+      .join("a prior decision");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when the runtime-grounded reason for audits' non-convergence is edited out", () => {
+    const gutted = shippedDoc.split("Checkpoint.interrupt").join("the checkpoint state");
     expect(gutted).not.toBe(shippedDoc);
     expect(() => {
       assertFlipPrerequisitesStated(gutted);

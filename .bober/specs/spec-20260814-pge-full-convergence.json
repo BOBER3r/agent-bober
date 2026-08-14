@@ -82,10 +82,10 @@
       "priority": "must-have",
       "estimatedComplexity": "high",
       "dependencies": [],
-      "description": "Revisit ADR-6 so human-in-the-loop checkpoints can be declared on nodes reachable only through a fan-out edge, with defined semantics for concurrent branches.",
+      "description": "Revisit ADR-6 so human-in-the-loop checkpoints can be declared on nodes reachable only through a fan-out edge, with defined semantics for concurrent branches. CLOSED at sprint 1 (arch-20260814-pge-full-convergence-adr-1): the revisit concluded the rule stands. A per-branch interrupt inside the region is unsound with the runtime as it stands today, for three independent reasons distinct from ADR-6's own restart-from-top hazard — Checkpoint.interrupt holds one pending interrupt, grantScope/clearScope are branch-blind so a sibling branch evicts a prior branch's grant, and resumeMessageId collapses every branch's decision onto one message row. The rule was not weakened to make feat-3 easier.",
       "acceptanceCriteria": [
-        "AC1: When a node inside the sprint fan-out region declares a hitl checkpoint, the topology validator either accepts it under stated semantics or reports a NEW diagnostic explaining precisely why it cannot.",
-        "AC2: The decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, and the validator's behaviour matches the ADR."
+        "AC1: When a node inside the sprint fan-out region declares a hitl checkpoint, the topology validator either accepts it under stated semantics or reports the existing InterruptInsideFanOut diagnostic carrying the reason it cannot — sprint 1 concluded the latter; the diagnostic's code and severity are unchanged, only its message.",
+        "AC2: The decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, and the validator's behaviour matches the ADR. MET at sprint 1: arch-20260814-pge-full-convergence-adr-1."
       ]
     },
     {
@@ -109,10 +109,10 @@
         "feat-1",
         "feat-2"
       ],
-      "description": "Declare the remaining checkpoint ids so a graph run records the same audit trail as the imperative pipeline.",
+      "description": "Declare the remaining checkpoint ids so a graph run records the same audit trail as the imperative pipeline. AMENDED at sprint 1 (arch-20260814-pge-full-convergence-adr-1): 5 of the 6 undeclared checkpoint ids (pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint) sit inside the sprint fan-out region, where InterruptInsideFanOut remains a blocking validation error after the sprint-1 ADR revisit concluded a per-branch fan-out interrupt is unsound with the runtime as it stands (one Checkpoint.interrupt slot, a branch-blind grantScope/clearScope, a branch-blind resumeMessageId). Only the sixth, out-of-region id can be declared. 'audits' therefore cannot converge to equivalence and is RECOMMENDED FOR PERMANENT ACCEPTANCE, the same disposition as 'history' (docs/pge-graph.md, 'Engine migration disposition').",
       "acceptanceCriteria": [
-        "AC1: A real conformance run records the same set of checkpoint ids from both engines.",
-        "AC2: 'audits' no longer appears in the divergence set, and the pin fails if it reappears."
+        "AC1 (AMENDED sprint 1): A real conformance run records the one additional checkpoint id that sits outside the sprint fan-out region; the five in-region ids stay undeclared per arch-20260814-pge-full-convergence-adr-1 — a stated limitation, not a defect.",
+        "AC2 (AMENDED sprint 1): 'audits' is RECOMMENDED FOR PERMANENT ACCEPTANCE alongside 'history', per arch-20260814-pge-full-convergence-adr-1; the divergence pin must not drop 'audits' silently without a corresponding ADR revisit."
       ]
     },
     {

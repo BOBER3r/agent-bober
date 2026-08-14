@@ -1,4 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { TopologySpecSchema } from "../../contracts/topology.js";
 import type { TopologySpec } from "../../contracts/topology.js";
@@ -778,5 +779,143 @@ describe("ModelTierMismatch", () => {
     const report = validateTopology(await loadFixture("ModelTierMismatch"));
     expect(errorCodes(report)).toEqual(["ModelTierMismatch"]);
     expect(report.diagnostics[0].nodeIds).toEqual(["plan_draft"]);
+  });
+});
+
+// ── InterruptInsideFanOut — the fan-out checkpoint decision ─────────
+//
+// arch-20260814-pge-full-convergence-adr-1 revisited ADR-6's fan-out clause (sc-1-1/
+// sc-1-2) and concluded the rule STANDS: a HITL node reachable only through a fan-out
+// edge re-executes once per concurrently-dispatched branch, and the runtime has no
+// per-branch interrupt slot (`Checkpoint.interrupt` is one `InterruptRecord | null`),
+// no per-branch grant scope (`grantScope`/`clearScope` are branch-blind) and no
+// per-branch decision message row (`resumeMessageId` collapses onto one row). The two
+// tests below pin both directions of that conclusion (sc-1-4): the shape the ADR still
+// forbids stays reported, with the reason named, and the shape the ADR affirms as sound
+// — a HITL placed on the join OUTSIDE the region — keeps validating clean. There was no
+// dedicated test for this rule before this sprint; the only prior coverage was the
+// fixture-driven one-code-per-fixture table above.
+
+describe("InterruptInsideFanOut", () => {
+  it("still rejects a HITL node reachable only through a fan-out edge, and now names the reason", async () => {
+    const raw = await mutatedValid((spec) => {
+      const node = nodeOf(spec, "sprint_generate");
+      node.hitl = { checkpointId: "sprint_hitl", onReject: "END" };
+    });
+    const report = validateTopology(raw);
+    expect(errorCodes(report)).toEqual(["InterruptInsideFanOut"]);
+    const diagnostic = report.diagnostics.find((d) => d.code === "InterruptInsideFanOut");
+    expect(diagnostic?.nodeIds).toEqual(["sprint_generate"]);
+    // The reason ADR-6 never gave: one grant per scope, so a sibling branch evicts it.
+    expect(diagnostic?.message).toContain("concurrently-dispatched branch");
+    expect(diagnostic?.message).toContain("evicts the first");
+    expect(diagnostic?.message).toContain("arch-20260814-pge-full-convergence-adr-1");
+  });
+
+  it("still validates a HITL node placed on the join OUTSIDE the region — the semantics the ADR affirms as sound", async () => {
+    // `supervisor` is the fixture's single-execution join for the fan-out (the node the
+    // interpreter's joinBuffer target reaches once, with `branchKey: null`) — the shape
+    // arch-20260814-pge-full-convergence-adr-1 names as sound (its Option (a)). This was
+    // already legal under ADR-6; the pin exists so a FUTURE validator change cannot
+    // silently narrow the rule to also catch this shape without breaking a test.
+    const raw = await mutatedValid((spec) => {
+      const node = nodeOf(spec, "supervisor");
+      node.hitl = { checkpointId: "post-plan", onReject: "END" };
+    });
+    const report = validateTopology(raw);
+    expect(errorCodes(report)).toEqual([]);
+    expect(report.ok).toBe(true);
+  });
+});
+
+// ── The ADR itself (sc-1-2) ──────────────────────────────────────────
+//
+// No test in this repo read a real `.bober/architecture/*.md` file before this sprint.
+// Follows the same read-the-real-file-plus-assert-function-plus-gutted-negative-control
+// pattern `docs.test.ts` uses for `docs/pge-graph.md`, so the ADR's claims cannot
+// silently diverge from what the file actually says.
+
+function assertAdrRecordsFanOutDecision(adr: string): void {
+  expect(adr, "must amend arch-20260805-pge-graph-engineering-adr-6").toContain(
+    "arch-20260805-pge-graph-engineering-adr-6",
+  );
+  expect(adr, "must govern InterruptInsideFanOut").toContain("InterruptInsideFanOut");
+  expect(adr, "must state the rule stands").toMatch(/remains a blocking validation error/i);
+  expect(adr, "must cite the single-interrupt-slot blocker").toContain("Checkpoint.interrupt");
+  expect(adr, "must cite the grant-scope-eviction blocker").toContain("grantScope");
+  expect(adr, "must cite the decision-message-collapse blocker").toContain("resumeMessageId");
+  expect(adr, "must correct ADR-6's fan-in-barrier claim about reduce_sprints").toContain(
+    "reduce_sprints",
+  );
+  expect(adr, "must record the audits consequence").toContain("audits");
+  for (const field of [
+    "**Decision:**",
+    "**Context:**",
+    "**Options Considered:**",
+    "**Rationale:**",
+    "**Consequences:**",
+    "**Risk:**",
+  ]) {
+    expect(adr, `ADR must carry the ${field} field`).toContain(field);
+  }
+}
+
+describe("the ADR governing InterruptInsideFanOut (arch-20260814-pge-full-convergence-adr-1)", () => {
+  const ADR_PATH = fileURLToPath(
+    new URL(
+      "../../../.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md",
+      import.meta.url,
+    ),
+  );
+  let adr = "";
+
+  beforeAll(async () => {
+    adr = await readFile(ADR_PATH, "utf8");
+  });
+
+  it("exists and records the amendment, the runtime blockers and the audits consequence", () => {
+    assertAdrRecordsFanOutDecision(adr);
+  });
+
+  it("caps at 50 lines, matching this repo's ADR convention", () => {
+    expect(adr.split("\n").length).toBeLessThanOrEqual(50);
+  });
+
+  // ── NEGATIVE CONTROLS ──
+
+  it("FAILS when the amendment reference to ADR-6 is edited out", () => {
+    const gutted = adr.split("arch-20260805-pge-graph-engineering-adr-6").join("a prior decision");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when the single-interrupt-slot blocker is edited out", () => {
+    const gutted = adr.split("Checkpoint.interrupt").join("the checkpoint state");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when the grant-scope-eviction blocker is edited out", () => {
+    const gutted = adr.split("grantScope").join("the scope map");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when the decision-message-collapse blocker is edited out", () => {
+    const gutted = adr.split("resumeMessageId").join("the message id helper");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when the fan-in-barrier correction is edited out", () => {
+    const gutted = adr.split("reduce_sprints").join("the barrier node");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
+  });
+
+  it("FAILS when a required ADR field is edited out", () => {
+    const gutted = adr.replace("**Risk:**", "Risk:");
+    expect(gutted).not.toBe(adr);
+    expect(() => assertAdrRecordsFanOutDecision(gutted)).toThrow();
   });
 });

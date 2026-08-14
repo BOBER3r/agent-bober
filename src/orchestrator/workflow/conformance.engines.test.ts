@@ -299,6 +299,12 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    be declared there AT ALL, not merely "this sprint may not edit them".
     //    RECOMMENDED FOR PERMANENT ACCEPTANCE for that reason —
     //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`.
+    //    `spec-20260814-pge-full-convergence` sprint 1 revisited ADR-6
+    //    (`.bober/architecture/arch-20260814-pge-full-convergence-adr-1.md`) and concluded
+    //    the fan-out clause STANDS: `Checkpoint.interrupt` holds one pending interrupt,
+    //    `grantScope`/`clearScope` are branch-blind so a sibling branch evicts a prior
+    //    branch's grant, and `resumeMessageId` collapses every branch's decision onto one
+    //    message row — a per-branch interrupt is unsound, not merely unrevisited.
     //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
     //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
     //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
