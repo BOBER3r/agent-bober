@@ -1111,7 +1111,7 @@ configures, and it is a MEASURED-basis function, never a hand-picked literal —
 | failures recorded | exactly one: `{nodeId: "commit", errorClass: "FailClosed", superstep: 232}` |
 | `state.spec` / `state.sprintContracts.length` at the boundary | non-null / **14** |
 | terminal node reached | `graceful_failure` — **explicitly NOT `finalize`** |
-| run status / verdict | `completed` / `failed` (the interpreter's OWN richer verdict; see below) |
+| run status / verdict | `completed` / `partial` (the interpreter's OWN richer verdict, see below — read `"failed"` here before sprint 7 of `spec-20260814-pge-full-convergence`; see [The evidence](#the-evidence) for the `verdictFrom` fix that moved it) |
 | what `PgeEngine.run` returned | `success: true` — still, by the Option-A decision — **plus**, as of sprint 5, `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: …}]`, so the refusal does now reach the returned `PipelineResult` even though `success` does not account for it (next paragraph) |
 
 Five consequences a reader should not have to derive:
@@ -1147,8 +1147,11 @@ Five consequences a reader should not have to derive:
   covered: its span ends `{ status: "interrupted", errorClass: "FailClosed" }`, never
   `"ok"`.
 - **The `commit` refusal now reaches the caller — `success` still does not account for it.**
-  `GraphRunResult.verdict` reads `"failed"` (it accounts for the `FailClosed`
-  `TaskFailure`), and `PgeEngine.run`'s returned `PipelineResult.success` is still `true`,
+  `GraphRunResult.verdict` reads `"partial"` (it accounts for the `FailClosed`
+  `TaskFailure`, but all 14 dispatched branches settled `"succeeded"` — read `"failed"` here
+  before sprint 7 of `spec-20260814-pge-full-convergence` fixed `verdictFrom`'s dead
+  `"passed"`-literal comparison; see [The evidence](#the-evidence)), and `PgeEngine.run`'s
+  returned `PipelineResult.success` is still `true`,
   still computed from the frozen `deriveRunSuccess` formula shared with the imperative
   engine — sprint-split based, and blind to a terminal-node failure that is not a sprint
   (Option A, spec-20260812-pge-real-workload-errors resolvedClarifications D3). What
@@ -1161,7 +1164,7 @@ Five consequences a reader should not have to derive:
   disposition](#engine-migration-disposition). The committed measurement carries both
   halves of the divergence in one file, on real-workload data:
   `failures: [{nodeId: "commit", errorClass: "FailClosed", superstep: 232}]` and
-  `verdict: "failed"` sitting next to `engineOutcome: {kind: "resolved", success: true}`; the
+  `verdict: "partial"` sitting next to `engineOutcome: {kind: "resolved", success: true}`; the
   returned `PipelineResult` now additionally carries
   `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: "..."}]`.
 - **And as of sprint 6, a person sees it.** An error channel nobody surfaces closes nothing,
@@ -1184,6 +1187,94 @@ Re-deriving the measurement is a deliberate act —
 committed file, and every other run of that test re-derives it and asserts the committed
 bytes are unchanged. The numbers above therefore go red the moment they stop being true, and
 the diff is the statement that they changed.
+
+### Every channel and every node this real run touches — sprint 10
+
+Everything above answers "does the run complete" and checks three of eleven channels
+(`messages`, `evaluations`, `refs`) against a STATIC corpus payload — real data, but not
+data from THIS run, and not every channel. Sprint 10 of `spec-20260814-pge-full-convergence`
+closes both gaps directly, in response to a carried finding from that spec's own sprint 5:
+`sprint_evaluate` (`src/pge/nodes/sprint-evaluate.ts`) now writes one `evaluations` entry
+carrying THREE independent copies of unbounded model text — `summary` (decorated, but
+containing the raw evaluator text), `evaluatorFeedback` (`result.summary`, raw) and
+`generatorNotes` (`generated.notes`, raw) — a tripling the node's own `bober:` comment names
+as a potential `StateBloatError` source once a real (non-stub) evaluator's free text is long
+enough. The corpus `evaluations` entries `corpusHeadroom` reads predate all three fields, so
+that check cannot see the risk. This section can, because it measures THIS run's own commit
+traffic instead.
+
+**`observedWrites`**: `real-workload.test.ts`'s `recordingCommitBoundary` wraps the real
+`CommitBoundary` the run drives and records, for every `ChannelUpdate` it sees, `byteSize`
+BEFORE the boundary's own accept/reject decision — the exact metric `commit.ts:388-400`
+compares against `maxInlineBytes`, repeated for all eleven declared channels rather than
+three:
+
+| channel | largest single write (bytes) | writes | declared cap | over cap? |
+| --- | --- | --- | --- | --- |
+| `branchStatus` | 108 | 28 | 4,096 | no |
+| `counters` | 70 | 47 | 4,096 | no |
+| `evaluations` | **368** | 43 | 4,096 | **no** |
+| `ledger` | 221 | 90 | 4,096 | no |
+| `messages` | 267 | 93 | 4,096 | no |
+| `refs` | 287 | 46 | 4,096 | no |
+| `spec` | 29,214 | 1 | 131,072 | no |
+| `specDraft` | 29,214 | 1 | 65,536 | no |
+| `sprintContracts` | 135,106 | 15 | 524,288 | no |
+| `testAnchors` | 22 | 14 | 4,096 | no |
+| `verdict` | 0 | **0** | 4,096 | n/a — never written this run |
+
+**The carried finding did not materialise on this measurement — reported as a fact, not
+engineered around.** `evaluations`' largest single write is 368 bytes against a 4,096-byte
+cap, comfortably under, even carrying all three copies the `bober:` comment names. Why:
+this run's collaborators are the shipped STUB set (`sharedAgents`,
+`src/pge/engine/__fixtures__/whole-graph.ts`) — `generator.notes` is the literal string
+`` `generated ${contractId}` `` and the stub evaluator's `summary` is the literal
+`"all criteria met"` — so even three copies of a few dozen bytes stay two orders of
+magnitude under the cap. **This measurement proves the STUB corpus does not breach; it does
+NOT prove a real evaluator's longer free-text summary and feedback would not.** The `bober:`
+comment's own upgrade path — stop decorating `summary` for the passing case, where it and
+`evaluatorFeedback` would then be identical — remains unexercised and is not this sprint's
+territory (tuning is an explicit nonGoal). Per this sprint's own stopCondition, had any row
+above come back `wouldReject: true`, the obligation was to report the breach here, not raise
+the cap that caught it — none did.
+
+`verdict`'s row reads `writeCount: 0` rather than a false "measured and found small": its
+sole writer is `finalize` (`nodes/root.ts`'s own doc comment), and `finalize` is one of the
+eight nodes the next table names as not executed on this run — so `verdict`'s 4,096-byte cap
+was exercised zero times by this measurement, a fact distinct from headroom.
+
+**`nodeCoverage`**: this run's own spans, filtered to `status: "ok"` — the same rule
+`src/pge/golden/coverage.test.ts`'s `executedNodeIdsFromSpans` applies to the golden
+dataset — against all 44 declared nodes. **36 of 44 execute; 8 do not**, and this is
+DELIBERATELY not the golden dataset's `NEVER_EXECUTED` (`context_compact`, `synthesize`
+only, [How much of the graph the committed cases
+execute](#how-much-of-the-graph-the-committed-cases-execute)): a golden dataset is many
+cases engineered to reach every region, and one real run is one path through the graph, so
+it misses every node whose triggering condition this workload's real spec and stub
+collaborators never produce, in addition to the two the golden dataset itself cannot reach
+by any input:
+
+| node | reached on this run? | why not |
+| --- | --- | --- |
+| `commit` | reached, span `"interrupted"` | FAIL_CLOSED refusal under the autopilot `noop` mechanism — no durable approval recorded for checkpoint `end-of-pipeline`. The golden dataset's `replay-full-run-commit-approved` case proves `commit` DOES complete `"ok"` under `goldenApprovedConfig()`; this measurement runs the plain `conformanceConfig()`, so this is a fact about this measurement's config, not a structural block. |
+| `finalize` | not reached | sole inbound edge is `commit -> finalize` (normal); `commit` never resolves `"ok"` on this run's config, so the edge is never crossed. Same root cause as `commit`, not independent. |
+| `critique` | not reached | reachable only via `route_after_eval`'s `rework` label, selected when `evaluate_global`'s verdict is not a pass; this workload's stub evaluator passes every one of the 14 branches on its first attempt (`branchStatus[*].attempts === 1`, asserted above), so `route_after_eval` never selects `rework`. The golden dataset's `replay-corrected-sprint-still-grades-fail` case proves `critique` DOES run given a branch `gradeContracts` grades `"fail"`. |
+| `rework_route` | not reached | sole inbound edge is `critique -> rework_route` (normal); not reached for the identical reason `critique` is not. |
+| `sprint_correct` | not reached | reachable via `gate_syntax`/`gate_anchor_regression`'s `sprint-correct` label or `sprint_route`'s `retry` label — all three require a generated sprint to fail a check or need another attempt. This workload's stub generator and evaluator both succeed on the first attempt for all 14 contracts, so no correction is ever triggered. |
+| `plan_clarify` | not reached | reachable only via `plan_clarify_check`'s `clarify` label, selected when the planner's output needs clarification. This workload's planner stub resolves `{kind: "ready", spec}` directly with the real committed spec, so clarification is never needed. |
+| `context_compact` | not reached — **structural** | same block the golden dataset records: the shipped supervisor has no code path that selects the `compact` label at all ([the golden coverage table](#how-much-of-the-graph-the-committed-cases-execute)). Independent of this workload's inputs. |
+| `synthesize` | not reached — **structural** | same block the golden dataset records: reachable only behind a second `route_after_eval` invocation that the graph's own routing order makes impossible ([the golden coverage table](#how-much-of-the-graph-the-committed-cases-execute)). Independent of this workload's inputs. |
+
+Six of the eight — everything except `context_compact` and `synthesize` — are proven
+REACHABLE elsewhere in this repository (a named golden case for each), so this table is
+evidence about what ONE real spec and ONE stub-driven run happens to exercise, not a second,
+independent claim of unreachability. Only `context_compact` and `synthesize` carry that
+stronger claim, and this table does not re-derive it — it cites the golden dataset's own
+proof.
+
+Both `observedWrites` and `nodeCoverage` are committed alongside the fields sprints 1–4
+established, in the same `.bober/topology/measurements/real-workload.json`, gated by the
+same byte-identical re-derivation `real-workload.test.ts` already enforced.
 
 ### A committed workload corpus
 

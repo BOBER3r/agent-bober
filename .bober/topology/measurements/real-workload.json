@@ -64,6 +64,125 @@
       "wouldReject": false
     }
   },
+  "observedWrites": {
+    "branchStatus": {
+      "maxBytes": 108,
+      "writeCount": 28,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "counters": {
+      "maxBytes": 70,
+      "writeCount": 47,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "evaluations": {
+      "maxBytes": 368,
+      "writeCount": 43,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "ledger": {
+      "maxBytes": 221,
+      "writeCount": 90,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "messages": {
+      "maxBytes": 267,
+      "writeCount": 93,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "refs": {
+      "maxBytes": 287,
+      "writeCount": 46,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "spec": {
+      "maxBytes": 29214,
+      "writeCount": 1,
+      "declaredLimit": 131072,
+      "wouldReject": false
+    },
+    "specDraft": {
+      "maxBytes": 29214,
+      "writeCount": 1,
+      "declaredLimit": 65536,
+      "wouldReject": false
+    },
+    "sprintContracts": {
+      "maxBytes": 135106,
+      "writeCount": 15,
+      "declaredLimit": 524288,
+      "wouldReject": false
+    },
+    "testAnchors": {
+      "maxBytes": 22,
+      "writeCount": 14,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    },
+    "verdict": {
+      "maxBytes": 0,
+      "writeCount": 0,
+      "declaredLimit": 4096,
+      "wouldReject": false
+    }
+  },
+  "nodeCoverage": {
+    "totalNodes": 44,
+    "executedNodeIds": [
+      "documenter",
+      "evaluate_global",
+      "fanout_sprints",
+      "gate_anchor_regression",
+      "gate_eval_in",
+      "gate_mock_coverage",
+      "gate_plan_in",
+      "gate_plan_out",
+      "gate_research_in",
+      "gate_research_out",
+      "gate_sprint_in",
+      "gate_sprint_out",
+      "gate_syntax",
+      "graceful_failure",
+      "hitl_commit",
+      "plan_clarify_check",
+      "plan_draft",
+      "plan_materialize",
+      "reduce_sprints",
+      "research_body",
+      "research_collect",
+      "research_critique",
+      "research_explore",
+      "research_reflect",
+      "research_route",
+      "route_after_eval",
+      "sprint_body",
+      "sprint_curate_explain",
+      "sprint_curate_mocks",
+      "sprint_evaluate",
+      "sprint_exit",
+      "sprint_generate",
+      "sprint_review",
+      "sprint_route",
+      "sprint_security",
+      "supervisor"
+    ],
+    "neverExecutedNodeIds": [
+      "commit",
+      "context_compact",
+      "critique",
+      "finalize",
+      "plan_clarify",
+      "rework_route",
+      "sprint_correct",
+      "synthesize"
+    ]
+  },
   "contractCountScaling": [
     {
       "contractCount": 1,

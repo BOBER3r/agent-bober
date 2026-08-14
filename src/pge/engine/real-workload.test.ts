@@ -57,6 +57,38 @@
 // :420), never through a private reimplementation of `run()`. Precedent that the seam is
 // real and already exercised: `pge-engine.test.ts:319-338`.
 //
+// ── Sprint 10 of spec-20260814-pge-full-convergence ──
+//
+// Every prior sprint that touched this file measured the fixture-stubbed run's SHAPE
+// (rejections, terminal node, superstep cost) or a STATIC corpus payload
+// (`corpusHeadroom`, three of eleven channels). Neither answers whether THIS run's own
+// writes — after sprint 5 (of THIS spec) tripled what `sprint_evaluate` puts in one
+// `evaluations` entry, and sprint 8 taught `critique`/`rework_route` to execute — still fit
+// every channel's declared cap, or which of the 44 declared nodes this SPECIFIC real
+// workload actually drives. This sprint's own tests:
+//
+//   sc-10-1  restated: a real PgeEngine run completes against the real, committed 29 KB
+//            PlanSpec — the sprint-4 assertions above already prove this; unchanged here.
+//   sc-10-2  `observedWrites`: every one of the eleven declared channels, from THIS run's
+//            own commit-boundary traffic (`recordingCommitBoundary` below), not a static
+//            corpus proxy — the largest single `ChannelUpdate.value` this run ever asked
+//            the boundary to commit, per channel, compared against that channel's own
+//            declared cap. Directly answers the carried finding: `evaluations` now carries
+//            three independent copies of unbounded text per entry
+//            (`nodes/sprint-evaluate.ts`'s `bober:` comment) and does NOT breach on this
+//            stub-driven corpus — see the generator's completion notes for the measured
+//            bytes and why that is not a guarantee for a real evaluator's longer output.
+//   sc-10-3  `nodeCoverage`: this run's OWN executed-node set, read off its OWN spans with
+//            the same `status: "ok"` rule `src/pge/golden/coverage.test.ts` uses, against
+//            ALL 44 declared nodes — not the golden dataset's `NEVER_EXECUTED` (two
+//            structural blocks only). One real run takes one path, so it misses every node
+//            whose triggering condition this workload's inputs and stub collaborators never
+//            produce; each is named, not averaged away.
+//   sc-10-4  the extended measurement — `observedWrites` and `nodeCoverage` alongside the
+//            fields sprints 1–4 already committed — is regenerated and committed as
+//            evidence, through the SAME `MEASURE_REAL_WORKLOAD=1` byte-identical-compare
+//            mechanism those sprints established.
+//
 // Regenerate the committed measurement with:
 //   MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 
@@ -71,6 +103,7 @@ import { GoldenBindingInvokedError } from "../golden/executor.js";
 import { WORKLOAD_DIR, capForCorpusMax, loadWorkloadCorpus, maxBytesPerChannel } from "../golden/workload.js";
 import type { CodingBindings } from "../registry/index.js";
 import { byteSize, createFixedClock } from "../runtime/commit.js";
+import type { ChannelUpdate, CommitBoundary } from "../runtime/commit.js";
 import { DEFAULT_MAX_SUPERSTEPS, createGraphInterpreter } from "../runtime/interpreter.js";
 import type { GraphInterpreter, GraphRunResult } from "../runtime/interpreter.js";
 import { withNetworkDisabled } from "../runtime/replay.js";
@@ -178,6 +211,46 @@ interface ContractCountScalingEntry {
   readonly status: GraphRunResult["status"];
 }
 
+/**
+ * sc-10-2: what THIS run actually wrote to one channel, over its WHOLE lifetime — not the
+ * committed corpus's static payloads (`CorpusHeadroom` above), and not the final merged
+ * channel value (which unions every write and would overstate a single update's cost).
+ * `maxBytes` is the largest SINGLE `ChannelUpdate.value` the commit boundary ever measured
+ * for this channel during this run, read via `byteSize` — the exact metric
+ * `commit.ts:388-400` compares against `maxInlineBytes` before a reducer ever sees the
+ * value — so `wouldReject` here is not inferred, it is the literal boundary comparison,
+ * repeated for every channel rather than the three `CORPUS_HEADROOM_CHANNELS` cover.
+ *
+ * `writeCount` absent (0) means the channel was never written by ANY node this run
+ * reached — itself a fact worth recording separately from "measured and found small": a
+ * channel with `writeCount: 0` had its cap exercised zero times, so a `wouldReject: false`
+ * for it says nothing about headroom.
+ */
+interface ObservedChannelWrite {
+  readonly maxBytes: number;
+  readonly writeCount: number;
+  readonly declaredLimit: number;
+  readonly wouldReject: boolean;
+}
+
+/**
+ * sc-10-3: which of the artifact's declared nodes this run's own spans show entering their
+ * handler and finishing `status: "ok"` — `src/pge/golden/coverage.test.ts`'s own rule
+ * (`executedNodeIdsFromSpans`), applied here to ONE real run instead of the golden dataset's
+ * many cases. `neverExecutedNodeIds` is deliberately not the golden dataset's
+ * `NEVER_EXECUTED` (`context_compact`, `synthesize` only): a single run necessarily takes
+ * one path through the graph, so it misses every node whose triggering condition this
+ * workload's own inputs and stub collaborators never produce, not only the two nodes no
+ * INPUT could ever trigger. See the generator's completion notes and the corresponding
+ * `docs/pge-graph.md` section for which of `neverExecutedNodeIds` is structural (unreachable
+ * by any input) and which is workload-specific (reachable, just not by this one).
+ */
+interface NodeCoverage {
+  readonly totalNodes: number;
+  readonly executedNodeIds: readonly string[];
+  readonly neverExecutedNodeIds: readonly string[];
+}
+
 interface Measurement {
   readonly formatVersion: 1;
   readonly graph: { readonly graphId: string; readonly graphVersion: string };
@@ -208,6 +281,10 @@ interface Measurement {
   readonly superstepCeiling: SuperstepCeilingFacts;
   readonly engineOutcome: EngineOutcome;
   readonly corpusHeadroom: Record<string, CorpusHeadroom>;
+  /** sc-10-2: every declared channel, keyed by channel id, from this run's own writes. */
+  readonly observedWrites: Record<string, ObservedChannelWrite>;
+  /** sc-10-3: every declared node, from this run's own spans. */
+  readonly nodeCoverage: NodeCoverage;
 }
 
 /**
@@ -236,6 +313,36 @@ function superstepCeilingFacts(): SuperstepCeilingFacts {
 }
 
 /**
+ * sc-10-2: wraps a real `CommitBoundary` to record, per channel, the largest single
+ * `ChannelUpdate.value` this run ever asked it to commit and how many updates it saw —
+ * BEFORE the boundary's own accept/reject decision, so a rejected write is recorded here
+ * too (it also shows up in `rejections`; recording it here as well is what lets
+ * `observedWrites` answer "every channel" without a caller needing to reconcile two lists).
+ * Delegates to `inner` unchanged — this NEVER alters what the boundary accepts, rejects or
+ * commits, only observes it, the same non-interference `recordingInterpreterFactory` below
+ * already gives `maxSupersteps`.
+ */
+function recordingCommitBoundary(
+  inner: CommitBoundary,
+  sink: Map<string, { maxBytes: number; writeCount: number }>,
+): CommitBoundary {
+  return {
+    commit: (graph, current, batch: readonly ChannelUpdate[], ctx) => {
+      for (const update of batch) {
+        const bytes = byteSize(update.value);
+        const prior = sink.get(update.channel);
+        sink.set(update.channel, {
+          maxBytes: prior === undefined ? bytes : Math.max(prior.maxBytes, bytes),
+          writeCount: (prior?.writeCount ?? 0) + 1,
+        });
+      }
+      return inner.commit(graph, current, batch, ctx);
+    },
+    finalize: (state, ctx) => inner.finalize(state, ctx),
+  };
+}
+
+/**
  * Drive a real `PgeEngine` over `projectRoot`'s committed `coding` artifact and measure
  * what the run actually did, reading every fact off the INTERPRETER's own `GraphRunResult`
  * — captured through `interpreterFactory`, the seam that exists for exactly this — and
@@ -258,10 +365,18 @@ async function observeRealWorkload(
   const topology = await readValidatedTopologySpec(projectRoot, CODING_GRAPH_ID);
 
   let observed: GraphRunResult | null = null;
+  // sc-10-2: populated by `recordingCommitBoundary` for EVERY channel this run's own
+  // commits touch, regardless of how the run ends — a probe that throws mid-run still
+  // leaves whatever was recorded before the throw, which is exactly what the null-outcome
+  // branch below reports rather than discarding.
+  const writeBytes = new Map<string, { maxBytes: number; writeCount: number }>();
   const recordingInterpreterFactory = (): GraphInterpreter => {
     const inner = createGraphInterpreter();
-    const withOverride = (ctx: Parameters<GraphInterpreter["run"]>[2]) =>
-      options?.maxSupersteps === undefined ? ctx : { ...ctx, maxSupersteps: options.maxSupersteps };
+    const withOverride = (ctx: Parameters<GraphInterpreter["run"]>[2]) => ({
+      ...ctx,
+      ...(options?.maxSupersteps === undefined ? {} : { maxSupersteps: options.maxSupersteps }),
+      commit: recordingCommitBoundary(ctx.commit, writeBytes),
+    });
     return {
       run: async (graph, init, ctx) => {
         observed = await inner.run(graph, init, withOverride(ctx));
@@ -320,6 +435,38 @@ async function observeRealWorkload(
     contractsCanonicalBytes: byteSize(workload.contracts),
   };
 
+  // sc-10-2: EVERY declared channel, not only `CORPUS_HEADROOM_CHANNELS` — a channel
+  // `writeBytes` never saw a write for is reported with `writeCount: 0` rather than
+  // omitted, so "not exercised by this workload" is a fact this measurement states rather
+  // than a gap a reader has to notice on their own.
+  const observedWrites: Record<string, ObservedChannelWrite> = {};
+  for (const channel of [...topology.channels].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    const observedForChannel = writeBytes.get(channel.id);
+    observedWrites[channel.id] = {
+      maxBytes: observedForChannel?.maxBytes ?? 0,
+      writeCount: observedForChannel?.writeCount ?? 0,
+      declaredLimit: channel.maxInlineBytes,
+      wouldReject: (observedForChannel?.maxBytes ?? 0) > channel.maxInlineBytes,
+    };
+  }
+
+  // sc-10-3: this run's OWN spans against the artifact's full node list — mirrors
+  // `src/pge/golden/coverage.test.ts`'s `executedNodeIdsFromSpans` rule (status "ok" only)
+  // applied to one real run rather than the golden dataset. Read regardless of how the run
+  // ended, so a probe that throws mid-run (the two-directional ceiling pin below) still
+  // reports whatever spans exist rather than an empty coverage record.
+  const declaredNodeIds = topology.nodes.map((node) => node.id).sort();
+  const allSpans = await readSpans(tracePath(projectRoot, runId));
+  const executedNodeIds = [
+    ...new Set(allSpans.filter((span) => span.status === "ok").map((span) => span.nodeId)),
+  ].sort();
+  const executedSet = new Set(executedNodeIds);
+  const nodeCoverage: NodeCoverage = {
+    totalNodes: declaredNodeIds.length,
+    executedNodeIds,
+    neverExecutedNodeIds: declaredNodeIds.filter((id) => !executedSet.has(id)),
+  };
+
   // `observed` is populated by the recorder REGARDLESS of what PgeEngine.run did with the
   // result afterwards — that is the whole point of driving it through this seam. It stays
   // `null` only when the INTERPRETER ITSELF throws before ever returning a `GraphRunResult`
@@ -342,12 +489,16 @@ async function observeRealWorkload(
       superstepCeiling: superstepCeilingFacts(),
       engineOutcome,
       corpusHeadroom,
+      observedWrites,
+      nodeCoverage,
     };
     return { measurement, observed: null };
   }
   const run: GraphRunResult = observed;
 
-  const spans = await readSpans(tracePath(projectRoot, runId));
+  // Reuses `allSpans`, read once above (before the null-outcome branch) precisely so
+  // `nodeCoverage` is available on both outcomes — never a second, independent read.
+  const spans = allSpans;
   const last = spans[spans.length - 1];
   if (last === undefined) {
     throw new Error(`run "${runId}" produced no spans; the run did not execute`);
@@ -386,6 +537,8 @@ async function observeRealWorkload(
     superstepCeiling: superstepCeilingFacts(),
     engineOutcome,
     corpusHeadroom,
+    observedWrites,
+    nodeCoverage,
   };
 
   return { measurement, observed: run };
@@ -509,6 +662,70 @@ describe("PgeEngine over this repository's own real workload (feat-1, feat-2)", 
       for (const channelId of CORPUS_HEADROOM_CHANNELS) {
         expect(measurement.corpusHeadroom[channelId]?.wouldReject, channelId).toBe(false);
       }
+
+      // sc-10-2: EVERY declared channel — not only the three `CORPUS_HEADROOM_CHANNELS`
+      // above cover — because `observedWrites` is keyed off `topology.channels` directly.
+      expect(Object.keys(measurement.observedWrites).sort()).toEqual(
+        Object.keys(measurement.channelLimits).sort(),
+      );
+      expect(Object.keys(measurement.observedWrites)).toHaveLength(11);
+
+      // The carried finding (sprint 5's security audit, see the generator's completion
+      // notes): one `evaluations` entry now carries THREE independent copies of unbounded
+      // model text (`summary`, `evaluatorFeedback`, `generatorNotes` — the `bober:` comment
+      // at `nodes/sprint-evaluate.ts` names the tripling explicitly). Measured here against
+      // the ACTUAL bytes this run wrote, not the static corpus the earlier
+      // `corpusHeadroom` block reads: `sprint_evaluate` genuinely ran with the tripled
+      // shape (`writeCount` at least one per dispatched branch) and did NOT breach — this
+      // stub-driven corpus's free text is short enough that even three copies stay far
+      // under the cap. That is a fact about THIS measurement's stub collaborators, not a
+      // guarantee about a real evaluator's longer output — see the generator's completion
+      // notes for the distinction.
+      expect(measurement.observedWrites.evaluations?.writeCount).toBeGreaterThanOrEqual(14);
+      expect(measurement.observedWrites.evaluations?.maxBytes).toBeGreaterThan(0);
+      expect(measurement.observedWrites.evaluations?.wouldReject).toBe(false);
+
+      // `verdict`'s sole writer is `finalize` (`nodes/root.ts`'s own doc comment), and this
+      // run never reaches it (see `nodeCoverage` below) — so `verdict`'s cap is measured as
+      // NEVER EXERCISED here, not as "measured and found small". Stated explicitly rather
+      // than left for a reader to notice a `wouldReject: false` can mean either.
+      expect(measurement.observedWrites.verdict?.writeCount).toBe(0);
+      expect(measurement.observedWrites.verdict?.maxBytes).toBe(0);
+
+      // sc-10-2 / this sprint's stopCondition: every channel this run wrote to stayed under
+      // its declared cap. Had any come back `true`, the obligation was to report the
+      // breach, not raise the cap that caught it — this loop is what would have surfaced
+      // one.
+      for (const [channelId, write] of Object.entries(measurement.observedWrites)) {
+        expect(write.wouldReject, channelId).toBe(false);
+      }
+
+      // sc-10-3: this run's OWN node coverage — deliberately NOT the golden dataset's
+      // 42/44 (`src/pge/golden/coverage.test.ts`'s `NEVER_EXECUTED`), because one real run
+      // takes one path through the graph. Six of these eight ARE reachable (proven by a
+      // golden case each: `commit`/`finalize` under `goldenApprovedConfig()`,
+      // `critique`/`rework_route` under a corrected-then-still-failing sprint,
+      // `sprint_correct` under any correction, `plan_clarify` under a clarifying planner) —
+      // this workload's own stub collaborators and its plain (non-approved) config just
+      // never trigger any of the six. Only `context_compact` and `synthesize` are the
+      // golden dataset's OWN structural blocks. See the generator's completion notes and
+      // docs/pge-graph.md's "The real workload's own node coverage" section for the reason
+      // recorded against each one.
+      expect(measurement.nodeCoverage.totalNodes).toBe(44);
+      expect(measurement.nodeCoverage.neverExecutedNodeIds).toEqual([
+        "commit",
+        "context_compact",
+        "critique",
+        "finalize",
+        "plan_clarify",
+        "rework_route",
+        "sprint_correct",
+        "synthesize",
+      ]);
+      expect(measurement.nodeCoverage.executedNodeIds).toHaveLength(36);
+      expect(
+        measurement.nodeCoverage.totalNodes - measurement.nodeCoverage.neverExecutedNodeIds.length,
+      ).toBe(measurement.nodeCoverage.executedNodeIds.length);
 
       // sc-4-3, sc-4-4: the contract-count scaling comparison — the single experiment that
       // distinguishes INSUFFICIENT CEILING from NON-CONVERGENCE. A 1-contract slice of the
