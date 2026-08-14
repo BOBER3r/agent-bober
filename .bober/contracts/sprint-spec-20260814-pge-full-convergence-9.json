@@ -1,0 +1,67 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-9",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 9,
+  "title": "rework_route and synthesize execute \u2014 NEVER_EXECUTED empties",
+  "description": "The last two unreached nodes. When they execute, every node in the committed topology has run at least once.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-8"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "A golden case drives rework_route to execution with span status 'ok'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "A golden case drives synthesize to execution with span status 'ok'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "NEVER_EXECUTED is empty, and the guard that fails when a node re-enters it is still present and still bites.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "Node coverage reports every node in the committed topology as executed, asserted against the artifact rather than a hardcoded count.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Relaxing the span-status-ok rule to make a node count as covered."
+  ],
+  "stopConditions": [
+    "A node is genuinely unreachable in the committed topology \u2014 that is a topology finding worth more than the coverage number; record it."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "With the list empty, the guard's shape changes: it can no longer assert 'these are unreachable and here is why'. Replace it with the equivalent positive claim \u2014 every node executed \u2014 keeping a control that fails if coverage regresses. Do not simply delete the guard. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "An empty list is exactly where a guard rots into a no-op. Verify the replacement genuinely fails when a node stops executing \u2014 remove a case in a scratch edit and confirm it reports. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/golden/coverage.test.ts",
+    ".bober/golden/",
+    "src/pge/golden/capture.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

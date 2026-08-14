@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-1",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 1,
+  "title": "Checkpoints inside the sprint fan-out \u2014 the ADR decision",
+  "description": "Five of the six undeclared checkpoint ids sit inside the sprint fan-out region, where InterruptInsideFanOut is a BLOCKING validation error by ADR-6. `audits` cannot converge until that rule is revisited. This sprint decides the question and makes the validator match the decision \u2014 it does not declare any checkpoint yet.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The hazard ADR-6's rule guards against is stated explicitly, from the ADR itself, before any change is proposed \u2014 what goes wrong when concurrent fan-out branches each raise an interrupt.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "A decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, stating either the semantics under which a fan-out checkpoint is sound, or why it cannot be.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "src/pge/topology/validate.ts matches the ADR: if fan-out checkpoints become legal, InterruptInsideFanOut is replaced by a rule that still rejects the unsound shape; if they stay illegal, the diagnostic gains the reason and the spec's audits goal is amended.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "The validator change is pinned in both directions: a topology that is now legal validates, and the shape the ADR still forbids is still reported.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "The committed topology artifact still validates and the golden gate is unaffected \u2014 no checkpoint is declared in this sprint.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Declaring any checkpoint id \u2014 that is sprint 3.",
+    "Changing interrupt mechanics \u2014 that is sprint 2."
+  ],
+  "stopConditions": [
+    "The revisit concludes the rule is sound and fan-out checkpoints cannot be made safe. That is a legitimate outcome: record it in the ADR, and say plainly that `audits` cannot fully converge and why. Do NOT weaken the validator to make a later sprint easier."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 6,
+  "generatorNotes": "Read .bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md FIRST and quote its reasoning before proposing anything. The rule is at src/pge/topology/validate.ts:1089-1099 and emits severity 'error' via diag(). The real question is what a human interrupt MEANS when N branches reach it concurrently: one approval for all branches, one per branch, or a barrier. Answer that in the ADR, not in code. Note the imperative pipeline records five sprint-lifecycle ids (pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint) \u2014 those are the ones this unblocks. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "The failure mode is a validator weakened to suit a later sprint. Check the new rule still rejects whatever the ADR says is unsound \u2014 construct that topology yourself and confirm it is reported. If the ADR concluded the rule is sound, verify the spec's audits goal was amended honestly rather than the sprint quietly passing. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    ".bober/architecture/",
+    "src/pge/topology/validate.ts",
+    "src/pge/topology/validate.test.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

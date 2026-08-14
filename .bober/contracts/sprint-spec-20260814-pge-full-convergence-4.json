@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-4",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 4,
+  "title": "history converges \u2014 the missing phase events",
+  "description": "A graph run writes one shared terminal event where the imperative pipeline writes ten phase events, because PGE has exactly one history writer, finalizePipelineRun. Emit the missing phases from the graph nodes.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The ten events the imperative engine writes are enumerated from a real run, and each is mapped to the graph node that should emit it \u2014 recorded before any code changes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A graph run emits the same ordered event list as an imperative run, verified by running both engines.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "'history' no longer appears in the divergence set, and the pin fails in both directions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "History emission does not become a second source of truth: events are written through the existing appendHistory path, not a parallel one.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing what the imperative engine writes.",
+    "Adding events neither engine writes today."
+  ],
+  "stopConditions": [
+    "An event has no honest graph-side emitter \u2014 for example a phase that only exists because the imperative pipeline is sequential. Record which, and why, rather than inventing a node to emit it."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 5,
+  "generatorNotes": "`grep -rn \"appendHistory\\|history.jsonl\" src/pge --include=\"*.ts\"` (non-test) returns ZERO hits today \u2014 that is the gap. The conformance per-field record enumerates the ten-versus-one shape. Some events pair (a start and a complete); emit them where the corresponding graph node begins and ends, not all at the end, or ordering will diverge even when the set matches. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Compare the ORDERED lists, not the sets \u2014 order is part of this field's equality. Then check the events come from the real node lifecycle rather than being replayed in a block at finalize, which would match the list while misrepresenting when things happened. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/nodes/",
+    "src/pge/runtime/commit.ts",
+    "src/state/history.ts",
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

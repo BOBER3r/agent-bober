@@ -1,0 +1,68 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-7",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 7,
+  "title": "Retire the dead \"passed\" comparisons",
+  "description": "verdictFrom counts contracts whose status is the literal \"passed\", which no engine writes since the terminal-vocabulary spec. The counter is structurally always zero, so parts of its downgrade logic are unreachable for any run.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-6"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "src/pge/runtime/interpreter.ts:728 and src/pge/runtime/commit.ts:539 no longer compare against a status literal no writer produces; they use the settled predicate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "The downgrade paths that were unreachable are shown to be reachable again \u2014 a test drives success-with-failures to 'partial' and proves it fails before the change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "The status-vocabulary invariant scan's allowlist loses the entries these sites occupied, rather than keeping stale ones.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read \u2014 this change alters verdicts, so movement is expected and must be understood.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing what a verdict MEANS \u2014 only which contracts are counted."
+  ],
+  "stopConditions": [
+    "Making the counter live changes a golden case's verdict in a way that looks wrong rather than merely different \u2014 stop and understand it before re-capturing."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 2,
+  "generatorNotes": "Both sites are allowlisted with reasons in src/contracts/status-vocabulary.invariant.test.ts (around :205) \u2014 remove the entries as you migrate the sites, since a stale allowlist entry fails that test's own bidirectional check. isSettledContractStatus is the predicate. Expect real verdict movement: this is the sprint where previously-dead logic starts running. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Verify the reachability claim by execution, not by reading: construct a run with successes and failures and confirm the verdict is now 'partial' where it used to be 'failed'. Confirm the allowlist shrank. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/runtime/interpreter.ts",
+    "src/pge/runtime/commit.ts",
+    "src/contracts/status-vocabulary.invariant.test.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

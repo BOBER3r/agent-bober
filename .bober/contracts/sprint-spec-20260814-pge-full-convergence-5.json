@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-5",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 5,
+  "title": "PGE writes evaluatorFeedback and generatorNotes",
+  "description": "Two of the three contract deltas exist because no PGE node writes these fields at all. Give the settled contract the same feedback and notes an imperative run records.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "A settled contract from a graph run carries evaluatorFeedback with the same content an imperative run records for the same outcome.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "The same holds for generatorNotes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "Both are written from the node that owns the information, not copied from the seeded contract.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "The contracts divergence is now down to `version` alone \u2014 asserted, not assumed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Closing the version delta \u2014 sprint 6.",
+    "Changing what the evaluator decides or what feedback it produces."
+  ],
+  "stopConditions": [
+    "The graph engine genuinely lacks the information one of these fields needs \u2014 say which and why rather than writing a plausible-looking placeholder."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "The imperative writer is src/orchestrator/pipeline.ts around the settle site (it sets evaluatorFeedback from evaluation.summary). The graph equivalent settles at src/pge/nodes/sprint-review.ts:203-223. Write the fields there, from the same source of truth the imperative engine uses, so the two cannot drift by construction. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Check the values MATCH rather than merely being present \u2014 a non-empty string that says something different is still a divergence. Confirm the source is the node's own evaluation result, not the seeded contract echoed back. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/nodes/sprint-review.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

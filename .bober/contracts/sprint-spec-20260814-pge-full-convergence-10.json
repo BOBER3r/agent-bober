@@ -1,0 +1,71 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-10",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 10,
+  "title": "The graph engine runs this repository's own real workload",
+  "description": "Conformance runs on a synthetic fixture. Before claiming the engine is finished, run it against the real 29 KB PlanSpec this repository actually produces, end to end.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-3",
+    "sprint-spec-20260814-pge-full-convergence-4",
+    "sprint-spec-20260814-pge-full-convergence-6"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-10-1",
+      "description": "A graph run completes against the real committed workload corpus, not the synthetic conformance fixture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-2",
+      "description": "Every channel stays within its declared cap for that workload, measured and reported rather than assumed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-3",
+      "description": "The run's node coverage and verdict are recorded, and any node that does NOT execute on a real workload is named with its reason.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-4",
+      "description": "The result is committed as evidence \u2014 a real-workload record a later flip decision can be taken against.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Flipping the default.",
+    "Tuning performance."
+  ],
+  "stopConditions": [
+    "The real workload exceeds a channel cap or a superstep ceiling \u2014 that is the finding, and it is worth more than a passing run. Report the measured number rather than raising the cap reflexively."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "spec-20260812-pge-real-workload-errors already built the corpus and sized the caps to it (sprint 3 of that spec, graphVersion 1.3.0); reuse that corpus rather than inventing one. That spec's sprint 1 also established the measurement approach \u2014 follow it, and report numbers rather than a pass/fail. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "The point is measurement, not a green tick. Check real numbers were reported for every channel, and that a node failing to execute on the real workload was named rather than averaged away. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/golden/workload.ts",
+    "src/pge/engine/__fixtures__/real-workload.ts",
+    "src/pge/runtime/interpreter.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

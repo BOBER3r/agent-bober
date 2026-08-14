@@ -1,0 +1,223 @@
+{
+  "specId": "spec-20260814-pge-full-convergence",
+  "version": 1,
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z",
+  "title": "Close every conformance divergence and run every graph node",
+  "description": "The graph engine is built but not finished: four conformance fields still diverge from the imperative pipeline, and six of its nodes have never executed in any run. This spec closes all four divergences at their architectural causes and drives all six nodes to execution, so the flip bar becomes satisfiable as originally written. The default stays 'ts' \u2014 this makes the flip a decision you can take with evidence, not a risk this spec takes.",
+  "mode": "brownfield",
+  "status": "draft",
+  "ambiguityScore": 5,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Close every divergence \u2014 revisit ADR-6, add PGE writers for evaluatorFeedback and generatorNotes, resolve the version delta.",
+      "resolvedAt": "2026-08-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "All six unrun nodes, including durable checkpoints for commit/finalize and new golden cases for the other four.",
+      "resolvedAt": "2026-08-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Make it flippable, do not flip. Keep 'ts' the default and retain the oracle.",
+      "resolvedAt": "2026-08-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Keep Option A success semantics. Do not move the completion marker.",
+      "resolvedAt": "2026-08-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval",
+      "resolvedAt": "2026-08-14T00:00:00Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "src/orchestrator/workflow/conformance.engines.test.ts (per-field divergence record: ten history events vs one; eight checkpoint ids vs end-of-pipeline x3)",
+          "src/pge/topology/validate.ts:1089-1099 (InterruptInsideFanOut, severity error)",
+          ".bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md (the ADR that rule enforces)",
+          "src/pge/runtime/interrupt.ts:318 (four mechanisms), :38-46 and :523 (noop grants nothing)",
+          "src/pge/golden/coverage.test.ts:139-146 (the six NEVER_EXECUTED nodes)",
+          "src/pge/topology/coding.graph.ts:483,909 (the only two declared checkpoint ids)",
+          "src/pge/nodes/sprint-review.ts:215 (PGE writes version; the imperative engine writes none)",
+          "src/orchestrator/pipeline.ts:89-90 (PipelineResult.completedSprints/failedSprints are SprintContract[])",
+          "src/config/schema.ts:394-395 (engine defaults to 'ts'; 'pge' is explicit opt-in)",
+          "src/pge/runtime/interpreter.ts:728 (verdictFrom's dead 'passed' literal)",
+          "docs/pge-graph.md:1293,1333-1380 (the flip bar and the four prerequisites)"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "The history divergence is exactly ten imperative phase events versus one shared terminal event, per the per-field record in src/orchestrator/workflow/conformance.engines.test.ts. Closing it means PGE emitting the missing nine, not changing what the imperative engine writes.",
+    "The audits divergence has two independent causes: only two checkpoint ids are declared in the topology (src/pge/topology/coding.graph.ts:483,909) against the imperative pipeline's eight, and the middle audit record is a FAIL_CLOSED refusal of the git-effect commit node rather than a second evaluation of the same id.",
+    "Five of the six undeclared checkpoint ids sit inside the sprint fan-out region, where InterruptInsideFanOut is a BLOCKING validation error (src/pge/topology/validate.ts:1089-1099) enforced by ADR-6. They cannot be declared at a sprint's discretion; the ADR has to be revisited first.",
+    "commit and finalize never execute because nothing runs them under a non-noop mechanism: noop grants nothing (src/pge/runtime/interrupt.ts:38-46, enforced at :523) and the shipped conformanceConfig() is autopilot by construction.",
+    "pipelineResult is a container for SprintContract objects (src/orchestrator/pipeline.ts:89-90), so it converges exactly when contracts does and needs no separate closure work.",
+    "The version delta exists because PGE's sprint_exit writes version: attempts (src/pge/nodes/sprint-review.ts:215) and the imperative runSprintCycle writes none. Either engine can be brought to the other; the spec assumes giving the imperative engine an equivalent monotone source is cheaper than removing a field the rank-aware channel join now depends on.",
+    "verdictFrom (src/pge/runtime/interpreter.ts:728) and commit.ts:539 compare against the literal \"passed\", which spec-20260812-terminal-vocabulary retired from both engines, so those comparisons are structurally dead and safe to retire once golden movement is accepted.",
+    "The golden dataset is the regression net for every change here: 43 cases, 6 enforcement=replay (scripts/run-golden-regression.mjs). Each sprint that moves recorded artifacts re-captures in the SAME sprint, per the lesson recorded in docs/sprints/README.md.",
+    "The evaluator's DECISION logic is not in scope anywhere in this spec; only what is recorded about an already-decided outcome changes."
+  ],
+  "outOfScope": [
+    "Flipping pipeline.engine to 'pge'. The default stays 'ts' and oracle-retention.test.ts keeps pinning it \u2014 this spec makes the flip possible, not actual.",
+    "Option B success semantics. deriveRunSuccess stays frozen so completionMarker remains the field asserted identical across both engines.",
+    "Retiring TsPipelineEngine as the reference oracle.",
+    "Changing what the evaluator decides, or any generator/evaluator prompt content.",
+    "Performance work on the graph engine.",
+    "Any change to the imperative pipeline's own behaviour beyond the single version write needed to close the contracts delta."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Checkpoints inside the sprint fan-out",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "dependencies": [],
+      "description": "Revisit ADR-6 so human-in-the-loop checkpoints can be declared on nodes reachable only through a fan-out edge, with defined semantics for concurrent branches.",
+      "acceptanceCriteria": [
+        "AC1: When a node inside the sprint fan-out region declares a hitl checkpoint, the topology validator either accepts it under stated semantics or reports a NEW diagnostic explaining precisely why it cannot.",
+        "AC2: The decision is recorded as an ADR that supersedes or amends arch-20260805-pge-graph-engineering-adr-6, and the validator's behaviour matches the ADR."
+      ]
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Gated effects execute under a durable approval",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "dependencies": [],
+      "description": "Give commit and finalize a durable approval path so they run their bodies instead of always ending interrupted/FailClosed.",
+      "acceptanceCriteria": [
+        "AC1: When a run supplies a durable approval, the commit node's span status is 'ok' rather than 'interrupted' with errorClass FailClosed.",
+        "AC2: commit and finalize leave the NEVER_EXECUTED list, and the list's own two-directional pin still fails if a node re-enters it silently."
+      ]
+    },
+    {
+      "featureId": "feat-3",
+      "title": "audits converges",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "description": "Declare the remaining checkpoint ids so a graph run records the same audit trail as the imperative pipeline.",
+      "acceptanceCriteria": [
+        "AC1: A real conformance run records the same set of checkpoint ids from both engines.",
+        "AC2: 'audits' no longer appears in the divergence set, and the pin fails if it reappears."
+      ]
+    },
+    {
+      "featureId": "feat-4",
+      "title": "history converges",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "dependencies": [],
+      "description": "Emit the missing phase events from the graph engine so both engines write the same history.",
+      "acceptanceCriteria": [
+        "AC1: A real conformance run produces the same ordered event list from both engines.",
+        "AC2: 'history' no longer appears in the divergence set, and the pin fails in both directions."
+      ]
+    },
+    {
+      "featureId": "feat-5",
+      "title": "contracts and pipelineResult converge",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [],
+      "description": "Close the three remaining contract-field deltas: evaluatorFeedback, generatorNotes and version.",
+      "acceptanceCriteria": [
+        "AC1: A settled contract from a graph run carries the same evaluatorFeedback and generatorNotes as one from an imperative run.",
+        "AC2: Neither 'contracts' nor 'pipelineResult' appears in the divergence set."
+      ]
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Every node executes",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-2"
+      ],
+      "description": "Drive context_compact, critique, rework_route and synthesize to execution via new golden cases, emptying NEVER_EXECUTED.",
+      "acceptanceCriteria": [
+        "AC1: Node coverage reports every node in the committed topology as executed.",
+        "AC2: NEVER_EXECUTED is empty and its guard still fails if a node stops being reachable."
+      ]
+    },
+    {
+      "featureId": "feat-7",
+      "title": "The bar is satisfiable, and met",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-3",
+        "feat-4",
+        "feat-5",
+        "feat-6"
+      ],
+      "description": "With every divergence closed, assert equivalence directly and rewrite the disposition to say what a flip would now require.",
+      "acceptanceCriteria": [
+        "AC1: The conformance harness reports equivalent: true on a real run of both engines.",
+        "AC2: docs/pge-graph.md records that the bar is now met and that the default deliberately stays 'ts'."
+      ]
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "The golden gate stays at or above its replay floor (GOLDEN_MIN_REPLAY_CASES) for every sprint, and no case is silently relabelled from replay to integrity.",
+      "verificationMethod": "node scripts/run-golden-regression.mjs after build, plus the dataset guard in src/pge/golden/."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Every divergence that closes must close at its cause, not by being excluded from the comparison. VOLATILE_KEYS must not grow.",
+      "verificationMethod": "Read conformance.ts's normalize(); assert VOLATILE_KEYS membership is unchanged."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Every pin edited in this spec must still fail in BOTH directions afterwards \u2014 a new divergence and a silently-fixed one.",
+      "verificationMethod": "Mutation: add a fake field and remove a real one; both must fail."
+    },
+    {
+      "category": "security",
+      "requirement": "A durable approval must not weaken the fail-closed property: a gated effect proceeds only on a real recorded approval, never by default.",
+      "verificationMethod": "A test asserting the effect is still refused when no approval record exists."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "No new persistent entities. Touches OverallState channels, the committed topology artifact (.bober/topology/coding.json), the golden dataset (.bober/golden/), and SprintContract fields.",
+    "securityConsiderations": [
+      "The durable checkpoint mechanism is the one place fail-closed behaviour could regress; it must grant only on a durable record, matching interrupt.ts:523's existing rule.",
+      "Checkpoint records are an audit trail \u2014 declaring new ids must not make a refusal look like an approval."
+    ],
+    "existingPatterns": "Follow the discipline the previous three specs established: measure before asserting, re-capture goldens in the sprint that moves them, read every diff hunk rather than trusting a pass count, and move a pin and the doc it changes in ONE commit."
+  },
+  "sprints": [
+    "sprint-spec-20260814-pge-full-convergence-1",
+    "sprint-spec-20260814-pge-full-convergence-2",
+    "sprint-spec-20260814-pge-full-convergence-3",
+    "sprint-spec-20260814-pge-full-convergence-4",
+    "sprint-spec-20260814-pge-full-convergence-5",
+    "sprint-spec-20260814-pge-full-convergence-6",
+    "sprint-spec-20260814-pge-full-convergence-7",
+    "sprint-spec-20260814-pge-full-convergence-8",
+    "sprint-spec-20260814-pge-full-convergence-9",
+    "sprint-spec-20260814-pge-full-convergence-10",
+    "sprint-spec-20260814-pge-full-convergence-11"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "20-30 hours across 11 sprints",
+    "riskLevel": "high",
+    "riskNotes": "Two sprints reopen settled architecture. Sprint 1 revisits ADR-6, whose blocking rule exists for a reason \u2014 concurrent branches raising interrupts is the hazard it was written against; if the revisit concludes the rule is sound, audits cannot close and that is a legitimate recorded outcome rather than a failure. Sprint 2 makes gated effects actually run, which is the largest behavioural change in the spec and moves recorded golden artifacts substantially. Both are deliberately first."
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-8",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 8,
+  "title": "context_compact and critique execute",
+  "description": "Two of the six never-executed nodes are unreachable simply because no committed case drives them. Add cases that do.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-2"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-8-1",
+      "description": "A golden case drives context_compact to execution, and the node's span status is 'ok'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-2",
+      "description": "A golden case drives critique to execution, and the node's span status is 'ok'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-3",
+      "description": "Both leave NEVER_EXECUTED, and the list's two-directional guard still fails if either silently re-enters.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-4",
+      "description": "The new cases are enforcement=replay, not integrity \u2014 an integrity case makes no runtime claim and would not prove execution.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Driving rework_route or synthesize \u2014 sprint 9."
+  ],
+  "stopConditions": [
+    "A node turns out to be unreachable for a structural reason rather than a missing case \u2014 record which, with the reason, rather than contriving a case that reaches it artificially."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "Coverage counts a node as executed only when its span status is ok (that rule was tightened by sprint 9 of spec-20260812-pge-real-workload-errors \u2014 a failed span no longer counts). The NEVER_EXECUTED list at src/pge/golden/coverage.test.ts:139-146 is a list of CLAIMS about why each node is unreachable; deleting an entry means its claim stopped being true, so delete deliberately. Capture with GOLDEN_CAPTURE=1. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Confirm the new cases are genuinely replay cases and that the nodes' spans are 'ok' rather than merely present. A case that reaches a node but errors inside it does not satisfy this sprint. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/golden/coverage.test.ts",
+    ".bober/golden/",
+    "src/pge/golden/capture.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

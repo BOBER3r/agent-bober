@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-2",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 2,
+  "title": "Gated effects execute under a durable approval",
+  "description": "`commit` and `finalize` have never executed: noop grants nothing and nothing in this repo ever runs them under another mechanism, so commit's span is always interrupted/FailClosed. Give them a durable approval path so their bodies actually run.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "A run supplied with a durable approval record executes the commit node's body: its span status is 'ok', not 'interrupted' with errorClass FailClosed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "Fail-closed is NOT weakened: with no approval record present, the effect is still refused. Pinned by a test that fails if the guard is removed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "commit and finalize are removed from NEVER_EXECUTED (src/pge/golden/coverage.test.ts:139-146) and the list's two-directional guard still fails if a node silently re-enters it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "The approval record is durable in the sense interrupt.ts:38-46 means \u2014 it survives process exit and is not synthesised by the harness at run time.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "Every golden case whose recorded artifacts move is re-captured in THIS sprint, with each diff hunk read and confined to the newly-executing nodes and their direct consequences.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing deriveRunSuccess or the completion marker \u2014 Option A stays frozen.",
+    "Declaring new checkpoint ids \u2014 sprint 3."
+  ],
+  "stopConditions": [
+    "Making commit execute requires the golden executor to stop pinning one config, which would make cases irreproducible \u2014 stop and report rather than trading reproducibility for coverage."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 5,
+  "generatorNotes": "Four mechanisms are registered at src/pge/runtime/interrupt.ts:318 (cli, disk, pr, noop); `disk` is the obvious durable one. The grant rule is :523 `if (mechanismName !== \"noop\") granted.set(key, outcome)`. The shipped conformanceConfig() is autopilot by construction and the golden executor pins it deliberately so cases reproduce \u2014 do NOT unpin that. The likely shape is a second, explicitly-approved config used by new cases, leaving the autopilot path exactly as it is. commit is a git-effect node: make sure executing it in a test cannot touch the real repo. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Two things to hammer. First, that fail-closed still holds: delete the approval record and confirm the effect is refused again. Second, that commit's body running in a test cannot mutate the real repository \u2014 check where its git effect points. Then verify the coverage list actually shrank rather than the guard being relaxed. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/runtime/interrupt.ts",
+    "src/pge/golden/coverage.test.ts",
+    "src/pge/golden/executor.ts",
+    "src/pge/nodes/effects.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

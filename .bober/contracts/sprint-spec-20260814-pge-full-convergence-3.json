@@ -1,0 +1,77 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-3",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 3,
+  "title": "audits converges \u2014 the full checkpoint trail",
+  "description": "The imperative pipeline records eight distinct checkpoint ids, all approved; a graph run records end-of-pipeline three times as [approved, rejected, approved]. Declare the remaining ids and let the trail match.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-1",
+    "sprint-spec-20260814-pge-full-convergence-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The topology declares the checkpoint ids the imperative pipeline records, subject to whatever sprint 1's ADR permits. Any id that remains undeclarable is named with the ADR reason.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "A real conformance run records the same SET of checkpoint ids from both engines \u2014 verified by running the harness, not by reading the pin.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "The middle 'rejected' record is gone, because sprint 2's durable approval lets commit through rather than because a refusal was reclassified as an approval.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "'audits' no longer appears in the divergence set, and the divergence-set pin still fails in BOTH directions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Closing history, contracts or pipelineResult \u2014 later sprints.",
+    "Reclassifying a refusal to make the trail match."
+  ],
+  "stopConditions": [
+    "Sprint 1's ADR left some ids undeclarable \u2014 declare what is legal, record the rest with the ADR reason, and amend the spec's audits goal rather than forcing it."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "The per-field record in src/orchestrator/workflow/conformance.engines.test.ts states the exact shape of this divergence \u2014 read it first. Only two ids are declared today (src/pge/topology/coding.graph.ts:483 post-plan, :909 end-of-pipeline). post-sprint-contract may be declarable outside the fan-out even if sprint 1 forbade the five inside it. Remember post-plan is declared but never EVALUATED on the golden fixture, because a settled plan takes e-plan-ok and never e-plan-clarify. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Run the conformance harness yourself and compare the id sets \u2014 do not read the pin. Then check the outcomes list: a trail that matches only because a rejection became an approval is a false convergence, and the sprint fails. Verify the pin still bites both ways. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/pge/topology/coding.graph.ts",
+    ".bober/topology/coding.json",
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    ".bober/golden/",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

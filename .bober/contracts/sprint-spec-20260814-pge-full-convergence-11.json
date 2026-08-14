@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-11",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 11,
+  "title": "The bar is met, and the default deliberately stays 'ts'",
+  "description": "With every divergence closed, the bar as originally written \u2014 equivalent: true \u2014 becomes satisfiable. Assert it directly, record that it is met, and say what a flip would now involve. This spec does not flip it.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-3",
+    "sprint-spec-20260814-pge-full-convergence-4",
+    "sprint-spec-20260814-pge-full-convergence-6",
+    "sprint-spec-20260814-pge-full-convergence-9",
+    "sprint-spec-20260814-pge-full-convergence-10"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-11-1",
+      "description": "The conformance harness reports equivalent: true on a real run of both engines, verified by running it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-2",
+      "description": "The divergence-set pin becomes an equivalence assertion that still fails in BOTH directions \u2014 a new divergence fails it, and so does a silently-relaxed comparison.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-3",
+      "description": "docs/pge-graph.md's disposition is rewritten: which divergences closed and how, that the bar is met, and that the default stays 'ts' by choice rather than by blocker.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-4",
+      "description": "oracle-retention.test.ts still passes unmodified \u2014 pipeline.engine still defaults to 'ts', TsPipelineEngine is still selected and still the fallback.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-5",
+      "description": "Any field that did NOT converge is stated plainly with its reason, rather than the record implying total closure.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Flipping the default.",
+    "Removing the oracle.",
+    "Claiming closure for a field that did not converge."
+  ],
+  "stopConditions": [
+    "equivalent: true is not reached \u2014 record exactly which field still diverges and why, and do not adjust the comparison to reach it. A spec that closed three of four honestly is worth more than one that claims four."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "This is the closing record; write it like one. The previous spec's closing section in docs/pge-graph.md is the model \u2014 it stated the outcome, named what was enforced by which test, and said what stayed unproven. The most valuable sentence here is the one that says what a flip would now actually require, now that the bar is no longer the blocker. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Verify equivalence by running the harness, not by reading the pin. Then mutation-test the new assertion in both directions. Finally read the prose against reality: every field it claims closed should be absent from a run you perform yourself. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    "src/orchestrator/workflow/oracle-retention.test.ts",
+    "docs/pge-graph.md",
+    "docs/sprints/README.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}

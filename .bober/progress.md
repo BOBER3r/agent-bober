@@ -792,3 +792,24 @@ which makes the current flip bar ("sustained green conformance") unsatisfiable b
 1. [completed] Add docsMode/docsDir config keys + mode-aware runDocumenter — passed iter-2 (c0d97c5+4155e53); schema keys, resolveSprintDocPath, ensureGitignoreEntry, buildDocumenterUserMessage; +31 tests
 2. [completed] Sync skill/agent surfaces and docs — passed iter-1 (3938793); 3 md surfaces mode-gated, 3 .claude copies byte-identical, README/VISION recipes + carve-outs, CHANGELOG entry
 3. [completed] Init flow solo/team question — passed iter-1 (7d97de4); askDocsMode in all 3 interactive flows, non-TTY structurally promptless; +7 tests
+
+---
+
+## Plan: Close every conformance divergence and run every graph node
+- Spec: spec-20260814-pge-full-convergence
+- Created: 2026-08-14
+- Sprints: 11
+- Status: planned
+
+### Sprint Breakdown
+1. [proposed] Checkpoints inside the sprint fan-out — the ADR decision
+2. [proposed] Gated effects execute under a durable approval
+3. [proposed] audits converges — the full checkpoint trail
+4. [proposed] history converges — the missing phase events
+5. [proposed] PGE writes evaluatorFeedback and generatorNotes
+6. [proposed] The version delta closes — contracts and pipelineResult converge
+7. [proposed] Retire the dead "passed" comparisons
+8. [proposed] context_compact and critique execute
+9. [proposed] rework_route and synthesize execute — NEVER_EXECUTED empties
+10. [proposed] The graph engine runs this repository's own real workload
+11. [proposed] The bar is met, and the default deliberately stays 'ts'

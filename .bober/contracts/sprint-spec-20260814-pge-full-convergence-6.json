@@ -1,0 +1,76 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-6",
+  "specId": "spec-20260814-pge-full-convergence",
+  "sprintNumber": 6,
+  "title": "The version delta closes \u2014 contracts and pipelineResult converge",
+  "description": "PGE's sprint_exit writes version: attempts; the imperative runSprintCycle writes none. Close the last contract delta, which closes pipelineResult with it since that field is a container for the same objects.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260814-pge-full-convergence-5"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "Both engines agree on `version` for an equivalent run \u2014 by giving the imperative engine an equivalent monotone, replay-stable source, not by deleting the field the rank-aware channel join reads.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "The value stays replay-stable: two runs over the same input produce the same version, proven by execution.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "Neither 'contracts' nor 'pipelineResult' appears in the divergence set, verified by running the harness.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "VOLATILE_KEYS is unchanged \u2014 convergence is real, not achieved by excluding the field from comparison.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Removing version from SprintContractSchema.",
+    "Adding version to VOLATILE_KEYS."
+  ],
+  "stopConditions": [
+    "The imperative engine has no replay-stable monotone source at its settle site \u2014 report what IS available rather than shipping something a replay cannot reproduce."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "PGE derives version from `attempts` \u2014 a count-filter over the appendById evaluations channel, order-invariant by construction (src/pge/nodes/sprint-review.ts:215). The imperative engine tracks its own iteration count in runSprintCycle; use that, and check it increments across the same transitions. Sprint 3 of spec-20260812-terminal-vocabulary documents why a wall-clock or ordering-derived value is disqualified. Do NOT give the schema a .default() \u2014 it would stamp the seeded copy and break the channel join. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "evaluatorNotes": "Run the same input twice and diff the version. Then confirm VOLATILE_KEYS did not grow \u2014 that is the cheap way this criterion could be faked. Finally verify pipelineResult closed as a CONSEQUENCE of contracts rather than being separately special-cased. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+  "estimatedFiles": [
+    "src/orchestrator/pipeline.ts",
+    "src/contracts/sprint-contract.ts",
+    "src/orchestrator/workflow/conformance.ts",
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    ".bober/golden/"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-14T00:00:00Z",
+  "updatedAt": "2026-08-14T00:00:00Z"
+}
