@@ -478,7 +478,11 @@ on disk. A write over the cap is refused with `StateBloatError` and the run cont
 the channel unwritten. The original 4,096-byte default on every channel was measured
 against a real plan rather than a fixture and did not survive contact with one; see
 [The graph engine against a real workload](#the-graph-engine-against-a-real-workload) for
-what raising `spec` and `sprintContracts` did, and did not, fix.
+what raising `spec` and `sprintContracts` did, and did not, fix. Every one of the eleven caps
+above now also has an OBSERVED number — the largest single write a real run actually asked the
+boundary to commit, recorded per channel in the committed measurement; see [Every channel and
+every node this real run touches](#every-channel-and-every-node-this-real-run-touches--sprint-10),
+including what that observation does and does not prove.
 
 ## The golden dataset: what it proves and what it does not
 
@@ -552,6 +556,16 @@ executed set against the committed artifact.
 **42 of the 44 declared nodes execute, as of sprint 8 of `spec-20260814-pge-full-convergence`
 (reconfirmed, unmoved, by sprint 9 — see "What that implied for the two sprints that inherit
 it" below).**
+
+> **This figure is the DATASET's, and it is not the same number as one real run's.** Sprint 10
+> of `spec-20260814-pge-full-convergence` measured a single real-workload run's own coverage at
+> **36 of 44** ([Every channel and every node this real run
+> touches](#every-channel-and-every-node-this-real-run-touches--sprint-10)). The gap is not a
+> regression and the two are not comparable: a golden dataset is many cases engineered to reach
+> every region, one real run is one path. Six of that run's eight misses are workload-specific
+> and provably execute somewhere in THIS dataset — which is exactly what the pin below
+> guarantees, since the dataset's missing set is exactly `context_compact` and `synthesize`.
+
 The figure moved three times, and each move is worth separating. Sprint 9 of
 `spec-20260812-pge-real-workload-errors` corrected the RULE — the committed figure before
 that sprint read **"39 of the 44"**, and the drop to **"38 of the 44"** was a correction, not
@@ -1209,6 +1223,15 @@ BEFORE the boundary's own accept/reject decision — the exact metric `commit.ts
 compares against `maxInlineBytes`, repeated for all eleven declared channels rather than
 three:
 
+> **Read every number in this table with its caveat attached: the DATA is real, the
+> COLLABORATORS are STUBS.** `realWorkloadBindings`
+> (`src/pge/engine/__fixtures__/real-workload.ts`) replaces only the planner and materialize
+> collaborators — everything downstream is `wholeGraphBindings`' shipped stub set. The bytes
+> in the `spec`, `specDraft` and `sprintContracts` rows are this repository's genuine
+> committed plan; the bytes in the `evaluations`, `messages` and `ledger` rows are what SHORT
+> STUB TEXT costs. The two are not the same kind of evidence, and the paragraph after the
+> table says which conclusions each one can carry.
+
 | channel | largest single write (bytes) | writes | declared cap | over cap? |
 | --- | --- | --- | --- | --- |
 | `branchStatus` | 108 | 28 | 4,096 | no |
@@ -1237,6 +1260,23 @@ comment's own upgrade path — stop decorating `summary` for the passing case, w
 territory (tuning is an explicit nonGoal). Per this sprint's own stopCondition, had any row
 above come back `wouldReject: true`, the obligation was to report the breach here, not raise
 the cap that caught it — none did.
+
+**What this measurement can and cannot be cited for.** The split matters enough that a later
+flip decision should not have to re-derive it, so it is stated here in the same words the
+sprint's evaluation recorded (`realSpec: true`, `realCollaborators: false`):
+
+- **CAN support:** *the graph engine correctly processes this repository's real 29 KB spec and
+  14 contracts through 234 supersteps without any channel or superstep-ceiling breach on the
+  observed path.* The 29,214-byte figure was re-derived independently, from scratch, with a
+  key-sorted `JSON.stringify`.
+- **CANNOT support:** *the `evaluations` channel is safe under production (non-stub) evaluator
+  output.* That is an OPEN, NAMED risk. Nothing in this section retires it, and no later
+  sprint should inherit it as settled.
+
+The precise stub literals, for anyone checking the arithmetic: `generator.notes` is
+`` `generated ${contractId}` `` (`src/pge/engine/__fixtures__/whole-graph.ts:284`) and the
+evaluator stub's `summary` is `"all criteria met"` (`stubEvaluation`,
+`src/pge/nodes/__fixtures__/sprint-harness.ts:222`).
 
 `verdict`'s row reads `writeCount: 0` rather than a false "measured and found small": its
 sole writer is `finalize` (`nodes/root.ts`'s own doc comment), and `finalize` is one of the
@@ -1321,6 +1361,15 @@ the declared limit" question, extended to the channels real generator and evalua
 flows through, and (for `spec`/`sprintContracts`) the direct byte-vs-cap comparison
 [The graph engine against a real workload](#the-graph-engine-against-a-real-workload)
 documents.
+
+`corpusHeadroom` answers a STATIC question — how a stored corpus payload would fare against
+the cap — for three channels only, and the payloads it reads predate `evaluations`' current
+three-copy shape. Sprint 10 added the complementary DYNAMIC question, for all eleven: what a
+real run's own commit traffic actually weighed, recorded as `observedWrites` in the same file.
+Neither supersedes the other — the corpus is the sizing basis, the observation is the
+sighting — and the observation carries a caveat of its own about stub collaborators. See
+[Every channel and every node this real run
+touches](#every-channel-and-every-node-this-real-run-touches--sprint-10).
 
 **60 of 250 committed contracts and 1 of 53 committed specs do not parse** under their own
 schema (an earlier contract/spec era) and are skipped rather than crashing the corpus build —
