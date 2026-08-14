@@ -1905,39 +1905,86 @@ them this spec's to do (`nonGoals`):**
    to one root cause — the graph has a checkpoint-gated commit the imperative engine lacks.**
    `diffs` can never become empty under the bar's current wording, and now no amount of
    further building would make it so: the bar itself has to be re-specified, on purpose,
-   before "flip the default" is a live question again. **What this implies for
-   `spec-20260814-pge-full-convergence`'s own sprint 11:** its `sc-11-1` asks the harness to
-   report `equivalent: true` on a real run, and that criterion cannot be met as written. The
-   satisfiable part of that sprint is its `sc-11-3`/`sc-11-5` — rewrite this disposition,
-   state plainly which fields did not converge and why, and re-specify the bar around a
-   named, accepted divergence set rather than around emptiness. Doing that re-specification
-   was explicitly this spec's earlier sprints' `nonGoals`/`outOfScope[2]`, and it is not this
-   record's to perform.
+   before "flip the default" is a live question again. **What this implied for
+   `spec-20260814-pge-full-convergence`'s own sprint 11, and how it closed — the bar is met,
+   under the form the amendment gave it.** Its `sc-11-1` asked the harness to report
+   `equivalent: true` on a real run — unsatisfiable BY BUILDING, not by shortfall, for the
+   reasons above. The orchestrator amended it
+   (`sprint-spec-20260814-pge-full-convergence-11.json`, `amendment.sc-11-1`) to the same
+   standard sprint 3 applied to `audits` alone, now applied to the whole remaining set: *the
+   harness reports the TRUE divergence set on a real run, and every remaining entry is proven
+   architectural rather than merely unbuilt, each with a recorded reason* — explicitly NOT met
+   by adjusting the comparison.
 
-   **Since sprint 8, `sc-11-1` is not the only criterion in that condition.** Sprint 9's
+   **Sprint 11 performed that re-specification as code, not only as prose.**
+   `equivalentModuloAcceptedDivergences` (`src/orchestrator/workflow/conformance.ts`) is
+   `true` only when `report.diffs`'s field set is EXACTLY
+   `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`'s two keys — `audits` and `pipelineResult`, each
+   carrying the same source-grounded reason recorded above under point 1 and the `errors`
+   bullet — no more (a regression, or a genuinely new gap) and no less (one of the two
+   silently dropping out of the reported set, which would mean the comparison stopped
+   *detecting* a divergence that still, in fact, exists — not that it closed). Run against the
+   two REAL engines (`conformance.engines.test.ts`, `"sc-11-1"`), this amended claim is `true`.
+   The literal, unamended pin, `equivalent: false`, stays asserted in the same test,
+   immediately above it: the record keeps both statements side by side rather than only the
+   one that reads as progress.
+
+   **The amended assertion was proven to fail in both directions by mutation, not by reading
+   it (sc-11-2)** — the sprint-6 house precedent this record follows, applied twice: once as a
+   PERMANENT synthetic test in this file's own established idiom (`coverage.test.ts:311-354`
+   — hand-built `ConformanceReport` values against the exported function itself, `"sc-11-2"`),
+   and once as a LIVE mutation of the shipped source, observed red, then reverted
+   byte-identical, exactly as sprint 6's four live mutations were. Two mutations, both
+   reverted: `ARCHITECTURALLY_ACCEPTED_DIVERGENCES` gained a third, bogus entry
+   (`history`, which the real run does not diverge on) — the real-run assertion above went red
+   (`expected false to be true`) — and separately, `equivalentModuloAcceptedDivergences`'s
+   "no less" half was weakened to a subset check, the exact shape a silently-relaxed
+   comparison takes — which turned the new direction-2 synthetic test red
+   (`expected true to be false`). Neither mutation is in this diff; both are recorded here as
+   the verification they were.
+
+   **`equivalent: true`, unamended and literal, remains permanently unreached, and is not this
+   record's to chase.** The pin stays `equivalent: false` for the same two architectural
+   reasons it always has been (point 1 and the `errors` bullet, above), asserted directly and
+   not merely implied by the amended function passing. A future change that closed either
+   `audits` or `pipelineResult` for real would need to revisit
+   `ARCHITECTURALLY_ACCEPTED_DIVERGENCES` deliberately — shrinking that set quietly is exactly
+   the "adjusting the comparison" this section's own house rule forbids, which is why each
+   entry carries a reason to argue with rather than a bare name to delete.
+
+   **Since sprint 8, `sc-11-1` was not the only criterion needing this treatment.** Sprint 9's
    `sc-9-3` ("`NEVER_EXECUTED` is empty") and `sc-9-4` ("every node in the committed topology
-   executed") are unsatisfiable as literally written for the SAME class of reason, one level
+   executed") were unsatisfiable as literally written for the SAME class of reason, one level
    away from conformance: `context_compact` is structurally unreachable by case authoring.
    That finding, the two sibling structural limits it belongs with, and the amended form the
-   two criteria should take are recorded in "How much of the graph the committed cases
-   execute" above. Sprint 11 consolidates three such criteria, not one, and the remedy is
+   two criteria took are recorded in "How much of the graph the committed cases execute"
+   above. Sprint 11 therefore consolidated three such criteria, not one, and the remedy was
    identical in each: a named, accepted, individually-justified exception set instead of a bar
    phrased as emptiness.
 
    **Sprint 9 closed its own two against that amended form** — `synthesize` investigated on
    its own merits and independently reconfirmed structurally unreachable, `NEVER_EXECUTED`
    unchanged at `['context_compact', 'synthesize']` with both entries claim-tested, and node
-   coverage computed against the artifact at 42/44 — so sprint 11 inherits `sc-9-3`/`sc-9-4`
-   as CLOSED, and its own remaining work is `sc-11-1` alone plus the write-up `sc-11-3`/
-   `sc-11-5` ask for.
+   coverage computed against the artifact at 42/44 — so sprint 11 inherited `sc-9-3`/`sc-9-4`
+   as CLOSED, and its own remaining criterion-level work was `sc-11-1` alone plus the write-up
+   `sc-11-3`/`sc-11-5` asked for — both delivered above and in "The decision" below.
 
-   **And `sc-11-1` is unsatisfiable BY BUILDING, not merely as written.** `synthesize` is the
-   FOURTH structural limit this spec has produced (`audits`, `pipelineResult.errors`,
-   `context_compact`, `synthesize` — tabulated together in "How much of the graph the committed
-   cases execute" above). Two of the four ARE the divergence set; the other two block the
-   coverage bar one level away. No further implementation inside this spec's scope closes any
-   of them, so sprint 11 cannot reach `equivalent: true` by writing more code, and should not
-   be asked to try. Its whole deliverable is the honest re-specification.
+   **What sprint 11 did NOT do, and named as deliberately not its business.** `synthesize` is
+   the FOURTH structural limit this spec produced (`audits`, `pipelineResult.errors`,
+   `context_compact`, `synthesize` — tabulated together in "How much of the graph the
+   committed cases execute" above). Two of the four ARE the divergence set; the other two
+   block the coverage bar one level away, already closed by sprint 9's amended form. No
+   implementation inside this spec's scope closed any of the four this sprint, and none was
+   attempted: `equivalentModuloAcceptedDivergences` re-specifies the BAR, it does not narrow
+   the SET, and `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`' two entries are exactly the two
+   `conformance.engines.test.ts` has pinned since sprint 6 — unchanged in membership, only
+   named and reasoned explicitly in code for the first time. Separately, `pipelineResult.errors`
+   joining `audits`' ADR-1 acceptance FORMALLY — as an amendment to that ADR, or a new one —
+   remains RECOMMENDED and UNDECIDED, exactly as sprint 6 left it: that is an architecture
+   decision for an architect to take deliberately, not a documentation sprint's to assume. The
+   distinction matters: `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`' recorded reasons are this
+   sprint's evidence that BOTH fields are architectural (satisfying sc-11-1's "each with a
+   recorded reason"), not a claim that the formal ADR joinder has been taken.
 
 **One carried-forward fact from sprint 5/6 is now CLOSED, not merely unchanged — see the
 sprint 7 bullet above.** An earlier version of this paragraph read: *"`verdictFrom`
@@ -1989,6 +2036,62 @@ by an earlier sprint's security audit and spawned as its own task; it is not thi
 fix, but a document whose own gate is invisible to `grep` is worth one sentence in the
 record that names it.
 
+**Sprint 11's own outcome — the closing record for `spec-20260814-pge-full-convergence`.**
+No production `.ts` file changed, no topology moved, and the golden dataset was not
+re-captured: this sprint's whole deliverable is the amended equivalence assertion
+(`equivalentModuloAcceptedDivergences`, `src/orchestrator/workflow/conformance.ts`), its two
+tests in `conformance.engines.test.ts` (`"sc-11-1"`, real engines; `"sc-11-2"`, synthetic,
+both directions), and this section. What CLOSED, across the whole spec, not only this
+sprint: `history` (sprint 4) and `contracts` (sprints 5–6) — both were missing writers, both
+now converge byte-for-byte. What did **NOT** converge, stated plainly rather than left to be
+inferred from an all-green suite: `audits` and `pipelineResult.errors` remain diverged,
+permanently in the case of `audits` (ADR-1) and by the identical architectural reasoning in
+the case of `pipelineResult.errors` (sprint 6) — a formal ADR joinder for the latter is
+RECOMMENDED and still UNDECIDED, an architecture action this sprint did not take on its own
+authority. Two coverage-side structural limits sit beside them, already closed under their
+own amended criteria by sprint 9 and not reopened here: `context_compact` and `synthesize`
+stay in `NEVER_EXECUTED`, each with its own recorded, claim-tested reason. **Nothing above
+should be read as "PGE is done."** The `equivalent: false` pin is still the literal truth,
+still asserted directly, and still what a checkout with no other context should trust.
+
+Sprint 10's own measurement is real but narrower than a casual read of "no channel breached"
+would suggest, and this closing record repeats the caveat deliberately rather than letting it
+quietly not travel forward: that measurement's collaborators are the shipped STUB set
+(`generator.notes` the literal `` `generated ${contractId}` ``, the evaluator stub's
+`summary` the literal `"all criteria met"`), so its 368-byte `evaluations` headroom against a
+4,096-byte cap is evidence the graph handles this repository's real 29 KB spec and 14 real
+contracts through 234 supersteps without a breach on THIS path — not evidence a production
+evaluator's longer free text would clear the same cap, and not evidence about a channel's
+ACCUMULATED state, since `wouldReject` is checked per `ChannelUpdate`, before the reducer,
+the same instant `commit.ts:389` checks it — an append-style channel's total footprint after
+many writes (`messages` 93, `ledger` 90, `counters` 47 on that same run) is a different
+question this measurement does not answer. Both limits are recorded in full in "Every
+channel and every node this real run touches — sprint 10" above; restated here only so a
+reader of the closing section does not have to have read that one first to avoid
+over-crediting the number.
+
+**The most valuable sentence in this record is this one: what a flip would now actually
+require, now that the bar itself is no longer the blocker.** Before sprint 11, a flip needed
+four things (the numbered list above) and the fourth — re-specifying an unsatisfiable bar —
+was the one nothing could satisfy by building. That one is now done: the bar is
+`equivalentModuloAcceptedDivergences`, it is met on a real run of both engines, and it is
+proven two-directional by mutation. What is left is three concrete, scoped decisions, none
+of them a rebuild and none of them this record's to take: (1) the same amended equivalence
+holding under **sustained** real runs, plural, and other configurations — not only the one
+golden fixture `conformanceConfig()` drives — because "sustained green conformance across
+real runs" was always the plan's own bar for a flip, and one fixture passing once is a
+necessary data point, not the sustained evidence that bar asks for; (2) the Option B
+success-semantics decision (point 2 above), still deliberately out of scope, still the thing
+that would make `PipelineResult.success` tell the truth about a FAIL_CLOSED refusal instead
+of `deriveRunSuccess`'s frozen Option-A formula; and (3) the formal ADR joinder for
+`pipelineResult.errors` (point 1 above) — recorded as a recommendation with two named
+backers since sprint 6, and still exactly that, an open decision rather than settled doctrine.
+None of the three is a missing writer, a missing case, or a missing test. All three are
+decisions for a human or an architect to take on purpose, which is precisely what "the
+default stays `'ts'` by choice rather than by blocker" means: the remaining distance to a
+flip is now entirely in what this project chooses to accept, not in what the graph engine is
+still unable to do.
+
 **This decision is enforced, not just recorded.**
 `src/orchestrator/workflow/oracle-retention.test.ts` asserts that the schema still defaults
 `pipeline.engine` to `"ts"` (read from the schema, never from a checkout's own
@@ -2001,11 +2104,19 @@ named in that file's source, since their CLOSURE is recorded there too — a fie
 divergence set must not make the file stop mentioning it entirely). An
 oracle that exists but is unreachable from selection is not retained; an oracle nothing
 compares against is not exercised. Both are asserted separately, so neither can be
-satisfied by the other.
+satisfied by the other. **Sprint 11 of `spec-20260814-pge-full-convergence` left this file
+byte-for-byte UNMODIFIED (sc-11-4)** — it still names all four historical fields
+(`history`, `audits`, `contracts`, `pipelineResult`) and still pins the literal
+`equivalent: false`, which is the reading a checkout with no other context should trust. The
+amended, satisfiable claim `equivalentModuloAcceptedDivergences` makes lives beside it, in
+`conformance.engines.test.ts` — a NEW assertion, not a replacement for this one.
 
 If a future change makes the two engines equivalent, the assertion that pins
 `equivalent: false` is the one to revisit **first and deliberately** — accompanied by an
-update to this section — rather than the default quietly moving underneath it.
+update to this section — rather than the default quietly moving underneath it. The same is
+true, separately, of `ARCHITECTURALLY_ACCEPTED_DIVERGENCES`: a field leaving it needs the
+same deliberate revisit, because the set is a decision, not a cache of whatever the harness
+happened to report last.
 
 ### The dormant `src/orchestrator/workflow/` subtree — RETAIN
 
