@@ -4,7 +4,7 @@
   "sprintNumber": 4,
   "title": "history converges \u2014 the missing phase events",
   "description": "A graph run writes one shared terminal event where the imperative pipeline writes ten phase events, because PGE has exactly one history writer, finalizePipelineRun. Emit the missing phases from the graph nodes.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-4"
@@ -68,7 +68,15 @@
     ".bober/golden/"
   ],
   "estimatedDuration": "large",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-4-1",
+      "timestamp": "2026-08-14T13:05:00Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T13:05:00Z",
+  "completedAt": "2026-08-14T13:05:00Z"
 }

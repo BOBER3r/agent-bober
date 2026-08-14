@@ -1,0 +1,96 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-7-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-7",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T16:02:44Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "clean worktree @f8bc005: 467 files / 7102 passed / 6 skipped / 0 failed",
+      "details": "matches generator exactly"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "clean; typecheck:tests clean",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "7/7 (100%)",
+      "details": ""
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-7-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "interpreter.ts:734 and commit.ts:535 both use isSettledContractStatus. interpreter.test.ts 30/30, commit.test.ts 24/24."
+    },
+    {
+      "criterionId": "sc-7-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "INDEPENDENTLY REPRODUCED: in a disposable worktree, reverted ONLY interpreter.ts and commit.ts to cdef388, ran the sc-7-2 test -> FAILED with 'expected failed to be partial' at :823, the exact message quoted. Confirmed the mirrored negative control PASSES in that same reverted state (returns 'failed' correctly) AND in the real code \u2014 proving it discriminates rather than being a second copy of the positive test."
+    },
+    {
+      "criterionId": "sc-7-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Both ALLOWLIST entries DELETED outright (not edited/relocated); 'migrated readers' test renamed six -> eight with both files appended. 10/10 pass. Evaluator INJECTED a synthetic stale entry into a disposable copy -> FAILED with 'stale allowlist entry: ... no longer matches', proving the bidirectional check would have caught a leftover."
+    },
+    {
+      "criterionId": "sc-7-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "GOLDEN_CAPTURE=1 -> 10/10, zero file changes: the empty .bober/golden/ diff is genuine. Confirmed CONFORMANCE_FIELDS has no 'verdict' and PgeEngine.run (:558-570) spreads finalized + optional errors, NEVER result.verdict \u2014 so the empty diff reflects real non-capture, not an inert migration. For real-workload.json: ran real-workload.test.ts and confirmed BY EXECUTION that all 14 branchStatus entries are state:'succeeded', attempts:1, and measurement.failures has length 1 with nodeId:'commit', errorClass:'FailClosed'. Given 14/14 real successes and one intentional gated refusal, 'partial' IS more accurate than 'failed' \u2014 a correct application of the stopCondition, understood before re-capturing. Also verified the versionRank tie-break finding is genuinely TEST-ONLY: production's settled writer always sets version: attempts (>=1), so the version-less string tie-break never applies to a real writer."
+    },
+    {
+      "criterionId": "sc-7-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "All gates green in a clean detached worktree at f8bc005. conformance.engines.test.ts 8/8, divergence pin unchanged at ['audits','pipelineResult']."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/checkpoints/mechanisms/disk.ts",
+      "description": "Generator saw one flaky failure in approval-marker JSON parsing in 1 of 4 full-suite runs. Evaluator ran the full suite once (0 failures) and disk.test.ts alone (12/12) and did NOT observe it \u2014 cannot independently confirm, but the file is untouched by this sprint and the durable-approval path it gates matters enough to track as pre-existing."
+    }
+  ],
+  "summary": "All 5 criteria verified by execution. Pre-migration failure reproduced from scratch with the exact quoted error; negative control proven to discriminate; allowlist bidirectional check proven to bite via an injected synthetic entry; the unanticipated real-workload.json verdict move validated against test-asserted facts rather than narration. Full gate green on a clean worktree."
+}

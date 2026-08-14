@@ -4,7 +4,7 @@
   "sprintNumber": 5,
   "title": "PGE writes evaluatorFeedback and generatorNotes",
   "description": "Two of the three contract deltas exist because no PGE node writes these fields at all. Give the settled contract the same feedback and notes an imperative run records.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-5"
@@ -67,7 +67,23 @@
     ".bober/golden/"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "fail",
+      "failedCriteria": [
+        "sc-5-3"
+      ],
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-5-1"
+    },
+    {
+      "iteration": 2,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-5-2",
+      "timestamp": "2026-08-14T14:20:04Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T14:20:04Z",
+  "completedAt": "2026-08-14T14:20:04Z"
 }

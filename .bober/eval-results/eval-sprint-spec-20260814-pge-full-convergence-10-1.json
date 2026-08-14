@@ -1,0 +1,90 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-10-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-10",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T18:02:55Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "clean detached worktree at ba0248f + fresh npm install: 468 files / 7114 passed / 6 skipped; golden 8/8",
+      "details": "matches generator exactly"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors; typecheck:tests 0 errors",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-10-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "Fixture reads .bober/specs/spec-20260805-pge-graph-engineering.json + 14 real contracts directly. Evaluator INDEPENDENTLY re-derived the canonical byte count from scratch (key-sorted JSON.stringify): 29214 \u2014 exact match. 6/6 green on both trees."
+    },
+    {
+      "criterionId": "sc-10-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "VERIFIED SAME METRIC: commit.ts:388-400 computes bytes=byteSize(update.value) and rejects if > maxInlineBytes; recordingCommitBoundary computes byteSize(update.value) BEFORE delegating, and wouldReject uses the identical operator. Not a proxy. All 11 channels present, pinned by set-equality against channelLimits' own keys \u2014 not a hand-picked subset. Spot-checked two numbers independently."
+    },
+    {
+      "criterionId": "sc-10-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "nodeCoverage from THIS run's spans filtered to 'ok', against 44 nodes read from topology.nodes. Evaluator verified FOUR of the six 'reachable elsewhere' claims by finding the named golden cases on disk and confirming their intent fields. Pin is two-directional exact-equals (toEqual on the 8 exact ids), not a subset check."
+    },
+    {
+      "criterionId": "sc-10-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "Re-ran WITHOUT the MEASURE flag on a genuinely clean detached worktree \u2014 all 6 assertions passed, so the record is a REAL PIN that re-derives byte-identically, not a snapshot that silently re-records."
+    },
+    {
+      "criterionId": "sc-10-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Full gate on clean worktree matches the generator's numbers exactly."
+    }
+  ],
+  "measurementIntegrity": {
+    "verified": true,
+    "realSpec": true,
+    "realCollaborators": false,
+    "detail": "The SPEC/contract corpus is genuinely real and independently verified (29,214 canonical bytes re-derived from scratch; 14 real contract files on disk). The COLLABORATORS are the shipped STUB set \u2014 generator.notes is literally `generated ${contractId}`, evaluator.summary is literally 'all criteria met'. That was the workload's design from sprints 1-4, not a new limitation, and the contract uses 'workload' to mean the DATA driving the graph, so sc-10-1 is accurate on its own terms and not overclaiming.",
+    "honestyAssessment": "EXEMPLARY rather than merely acceptable \u2014 the generator stated the limit prominently in its report AND in the permanent docs/pge-graph.md record, flagging it as a residual unmeasured risk rather than closing the finding.",
+    "whatThisEvidenceCanCarry": "CAN support: 'the graph engine correctly processes this repository's real 29 KB spec + 14 contracts through 234 supersteps without any channel or superstep-ceiling breach on the observed path'.",
+    "whatItCannotCarry": "CANNOT support: 'the evaluations channel is safe under production (non-stub) evaluator output'. That remains an OPEN, NAMED risk sprint 11 must account for rather than silently inherit as settled."
+  },
+  "regressions": [],
+  "summary": "All 5 criteria verified with reproducible evidence. The observedWrites metric was confirmed to be the exact commit.ts comparison across all 11 channels, not a proxy. The one judgement call for sprint 11: the spec data is real but the collaborators are stubs, disclosed honestly \u2014 the evaluations 'no breach' finding is valid only for stub-length text."
+}

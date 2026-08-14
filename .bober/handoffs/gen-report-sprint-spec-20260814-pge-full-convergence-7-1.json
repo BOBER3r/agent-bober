@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-7",
+  "status": "complete",
+  "iteration": 1,
+  "criteria": [
+    "sc-7-1 MET: interpreter.ts:734 and commit.ts:535 now use isSettledContractStatus(c.status) instead of the literal === 'passed'. interpreter.test.ts 30/30, commit.test.ts 24/24, invariant scan's 'no un-allowlisted offender' + 'the eight migrated readers no longer contain the literal' both pass.",
+    "sc-7-2 MET: new test in partial-failure.test.ts drives a declared-'failed' terminal with two branches settled via a handlerOverrides sprintOut override writing status:'completed'. PRE-MIGRATION it FAILED with 'expected failed to be partial' (captured verbatim); post-migration it passes. A mirrored negative control (nothing committed) returns 'failed' both before and after, proving the test discriminates.",
+    "sc-7-3 MET: both ALLOWLIST entries (interpreter.ts:728, commit.ts:539) removed; the positive-evidence 'migrated readers' test grew 6 -> 8 files and was renamed; stale \u00a73 prose and two stale path:line citations corrected. All 10 tests pass, so the bidirectional check holds both ways.",
+    "sc-7-4 MET: .bober/golden/ diff EMPTY after GOLDEN_CAPTURE=1, exactly as predicted. BUT one committed artifact OUTSIDE .bober/golden/ moved and was NOT anticipated: .bober/topology/measurements/real-workload.json, which reads GraphRunResult.verdict directly rather than through PipelineResult. verdict failed -> partial. Checked against the stopCondition BEFORE re-capturing: all 14 dispatched branches settle 'succeeded' and the only recorded TaskFailure is the ADR-backed commit-node FailClosed refusal, so 'partial' is strictly MORE accurate \u2014 the exact under-report class this sprint exists to fix. Re-captured; diff touches only the verdict line; reproducibility test still passes.",
+    "sc-7-5 MET: main tree 467 files / 7106 passed / 2 skipped / 0 failed; clean detached worktree at f8bc005 467 / 7102 passed / 6 skipped / 0 failed. typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean in BOTH. Golden 7/7 in both."
+  ],
+  "commits": [
+    "f8bc005 retire the dead \"passed\" comparisons in verdictFrom and commit's split"
+  ],
+  "openQuestionResolved": "The suite-count discrepancy is ANSWERED: the 4 tests that skip in a clean worktree but run in the working checkout are tests/graph/mcp-client.test.ts:783,805,832,866, gated by it.skipIf(!tokensaveIntegrationRunnable) \u2014 they need a real indexed .tokensave/ project in cwd, which is gitignored (.gitignore:40) and so absent from any fresh worktree. Self-documenting gate, not a hidden one. Same 7108 total, 0 failures either way.",
+  "secondaryFinding": "While constructing the sc-7-2 test, an override writing status:'completed' WITHOUT version silently lost the fixture's channel-join tie-break to the seeded contract: neither side sets version, and the canonicalJson string tie-break happens to favour 'passed' (sorts after 'in-progress') but NOT 'completed' (sorts before it). Not a production bug \u2014 specific to how the test override was first written \u2014 but a real load-bearing subtlety in reducers.ts's versionRank fallback that the golden fixture's gate_sprint_out body dodges only by the alphabetics of the word 'passed'. Fixed by setting version:1 on the override, mirroring what sprint_exit does in production.",
+  "flakyTestObserved": "ONE flaky failure in a single full-suite run: src/orchestrator/checkpoints/mechanisms/disk.ts approval-marker JSON parsing \u2014 an existing filesystem-timing-sensitive area this sprint never touches. Two subsequent full runs plus the clean-worktree run were 100% green. Treated as pre-existing flakiness.",
+  "blockers": []
+}

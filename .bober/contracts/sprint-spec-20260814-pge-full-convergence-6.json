@@ -4,7 +4,7 @@
   "sprintNumber": 6,
   "title": "The version delta closes \u2014 contracts and pipelineResult converge",
   "description": "PGE's sprint_exit writes version: attempts; the imperative runSprintCycle writes none. Close the last contract delta, which closes pipelineResult with it since that field is a container for the same objects.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-5"
   ],
@@ -70,7 +70,27 @@
     ".bober/golden/"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass-amended",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-6-1",
+      "timestamp": "2026-08-14T15:10:40Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T15:10:40Z",
+  "completedAt": "2026-08-14T15:10:40Z",
+  "amendedDisposition": {
+    "criterion": "sc-6-3",
+    "amendedAt": "2026-08-14T15:10:40Z",
+    "reason": "The contract's premise that closing `contracts` closes `pipelineResult` was factually incomplete. `contracts` IS closed and pipelineResult's CONTAINER portion closed as a consequence, but pipelineResult.errors diverges independently and architecturally.",
+    "finding": "PipelineResult.errors has exactly one write site (PgeEngine.run, pre-dating this sprint). The imperative engine's commitAll is unconditional and ungated, so it has no honest equivalent write site. Same root cause as `audits`: the graph has a checkpoint-gated commit the imperative engine lacks.",
+    "acceptedAs": "Architectural divergence on the same footing as `audits` (sprint 3 precedent). Both remaining divergences share one root cause.",
+    "rejectedFixes": [
+      "adding `errors` to VOLATILE_KEYS (violates that set's own documented bar)",
+      "fabricating an imperative `errors` entry (misreports behaviour the architecture cannot produce)"
+    ],
+    "carryTo": "sprint 11 \u2014 the flip-bar assessment must account for a divergence set of ['audits','pipelineResult'] where BOTH entries are architectural, not unbuilt."
+  }
 }

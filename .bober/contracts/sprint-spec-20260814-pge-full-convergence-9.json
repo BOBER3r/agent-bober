@@ -4,7 +4,7 @@
   "sprintNumber": 9,
   "title": "rework_route and synthesize execute \u2014 NEVER_EXECUTED empties",
   "description": "The last two unreached nodes. When they execute, every node in the committed topology has run at least once.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-8"
   ],
@@ -61,7 +61,36 @@
     "src/pge/golden/capture.test.ts"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass-amended",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-9-1",
+      "timestamp": "2026-08-14T17:30:17Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T17:30:17Z",
+  "preFlightFinding": {
+    "foundBy": "orchestrator, from sprint 8's evaluator-confirmed structural finding",
+    "at": "2026-08-14T16:54:55Z",
+    "sc-9-1": "ALREADY SATISFIED by sprint 8. rework_route executes with span status 'ok' (superstep 42, route.label 'exhausted'), because critique's sole successor edge IS rework_route. Confirm it still holds; do not re-derive it.",
+    "sc-9-3": "UNSATISFIABLE AS WRITTEN. NEVER_EXECUTED cannot empty: context_compact is structurally unreachable (shipped supervisor has no code path returning COMPACT_LABEL; supervisor.reads excludes 'messages'). Evaluator-confirmed in sprint 8 by fresh trace.",
+    "sc-9-4": "UNSATISFIABLE AS WRITTEN for the same reason \u2014 'every node executed' cannot hold while context_compact is structurally blocked.",
+    "stopConditionApplies": "The contract's own stopCondition covers this: 'A node is genuinely unreachable in the committed topology \u2014 that is a topology finding worth more than the coverage number; record it.'",
+    "amendedIntent": "sc-9-3/sc-9-4 become: NEVER_EXECUTED contains ONLY nodes proven structurally unreachable, each with a recorded reason and a claim test; and coverage asserts every node executes EXCEPT those, computed against the topology ARTIFACT rather than a hardcoded count. The guard must still bite in BOTH directions \u2014 fail if a covered node stops executing, AND fail if a listed node starts executing without the list being updated. Per generatorNotes: do NOT simply delete the guard.",
+    "realWork": "synthesize (sc-9-2) is the genuine remaining target."
+  },
+  "completedAt": "2026-08-14T17:30:17Z",
+  "amendedDisposition": {
+    "criteria": [
+      "sc-9-2",
+      "sc-9-3",
+      "sc-9-4"
+    ],
+    "amendedAt": "2026-08-14T17:30:17Z",
+    "reason": "sc-9-2's literal form is unsatisfiable (synthesize structurally unreachable \u2014 FOURTH such finding, evaluator-verified through two independent proof chains). sc-9-3/sc-9-4's literal forms ('NEVER_EXECUTED empty', 'every node executed') were already unsatisfiable from sprint 8's context_compact finding.",
+    "acceptedAs": "NEVER_EXECUTED holds ONLY structurally-proven-unreachable nodes, each with a mutation-proven claim test; coverage asserted against the topology ARTIFACT. Final coverage 42/44 with both exceptions pinned and tested.",
+    "carryTo": "sprint 11 \u2014 four structural limits now stand: audits, pipelineResult.errors, context_compact, synthesize."
+  }
 }

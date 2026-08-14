@@ -1,0 +1,98 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-9-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-9",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T17:30:17Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "clean detached worktree + fresh npm ci at afe67e6: 468 files / 7114 passed / 6 skipped / 0 failed",
+      "details": ""
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "clean; typecheck:tests clean",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "8/8 (100%)",
+      "details": ""
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-9-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "NEVER_EXECUTED is ['context_compact','synthesize'] \u2014 neither critique nor rework_route appear, so both have >=1 ok span. Confirmed by an independent coverage run (11/11) and the 8/8 gate."
+    },
+    {
+      "criterionId": "sc-9-2",
+      "required": true,
+      "result": "pass-AMENDED",
+      "evidence": "synthesize is genuinely structurally unreachable \u2014 governed by the contract's own stopCondition. Evaluator re-derived it through TWO independent proof chains and could find no reachable path."
+    },
+    {
+      "criterionId": "sc-9-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator independently reproduced the evaluatorNotes instruction: removed the committed golden case driving critique/rework_route and reran coverage.test.ts \u2014 the REAL production guard (:272-275, NOT the local missingAgainst helper sprint 8's audit flagged) reported missing=['context_compact','critique','rework_route','synthesize'] and the ratio check failed (expected 42, got 40). Restored, 11/11 green. Each NEVER_EXECUTED entry is now backed by a claim test."
+    },
+    {
+      "criterionId": "sc-9-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "coverage.test.ts:248-251 reads .bober/topology/coding.json in beforeAll and derives declared from artifact.nodes.map(id) \u2014 not a literal. Unchanged by this diff (doc-comment lines only)."
+    },
+    {
+      "criterionId": "sc-9-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Entire gate re-run on a clean detached worktree + fresh npm ci; matches the generator exactly."
+    }
+  ],
+  "structuralFinding": {
+    "confirmed": true,
+    "node": "synthesize",
+    "isFourthOfFour": true,
+    "detail": "Evaluator attacked SEVEN paths and found none. Two independent proof chains: (A) supervisor.ts:165-171 checks SPRINTS_LABEL strictly before EVALUATE_LABEL (confirmed by reading code order AND by mutation), and evaluate_global/route_after_eval/critique declare writes of exactly ['messages','evaluations','ledger'], ['counters'], ['messages','ledger'] \u2014 none touches sprintContracts or branchStatus. (B) A SECOND barrier the generator's docs cited but did NOT encode as a test: reduce_sprints (gates.ts:1001-1028) refuses \u2014 routing back to fanout_sprints, NOT supervisor \u2014 whenever ANY branchStatus entry is 'failed' or 'abandoned', and its own fanoutRetries budget degrades straight to graceful_failure once exhausted. Combined with sprint_exit being the ONLY writer that sets a new terminal branchStatus, and 'abandoned' being grep-verified as NEVER written by any production .ts, EVERY branch is provably 'succeeded' by the time a run can reach evaluate_global at all. So rework_route's dispatch set is empty on its one reachable invocation, it always selects 'exhausted', route_after_eval runs at most once, and its 'reworkRoundsTaken >= maxIterations' branch \u2014 the sole path to synthesize \u2014 is dead by construction.",
+    "negativeControlReconciled": "CLAIM 3's negative control shows reworkRouterNode CAN select 'rework' given a state with a 'failed' branchStatus entry. That does not contradict the finding: chain (B) proves that exact state can never arise at rework_route.",
+    "maxIterationsChecked": "2 is a fixed topology constant (coding.graph.ts:872), NOT a bober.config.json knob \u2014 and moot, since the block is upstream of the loop bound entirely.",
+    "rejectedContrivanceUpheld": "Refusing to seed counters.reworkRounds=2 was correct, not avoidable work: such a case would encode a state the shipped interpreter can never produce. The CLAIM 4 tests correctly label their injected states 'SYNTHETIC STATE (not claimed reachable)' and use them only to prove the router's own logic is right \u2014 a materially different and more honest claim than reachability.",
+    "tripwire": "root.test.ts's four CLAIM tests go red the moment any supporting fact stops being true."
+  },
+  "regressions": [],
+  "summary": "All five criteria verified. sc-9-2 re-derived from primary source through two independent proof chains, seven attacked paths, no reachable route found. Evaluator reproduced three of four production-code mutations and the scratch golden-case removal itself. Full clean-worktree gate matches."
+}

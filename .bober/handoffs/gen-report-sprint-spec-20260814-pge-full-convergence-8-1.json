@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-8",
+  "status": "partial",
+  "iteration": 1,
+  "criteria": [
+    "sc-8-1 NOT MET (stopCondition fired as designed): independently re-verified \u2014 `grep -rn COMPACT_LABEL src/` returns exactly ONE hit (supervisor.ts:82, the declaration itself); the handler at :140-177 has exactly five return statements (refusal->failGoto, PLAN_LABEL, SPRINTS_LABEL, EVALUATE_LABEL, default->endGoto) and none returns COMPACT_LABEL. Recorded in NEVER_EXECUTED's doc block AND backed by a new claim test in supervisor.test.ts, PROVEN to bite: temporarily added a path returning COMPACT_LABEL -> the new test went red; reverted to byte-identical (git diff --stat empty).",
+    "sc-8-2 MET: new replay case replay-corrected-sprint-still-grades-fail (correctingBindings(1): evaluator fails call 1, passes call 2) drives critique. Span status verified DIRECTLY, not inferred: a temporary standalone test ran the case through createGoldenExecutor with keepRunRoots:true and printed raw trace JSONL \u2014 critique's span shows superstep 41, status:'ok', route.goto {kind:node,node:rework_route}. Temp file deleted before commit.",
+    "sc-8-3 MET: NEVER_EXECUTED shrank from 4 entries to ['context_compact','synthesize']; main pin passes with executed.size===42. Two new two-directional guard tests added, each PROVEN to bite by temporarily inverting its key assertion and confirming it goes red, then restoring (11/11 green).",
+    "sc-8-4 MET: the new case declares enforcement:'replay' (verified by direct JSON inspection). Produced exclusively via captureGoldenCase (capture.ts:225 hard-codes replay); no case hand-written. Dataset-level test confirms the 8 committed replay caseIds equal SCENARIOS exactly.",
+    "sc-8-5 MET: working tree 7110 passed / 2 skipped; clean detached worktree + fresh npm install 7106 passed / 6 skipped / 0 failed. typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean in BOTH. Golden 8/8 (100%)."
+  ],
+  "coverage": "40/44 (~90.9%) -> 42/44 (~95.5%), verified via coverage.test.ts (declared.length - NEVER_EXECUTED.length === executed.size, both 42).",
+  "commits": [
+    "65ea5a8 critique and rework_route execute; context_compact recorded as structurally blocked"
+  ],
+  "nonGoalConflict": "The nonGoal ('Driving rework_route or synthesize \u2014 sprint 9') could NOT be honoured for rework_route \u2014 structurally forced, since critique's sole successor edge is rework_route. Flagged ahead of implementation in the contract's preFlightFinding. Let it happen and recorded plainly rather than contriving to avoid it. `synthesize` untouched and still in NEVER_EXECUTED.",
+  "noProductionCodeChanged": "git diff --stat confirms ONLY test files and docs changed. No non-test .ts modified anywhere. package.json/package-lock.json untouched.",
+  "blockers": [
+    "sc-8-1 requires a topology change (adding 'messages' to supervisor.reads, a minor graphVersion bump) plus new supervisor code to select the label from a measured window \u2014 out of this sprint's scope and explicitly forbidden by the stopCondition."
+  ],
+  "flakyObserved": "One transient ESLint-spawn timeout in src/pge/lint-boundary.test.ts on the first clean-worktree run; passed in 446ms in isolation and the suite was green on immediate rerun. Resource contention, not caused by any file this sprint touched."
+}

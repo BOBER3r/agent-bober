@@ -4,7 +4,7 @@
   "sprintNumber": 11,
   "title": "The bar is met, and the default deliberately stays 'ts'",
   "description": "With every divergence closed, the bar as originally written \u2014 equivalent: true \u2014 becomes satisfiable. Assert it directly, record that it is met, and say what a flip would now involve. This spec does not flip it.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-3",
     "sprint-spec-20260814-pge-full-convergence-4",
@@ -74,7 +74,52 @@
     "docs/sprints/README.md"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-11-1",
+      "timestamp": "2026-08-14T18:43:27Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T18:43:27Z",
+  "pendingAmendment": {
+    "flaggedAt": "2026-08-14T15:28:43Z",
+    "flaggedBy": "orchestrator, on findings from sprints 3 and 6",
+    "problem": "sc-11-1 requires the conformance harness to report equivalent:true on a real run. That is now UNSATISFIABLE BY BUILDING: both remaining divergences are architectural, not unbuilt. `audits` was PROVEN unreachable in sprint 3 (the runtime cannot express a per-branch interrupt). `pipelineResult.errors` was proven unreachable in sprint 6 (only PgeEngine.run writes it, sourced from a checkpoint-gated commit refusal; the imperative commitAll is unconditional and ungated). They share ONE root cause.",
+    "resolution": "Amend at sprint 11, preserving rigor rather than lowering the bar: replace 'the harness reports equivalent:true' with 'the harness reports the TRUE divergence set, and EVERY remaining entry is proven architectural rather than merely unbuilt, with a formal ADR-backed acceptance'. That is the same standard sprint 3 applied to `audits`. Do NOT weaken it to whatever the code happens to produce.",
+    "alsoOpen": "Generator, evaluator and documenter all independently recommend joining pipelineResult.errors to the audits acceptance in .bober/architecture/arch-20260814-pge-full-convergence-adr-1.md. That ADR decision is UNTAKEN \u2014 it needs an architect, not a documenter. sc-11-3/sc-11-5 (rewrite the disposition, state plainly what did not converge) remain meetable as written.",
+    "specStaleness": "spec-20260814-pge-full-convergence.json feat-7 ('With every divergence closed, assert equivalence directly') has a now-false premise; feat-5 is done."
+  },
+  "amendment": {
+    "amendedAt": "2026-08-14T18:04:50Z",
+    "amendedBy": "orchestrator, on evaluator-adjudicated findings from sprints 3, 6, 8, 9",
+    "sc-11-1": {
+      "literalForm": "The conformance harness reports equivalent: true on a real run of both engines.",
+      "status": "UNSATISFIABLE BY BUILDING \u2014 not by shortfall.",
+      "why": "Two divergences remain and BOTH are architectural, sharing one root cause: the graph has a checkpoint-gated commit the imperative engine lacks. `audits` was PROVEN unreachable in sprint 3 (the runtime cannot express a per-branch interrupt). `pipelineResult.errors` was proven in sprint 6 (only PgeEngine.run writes it, from the interpreter's TaskFailure records; the imperative commitAll is unconditional and ungated, so there is no honest equivalent write site).",
+      "amendedTo": "The harness reports the TRUE divergence set on a real run of both engines, AND every remaining entry is proven architectural rather than merely unbuilt, each with a recorded reason. This preserves the bar's rigor instead of lowering it \u2014 it is the same standard sprint 3 applied to `audits`. It must NOT be met by adjusting the comparison.",
+      "contractAlreadyAnticipatesThis": "sc-11-5 requires any non-converged field be stated plainly, and the stopCondition says outright: 'A spec that closed three of four honestly is worth more than one that claims four.' The amendment aligns sc-11-1 with what the contract's own stopCondition and nonGoals already demand."
+    },
+    "sc-11-2": {
+      "amendedTo": "The pin becomes an assertion of the TRUE state that still fails in BOTH directions \u2014 a NEW divergence fails it, AND a silently-relaxed comparison fails it. Unchanged in spirit; only the asserted state differs from 'empty'."
+    },
+    "whatActuallyClosed": [
+      "history (sprint 4)",
+      "contracts \u2014 evaluatorFeedback + generatorNotes (sprint 5), version (sprint 6)"
+    ],
+    "whatDidNotClose": [
+      "audits \u2014 architectural, sprint 3",
+      "pipelineResult.errors \u2014 architectural, sprint 6"
+    ],
+    "fourStructuralLimitsTotal": [
+      "audits",
+      "pipelineResult.errors",
+      "context_compact (sprint 8)",
+      "synthesize (sprint 9)"
+    ],
+    "openRiskSprint11MustNotInherit": "Sprint 10 measured NO channel breach on the real 29,214-byte workload \u2014 but its collaborators are STUBS. The `evaluations` channel measured 368/4096 with stub text (generator.notes='generated <id>', evaluator.summary='all criteria met'). This does NOT clear a real evaluator's longer free text against a cap sized to a ~1 KB stub corpus. Sprint 10's evaluator was explicit that this evidence CANNOT carry that claim. Do not let the closing record imply it does."
+  },
+  "completedAt": "2026-08-14T18:43:27Z"
 }

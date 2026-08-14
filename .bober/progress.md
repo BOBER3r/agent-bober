@@ -2,7 +2,7 @@
 
 Project: agent-bober
 Mode: greenfield
-Last updated: 2026-07-09 20:29 UTC
+Last updated: 2026-08-14 13:05 UTC
 
 ---
 
@@ -799,23 +799,38 @@ which makes the current flip bar ("sustained green conformance") unsatisfiable b
 - Spec: spec-20260814-pge-full-convergence
 - Created: 2026-08-14
 - Sprints: 11
-- Status: PAUSED after 3 of 11 (deliberate — consolidating)
+- Status: completed (11/11 sprints) — PLAN COMPLETE 2026-08-14
 
 ### Sprint Breakdown
 1. [completed] Checkpoints inside the sprint fan-out — the ADR decision — iteration 1
 2. [completed] Gated effects execute under a durable approval — iteration 1
 3. [completed] audits converges — the full checkpoint trail — iteration 2
-4. [proposed] history converges — the missing phase events
-5. [proposed] PGE writes evaluatorFeedback and generatorNotes
-6. [proposed] The version delta closes — contracts and pipelineResult converge
-7. [proposed] Retire the dead "passed" comparisons
-8. [proposed] context_compact and critique execute
-9. [proposed] rework_route and synthesize execute — NEVER_EXECUTED empties
-10. [proposed] The graph engine runs this repository's own real workload
-11. [proposed] The bar is met, and the default deliberately stays 'ts'
+4. [completed] history converges — the missing phase events — iteration 1 (072f814..cf7595d); new src/pge/runtime/history.ts emitPhaseEvent delegating to the EXISTING appendHistory + HISTORY_EVENT_NODE_MAP; nine emitters wired at real node lifecycle boundaries; divergence set 4 -> 3
+5. [completed] PGE writes evaluatorFeedback and generatorNotes — iteration 2 (b03463b..23a1718); raw (undecorated) pair carried on SprintVerdict, sprint_exit strips any seeded copy before re-adding from the decisive verdict; `contracts` divergence narrows to `version` alone. Iter-1 failed sc-5-3: the negative control was inert under mutation; iter-2 replaced it with one that bites.
+6. [completed] The version delta closes — contracts and pipelineResult converge — iteration 1, AMENDED (1fd29e9); new settledAttempts decisive-round counter gives the imperative engine a replay-stable monotone source; `contracts` FULLY CLOSED (canonical equality, nothing stripped). But the contract's premise was wrong: pipelineResult.errors diverges INDEPENDENTLY and architecturally (one write site, PgeEngine.run; the imperative commitAll is unconditional and ungated). Accepted on the same footing as `audits`. Divergence set now ['audits','pipelineResult'] — BOTH architectural.
+7. [completed] Retire the dead "passed" comparisons — iteration 1 (f8bc005); interpreter.ts and commit.ts migrated to isSettledContractStatus, two ALLOWLIST entries removed, previously-dead downgrade logic now reachable (proven by a test that FAILS pre-migration). Golden diff empty as predicted (verdict is not a captured field); .bober/topology/measurements/real-workload.json verdict moved failed -> partial and was understood before re-capture.
+8. [completed] context_compact and critique execute — iteration 1, AMENDED (65ea5a8); new replay case drives critique AND (topology-forced) rework_route to ok spans; coverage 40/44 -> 42/44. context_compact is STRUCTURALLY BLOCKED — the shipped supervisor has no code path returning COMPACT_LABEL and supervisor.reads excludes 'messages'. Recorded per the stopCondition, backed by a claim test. NO production code changed.
+9. [completed] rework_route and synthesize execute — NEVER_EXECUTED empties — iteration 1, AMENDED (afe67e6); rework_route reconfirmed. synthesize is STRUCTURALLY UNREACHABLE — the FOURTH such finding — verified through two independent proof chains (supervisor dispatch-order + a reduce_sprints barrier the generator had not encoded) across seven attacked paths. NEVER_EXECUTED now holds only proven-unreachable nodes, each with a mutation-proven claim test. Coverage 42/44 final. No production behaviour changed.
+10. [completed] The graph engine runs this repository's own real workload — iteration 1 (ba0248f); real 29,214-byte PlanSpec + 14 real contracts, 234/512 supersteps, verdict partial. ALL 11 channels measured against the exact commit.ts metric: NO breach (evaluations 368/4096, spec 29214/131072, sprintContracts 135106/524288). 36/44 nodes executed, all 8 misses NAMED. CAVEAT: collaborators are stubs, so the evaluations headroom is proven only for stub-length text.
+11. [completed] The bar is met, and the default deliberately stays 'ts' — iteration 1, AMENDED (1487ba1, 97ac340); the closing record. `equivalent: true` proved UNREACHABLE BY BUILDING, so sc-11-1 was amended BEFORE the sprint to preserve rigor: the harness reports the TRUE divergence set and every remaining entry is proven architectural. report.equivalent's formula is byte-identical and still asserted FALSE directly; the new equivalentModuloAcceptedDivergences is a separate frozen two-member predicate, test-pinned by a hardcoded array, proven to fail in BOTH directions by independently reproduced mutations. Default stays 'ts' BY CHOICE.
 
-### Pause note (2026-08-14)
-Stopped after sprint 3 by decision, to consolidate rather than push on.
+### Outcome (spec-20260814-pge-full-convergence, 11/11)
+The spec set out to close four conformance divergences and run six never-executed nodes. What it actually established:
+- CLOSED, genuinely: `history` (s4), `contracts` — evaluatorFeedback + generatorNotes (s5) and version (s6). Verified by canonical whole-object equality with nothing stripped.
+- NOT CLOSED, proven architectural: `audits` (s3) and `pipelineResult.errors` (s6). They share ONE root cause — the graph has a checkpoint-gated commit the imperative engine lacks.
+- FOUR structural limits recorded, each with a claim test and a cost-to-close: audits, pipelineResult.errors, context_compact (s8), synthesize (s9).
+- Node coverage 38/44 -> 42/44 on the golden corpus; 36/44 on the real workload with every miss named.
+- Real workload measured: 29,214-byte PlanSpec + 14 real contracts, 234/512 supersteps, NO channel breach.
+- Two evidence caveats that must travel with any flip decision: collaborators were STUBS, and `wouldReject` measures per-update, not accumulated state.
+- Default engine unchanged at 'ts' — by choice, not by blocker.
+
+Four sprints (6, 8, 9, 11) closed under AMENDED dispositions. In each case the contract's own stopCondition had anticipated the outcome, and an evaluator independently adjudicated it rather than the generator self-declaring.
+
+STILL OPEN, deliberately: the formal ADR joinder of pipelineResult.errors to ADR-1 (recommended by three independent agents, undecided — needs an architect); and the `evaluations` channel under production-length evaluator text (unmeasured).
+
+### Pause note (2026-08-14) — SUPERSEDED, run resumed same day
+The run was stopped after sprint 3 by decision, to consolidate. It RESUMED at sprint 4 on 2026-08-14 and is live again;
+the history below is kept because it records what sprints 1-3 established, not because the run is still paused.
 
 What sprints 1-3 established:
 - `audits` is PROVEN unreachable — the runtime cannot express a per-branch interrupt. Permanently accepted.
@@ -827,4 +842,5 @@ What the reassessment corrected:
   `appendHistory` is callable. It is unbuilt, not unreachable. Corrected in e48962e, with a self-checking test
   so the claim cannot rot again.
 
-So ONE of four divergences is architectural, not two. Sprints 4-11 remain as a recorded, resumable plan.
+So ONE of four divergences is architectural, not two. Sprints 4-11 were a recorded, resumable plan — and the run resumed:
+sprint 4 closed `history` (divergence set 4 -> 3), so the live set is now ['audits','contracts','pipelineResult'].

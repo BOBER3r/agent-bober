@@ -1,0 +1,160 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-11-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-11",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T18:04:50Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: TypeScript multi-agent pipeline. This is the CLOSING sprint of the spec that finishes the PGE graph engine.",
+    "currentBranch": "bober/pge-full-convergence",
+    "finalState": {
+      "divergenceSet": "['audits','pipelineResult'] \u2014 both architectural",
+      "coverage": "42/44 on the golden corpus; 36/44 on the real workload",
+      "goldenGate": "8/8 (100%)",
+      "suite": "~7114 passing",
+      "defaultEngine": "'ts' \u2014 unchanged and staying"
+    },
+    "evidenceCaveats": [
+      "SPRINT 10 CAVEAT 1 (collaborators): the workload's SPEC data is real (29,214 canonical bytes, independently re-derived; 14 real contracts) but the COLLABORATORS are STUBS \u2014 generator.notes is literally `generated ${contractId}`, evaluator.summary is literally 'all criteria met'. The evaluations channel measured 368/4096. This CANNOT clear a real evaluator's longer free text against a cap sized to a ~1 KB stub corpus. Open, named risk.",
+      "SPRINT 10 CAVEAT 2 (per-update vs accumulated): observedWrites.wouldReject measures the largest SINGLE ChannelUpdate \u2014 which is exactly what commit.ts:389 enforces \u2014 NOT a channel's accumulated merged state. Append-style channels grow past their nominal 4096 over a run (messages 93 writes, ledger 90, counters 47) without any declared cap being consulted, because the cap applies per update, BEFORE the reducer. Do NOT cite 'no channel breached' as evidence of bounded total state.",
+      "What the sprint-10 evidence CAN carry: 'the graph engine correctly processes this repository's real 29 KB spec + 14 contracts through 234 supersteps of a 512 ceiling without any per-update channel cap or superstep-ceiling breach on the observed path.'"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-11",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 11,
+    "title": "The bar is met, and the default deliberately stays 'ts'",
+    "description": "With every divergence closed, the bar as originally written \u2014 equivalent: true \u2014 becomes satisfiable. Assert it directly, record that it is met, and say what a flip would now involve. This spec does not flip it.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260814-pge-full-convergence-3",
+      "sprint-spec-20260814-pge-full-convergence-4",
+      "sprint-spec-20260814-pge-full-convergence-6",
+      "sprint-spec-20260814-pge-full-convergence-9",
+      "sprint-spec-20260814-pge-full-convergence-10"
+    ],
+    "features": [
+      "feat-7"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-11-1",
+        "description": "The conformance harness reports equivalent: true on a real run of both engines, verified by running it.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-11-2",
+        "description": "The divergence-set pin becomes an equivalence assertion that still fails in BOTH directions \u2014 a new divergence fails it, and so does a silently-relaxed comparison.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-11-3",
+        "description": "docs/pge-graph.md's disposition is rewritten: which divergences closed and how, that the bar is met, and that the default stays 'ts' by choice rather than by blocker.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-11-4",
+        "description": "oracle-retention.test.ts still passes unmodified \u2014 pipeline.engine still defaults to 'ts', TsPipelineEngine is still selected and still the fallback.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-11-5",
+        "description": "Any field that did NOT converge is stated plainly with its reason, rather than the record implying total closure.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-11-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Flipping the default.",
+      "Removing the oracle.",
+      "Claiming closure for a field that did not converge."
+    ],
+    "stopConditions": [
+      "equivalent: true is not reached \u2014 record exactly which field still diverges and why, and do not adjust the comparison to reach it. A spec that closed three of four honestly is worth more than one that claims four."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 3,
+    "generatorNotes": "This is the closing record; write it like one. The previous spec's closing section in docs/pge-graph.md is the model \u2014 it stated the outcome, named what was enforced by which test, and said what stayed unproven. The most valuable sentence here is the one that says what a flip would now actually require, now that the bar is no longer the blocker. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "Verify equivalence by running the harness, not by reading the pin. Then mutation-test the new assertion in both directions. Finally read the prose against reality: every field it claims closed should be absent from a run you perform yourself. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "src/orchestrator/workflow/oracle-retention.test.ts",
+      "docs/pge-graph.md",
+      "docs/sprints/README.md"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T18:04:50Z",
+    "pendingAmendment": {
+      "flaggedAt": "2026-08-14T15:28:43Z",
+      "flaggedBy": "orchestrator, on findings from sprints 3 and 6",
+      "problem": "sc-11-1 requires the conformance harness to report equivalent:true on a real run. That is now UNSATISFIABLE BY BUILDING: both remaining divergences are architectural, not unbuilt. `audits` was PROVEN unreachable in sprint 3 (the runtime cannot express a per-branch interrupt). `pipelineResult.errors` was proven unreachable in sprint 6 (only PgeEngine.run writes it, sourced from a checkpoint-gated commit refusal; the imperative commitAll is unconditional and ungated). They share ONE root cause.",
+      "resolution": "Amend at sprint 11, preserving rigor rather than lowering the bar: replace 'the harness reports equivalent:true' with 'the harness reports the TRUE divergence set, and EVERY remaining entry is proven architectural rather than merely unbuilt, with a formal ADR-backed acceptance'. That is the same standard sprint 3 applied to `audits`. Do NOT weaken it to whatever the code happens to produce.",
+      "alsoOpen": "Generator, evaluator and documenter all independently recommend joining pipelineResult.errors to the audits acceptance in .bober/architecture/arch-20260814-pge-full-convergence-adr-1.md. That ADR decision is UNTAKEN \u2014 it needs an architect, not a documenter. sc-11-3/sc-11-5 (rewrite the disposition, state plainly what did not converge) remain meetable as written.",
+      "specStaleness": "spec-20260814-pge-full-convergence.json feat-7 ('With every divergence closed, assert equivalence directly') has a now-false premise; feat-5 is done."
+    },
+    "amendment": {
+      "amendedAt": "2026-08-14T18:04:50Z",
+      "amendedBy": "orchestrator, on evaluator-adjudicated findings from sprints 3, 6, 8, 9",
+      "sc-11-1": {
+        "literalForm": "The conformance harness reports equivalent: true on a real run of both engines.",
+        "status": "UNSATISFIABLE BY BUILDING \u2014 not by shortfall.",
+        "why": "Two divergences remain and BOTH are architectural, sharing one root cause: the graph has a checkpoint-gated commit the imperative engine lacks. `audits` was PROVEN unreachable in sprint 3 (the runtime cannot express a per-branch interrupt). `pipelineResult.errors` was proven in sprint 6 (only PgeEngine.run writes it, from the interpreter's TaskFailure records; the imperative commitAll is unconditional and ungated, so there is no honest equivalent write site).",
+        "amendedTo": "The harness reports the TRUE divergence set on a real run of both engines, AND every remaining entry is proven architectural rather than merely unbuilt, each with a recorded reason. This preserves the bar's rigor instead of lowering it \u2014 it is the same standard sprint 3 applied to `audits`. It must NOT be met by adjusting the comparison.",
+        "contractAlreadyAnticipatesThis": "sc-11-5 requires any non-converged field be stated plainly, and the stopCondition says outright: 'A spec that closed three of four honestly is worth more than one that claims four.' The amendment aligns sc-11-1 with what the contract's own stopCondition and nonGoals already demand."
+      },
+      "sc-11-2": {
+        "amendedTo": "The pin becomes an assertion of the TRUE state that still fails in BOTH directions \u2014 a NEW divergence fails it, AND a silently-relaxed comparison fails it. Unchanged in spirit; only the asserted state differs from 'empty'."
+      },
+      "whatActuallyClosed": [
+        "history (sprint 4)",
+        "contracts \u2014 evaluatorFeedback + generatorNotes (sprint 5), version (sprint 6)"
+      ],
+      "whatDidNotClose": [
+        "audits \u2014 architectural, sprint 3",
+        "pipelineResult.errors \u2014 architectural, sprint 6"
+      ],
+      "fourStructuralLimitsTotal": [
+        "audits",
+        "pipelineResult.errors",
+        "context_compact (sprint 8)",
+        "synthesize (sprint 9)"
+      ],
+      "openRiskSprint11MustNotInherit": "Sprint 10 measured NO channel breach on the real 29,214-byte workload \u2014 but its collaborators are STUBS. The `evaluations` channel measured 368/4096 with stub text (generator.notes='generated <id>', evaluator.summary='all criteria met'). This does NOT clear a real evaluator's longer free text against a cap sized to a ~1 KB stub corpus. Sprint 10's evaluator was explicit that this evidence CANNOT carry that claim. Do not let the closing record imply it does."
+    }
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "GOLDEN_PASS_THRESHOLD=80 node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

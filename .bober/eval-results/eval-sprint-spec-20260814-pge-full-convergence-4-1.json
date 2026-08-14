@@ -1,0 +1,109 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-4-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-4",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T13:02:37Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit exit 0",
+      "details": "clean detached worktree at cf7595d"
+    },
+    {
+      "strategy": "typecheck:tests",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit -p tsconfig.test.json exit 0",
+      "details": "required by sc-4-6"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "eslint src/ \u2014 2 warnings, 0 errors",
+      "details": "both warnings verified pre-existing at base commit c0e3bbe"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0",
+      "details": "clean worktree"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "output": "467 files passed | 1 skipped; 7087 tests passed | 6 skipped | 0 failed",
+      "details": "clean detached worktree, worktree/node_modules excluded"
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "golden: 7/7 passed (100.00%, threshold >80%) exit=0",
+      "details": "7 replay cases executed; 37 integrity cases not executed by design"
+    },
+    {
+      "strategy": "api-check",
+      "required": false,
+      "result": "skipped",
+      "output": "no API surface touched",
+      "details": "n/a to this sprint"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-4-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "git show --stat 072f814 touches ONLY src/pge/runtime/history.ts + history.test.ts \u2014 no node body. Mapping cross-referenced against real appendHistory call sites in pipeline.ts/finalize.ts."
+    },
+    {
+      "criterionId": "sc-4-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "conformance.engines.test.ts asserts loadHistory(pgeRoot).map(e=>e.event) toEqual tsHistoryEvents \u2014 order-sensitive, from two REAL engine runs. All 9 emitter call sites verified inline in node handlers at genuine start/end points; no deferred flush, nothing batched at finalize."
+    },
+    {
+      "criterionId": "sc-4-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Pin is exact toEqual against ['audits','contracts','pipelineResult'] \u2014 inherently bidirectional. Second pure-function test proves both: historyRegressed (adds history) and contractsSilentlyClosed (drops contracts) both not.toEqual the pin."
+    },
+    {
+      "criterionId": "sc-4-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "Exactly one production definition (src/state/history.ts:81); src/pge/runtime/history.ts:210 is the only caller under src/pge. grep of src/pge/nodes/ for appendHistory returns ZERO. docs.test.ts scanner enforces the caller set with positive AND negative controls."
+    },
+    {
+      "criterionId": "sc-4-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "39a2cbe recaptures the 7 replay cases. Evaluator manually read the multi-round case diff: generator/evaluator pairs at (1,1) then (2,2), ending in an unmatched curator-start (cache-hit re-entry) \u2014 internally coherent. The 5 stale integrity cases verified NOT executed by the gate (assertExecutable throws for non-replay), so their content makes no runtime claim; disposition documented with named precedent."
+    },
+    {
+      "criterionId": "sc-4-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All green on clean detached worktree at cf7595d; working-tree noise confirmed outside the c0e3bbe..cf7595d diff."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All six required criteria independently verified hands-on on a clean detached worktree. Mapping committed before any node touched; all nine emitters fire at genuine lifecycle boundaries (not batched at finalize); ordered lists from two real engine runs are equal; the pin provably fails both directions; appendHistory has exactly one caller under src/pge under a scanner-enforced invariant; full suite 7087 passed / 0 failed and golden 7/7."
+}

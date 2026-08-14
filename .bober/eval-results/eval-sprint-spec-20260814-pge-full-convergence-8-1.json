@@ -1,0 +1,95 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-8-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-8",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T16:51:38Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "clean detached worktree + fresh npm install: 467 files / 7106 passed / 6 skipped / 0 failed",
+      "details": "6 skips are the exact expected set"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "clean; typecheck:tests clean",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "8/8 (100%)",
+      "details": "8 of 45 committed cases are replay; 37 integrity"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-8-1",
+      "required": true,
+      "result": "pass-AMENDED",
+      "evidence": "INDEPENDENTLY RE-DERIVED. grep -rn COMPACT_LABEL src/ returns exactly ONE hit \u2014 supervisor.ts:82, the declaration. supervisorNode's handler (:133-177) has exactly 5 returns: refusal->failGoto(:144), PLAN_LABEL(:153), SPRINTS_LABEL(:166), EVALUATE_LABEL(:170), default->endGoto(:173-176). None returns COMPACT_LABEL. supervisor.reads is ['branchStatus','counters','spec','evaluations'] (coding.graph.ts:408) \u2014 NO 'messages', so even a correct handler cannot READ what a compaction threshold would need. No case-authoring lever reaches around it: seeds refused outright (executor.ts:446), only permitted config override is {approved:true} (:176-179), and the node has effects:[] so bindings cannot touch it. Evaluator ran the new case FRESH and grepped the raw trace for context_compact: ZERO occurrences.",
+      "amendedDisposition": "Structurally recorded, not a retry target. The contract's own stopCondition anticipated exactly this. Closing it needs shipped production code (topology reads-list change + graphVersion bump + new handler logic) \u2014 out of scope for an 'add cases that drive existing behaviour' sprint. No cheaper legitimate route exists: counters is a generic Record<string,number> with no message-count proxy, and nothing wires decideCompaction into the supervisor."
+    },
+    {
+      "criterionId": "sc-8-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator read the span status DIRECTLY from the trace, not from narration: ran the case through createGoldenExecutor(keepRunRoots:true) and read raw golden.jsonl \u2014 critique at superstep 41, status:'ok', route.goto {kind:node,node:rework_route}; rework_route at superstep 42, status:'ok', route.label:'exhausted'."
+    },
+    {
+      "criterionId": "sc-8-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "NEVER_EXECUTED shrank 4 -> ['context_compact','synthesize']. Evaluator READ both new mutation tests rather than trusting the inversion narrative: one regresses critique's span to 'failed' and asserts the pin then reports ['critique']; the other gives context_compact an ok span while still listed and asserts the pin then reports []. The assertions DIFFER in the two branches, so the guard demonstrably bites both ways \u2014 directly answering the sprint-5 precedent. 11/11 pass."
+    },
+    {
+      "criterionId": "sc-8-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "New case declares enforcement:'replay'. Evaluator independently counted the dataset: 45 total files, exactly 8 replay, matching SCENARIOS."
+    },
+    {
+      "criterionId": "sc-8-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Entire gate re-run on a clean detached worktree + fresh npm install. Coverage independently recomputed: coding.json declares 44 nodes, NEVER_EXECUTED has 2 -> 42/44. The 0.85 coverage-ratio floor was NOT touched by the diff \u2014 the floor did not move to protect the number."
+    }
+  ],
+  "structuralFinding": {
+    "confirmed": true,
+    "node": "context_compact",
+    "detail": "Only inbound edge is supervisor --compact--> context_compact. Handler has 5 exhaustive returns, none COMPACT_LABEL. supervisor.reads excludes 'messages'. Seeds refused, config limited to {approved:true}, effects:[] so no binding lever. Verified by fresh trace: context_compact never appears.",
+    "precedent": "Same pattern as sprint 3 (audits) and sprint 6 (pipelineResult.errors)."
+  },
+  "regressions": [],
+  "summary": "All five criteria verified from source and a clean-worktree gate run. sc-8-1's structural block holds under direct scrutiny; recording rather than contriving was correct per the contract's own stopCondition. No production code changed \u2014 only tests, docs and golden data \u2014 so coverage rose 40/44 -> 42/44 without altering behaviour. The rework_route nonGoal conflict is confirmed genuinely topology-forced; synthesize left untouched."
+}

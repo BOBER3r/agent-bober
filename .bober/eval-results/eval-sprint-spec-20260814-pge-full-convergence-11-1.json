@@ -1,0 +1,100 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-11-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-11",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T18:43:27Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "clean detached worktree at 97ac340: 468 files / 7116 passed / 6 skipped / 0 failed",
+      "details": "matches generator exactly"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors; typecheck:tests 0 errors",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "8/8 (100%)",
+      "details": ""
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-11-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator RAN the harness. Suite stdout logged '[conformance] artifact divergence detected: 2 diff(s) across engines [ts, pge]' on its own real run \u2014 TRUE set is exactly 2 fields. report.equivalent FALSE (asserted directly, unweakened); equivalentModuloAcceptedDivergences TRUE. Allowlist keys are exactly ['audits','pipelineResult'] (Object.freeze, conformance.ts:687-696). BOTH reasons cross-checked against source: audits' single-slot Checkpoint.interrupt confirmed at checkpointer.ts:247 and branch-blind grantScope/resumeMessageId at interrupt.ts:268/332, matching ADR-1 written in sprint 3; pipelineResult confirmed by grep showing pge-engine.ts is the SOLE writer of `errors` and pipeline.ts:451's commitAll is unconditional with no checkpoint gate."
+    },
+    {
+      "criterionId": "sc-11-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator reproduced BOTH mutations INDEPENDENTLY in a disposable worktree: (a) bogus third entry 'history' added to the allowlist -> sc-11-1 RED with 'expected false to be true' at :443; (b) 'no less' half replaced with a pure subset check -> sc-11-2 RED with 'expected true to be false' at :501 on the missingOne case. Both reverted byte-identical (git diff --stat empty). Exact error messages matched the generator's claims."
+    },
+    {
+      "criterionId": "sc-11-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Disposition substantially rewritten in place + new closing subsection. Names what closed (history s4; contracts s5-6), what did not (audits, pipelineResult.errors \u2014 both architectural, ADR joinder explicitly RECOMMENDED and UNDECIDED), states equivalent:false remains the literal truth and 'Nothing above should be read as PGE is done'. docs.test.ts 76/76 including assertFlipPrerequisitesStated and region-gutting controls, verified independently."
+    },
+    {
+      "criterionId": "sc-11-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "git diff on oracle-retention.test.ts is EMPTY. Ran it: 11/11 pass including 'defaults to ts when the config says nothing at all', 'is what the DEFAULT config selects', 'is the fallback the graph engine itself downgrades to'. Confirmed schema.ts:395 .default('ts') and :1012."
+    },
+    {
+      "criterionId": "sc-11-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Closing subsection states both non-converged fields plainly with reasons, and explicitly 'Nothing above should be read as PGE is done. The equivalent: false pin is still the literal truth.' BOTH sprint-10 caveats confirmed present VERBATIM and unsoftened."
+    },
+    {
+      "criterionId": "sc-11-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All gates re-run on a clean detached worktree at 97ac340; every number matches."
+    }
+  ],
+  "goalpostVerdict": {
+    "legitimate": true,
+    "detail": "VERIFIED, not accepted. (1) report.equivalent's formula (diffs.length===0 && !vacuous) is BYTE-IDENTICAL to before this sprint \u2014 untouched \u2014 and the test asserts it FALSE directly, in the same test, immediately before checking the amended claim. The literal bar was never softened. (2) The allowlist has EXACTLY two members, Object.freeze'd, and the test HARDCODES expect(Object.keys(...).sort()).toEqual(['audits','pipelineResult']) \u2014 any future widening requires editing that literal inside a test, so it cannot happen invisibly in review. (3) Both mutation directions independently reproduced red, then reverted byte-identical. (4) The ORCHESTRATOR, not the generator, wrote the amendment into the contract BEFORE the sprint started, specifying this exact form and explicitly forbidding comparison-adjustment \u2014 the generator implemented a pre-specified amendment, not a self-serving relaxation. (5) Both allowlist reasons trace to specific source facts the evaluator checked itself, and audits is backed by an ADR written at sprint 3, independent of this sprint.",
+    "disclosedLimitation": "A test can enforce that the accepted set stays internally consistent and stays exactly two members; it CANNOT prove the underlying 'architectural' characterisation is correct. That remains a human/ADR judgement \u2014 the same limit sprint 3's precedent carries. The record discloses this candidly: pipelineResult.errors' formal ADR joinder is explicitly still RECOMMENDED and UNDECIDED, not silently treated as settled.",
+    "whatGoalpostMovingWouldHaveLookedLike": "Quietly merging the two into one settled claim, or weakening report.equivalent itself. This sprint did neither."
+  },
+  "regressions": [],
+  "summary": "All 6 criteria independently verified. The literal equivalent:false claim stays pinned and directly asserted; the allowlist is a separate, frozen, test-pinned two-member function whose membership matches source-grounded ADR reasoning; both mutation directions reproduce red. Full gate green on a clean worktree, and sprint 10's two evidence caveats survive unsoftened."
+}

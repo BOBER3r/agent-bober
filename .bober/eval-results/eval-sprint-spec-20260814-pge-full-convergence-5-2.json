@@ -1,0 +1,95 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-5-2",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-5",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T14:20:04Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "467 files passed / 1 skipped; 7096 passed / 6 skipped / 0 failed",
+      "details": "clean detached worktree at 23a1718"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors; typecheck:tests 0 errors",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": "untouched file"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "7/7 (100%)",
+      "details": "independently re-run in clean worktree"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-5-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "Zero-line production diff vs the iteration-1-verified commit; assertions pass unchanged."
+    },
+    {
+      "criterionId": "sc-5-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "Same zero-line production diff."
+    },
+    {
+      "criterionId": "sc-5-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator INDEPENDENTLY reproduced the mutation at 23a1718: deleted the destructure at sprint-review.ts:276-278 and changed the spread. Result 32 passed / 1 FAILED \u2014 the failure was EXACTLY the new discriminating test at :939. All 32 others, including the renamed former control, still passed under the mutant, confirming the new test is the only discriminating one. Reverted -> 33/33. On the merits: underDeliveringExplain(1) makes the curate region refuse before sprint_generate/sprint_evaluate ever run (asserted via handlerLog), so outcome.evaluatorFeedback is genuinely undefined and the conditional spread contributes {} \u2014 spread-order cannot rescue the seed, only the strip protects it. Same refusal mechanism an existing pre-sprint test already exercises, so the path is real, not contrived. definitionOfDone closed: the doc claim at sprint-review.ts:266-274 is cited in the test docstring and backed by an assertion that fails when the claim stops being true."
+    },
+    {
+      "criterionId": "sc-5-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "conformance.engines.test.ts unchanged this iteration; passes."
+    },
+    {
+      "criterionId": "sc-5-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Zero-line golden diff \u2014 nothing moved, consistent with no production change. Gate 7/7."
+    },
+    {
+      "criterionId": "sc-5-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All green on clean detached worktree at 23a1718; no dependency changes; only file touched in iteration 2 is sprint-evaluate.test.ts."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "sc-5-3 fixed and independently reproduced. Full gate green on a clean detached worktree, no production code or golden artifacts changed in iteration 2, and the renamed old control no longer overclaims. All 6 required criteria pass."
+}

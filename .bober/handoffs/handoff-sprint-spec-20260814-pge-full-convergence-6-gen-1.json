@@ -1,0 +1,138 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-6",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T14:37:07Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: TypeScript multi-agent pipeline. This spec finishes the PGE graph engine. The default engine deliberately stays 'ts'.",
+    "completedSprints": [
+      {
+        "title": "1. Checkpoints inside the sprint fan-out",
+        "summary": "ADR for per-branch checkpoints."
+      },
+      {
+        "title": "2. Gated effects execute under a durable approval",
+        "summary": "commit and finalize execute for the first time."
+      },
+      {
+        "title": "3. audits converges",
+        "summary": "PROVED architecturally unreachable; ADR-backed permanent acceptance."
+      },
+      {
+        "title": "4. history converges",
+        "summary": "emitPhaseEvent delegating to the existing appendHistory; nine emitters at real lifecycle boundaries. Divergence SET 4 -> 3."
+      },
+      {
+        "title": "5. PGE writes evaluatorFeedback and generatorNotes",
+        "summary": "Raw undecorated pair carried on SprintVerdict; sprint_exit strips any seeded copy before re-adding. `contracts` now down to `version` ALONE. Took 2 iterations \u2014 iter-1's negative control was inert under mutation."
+      }
+    ],
+    "currentBranch": "bober/pge-full-convergence",
+    "importantNote": "Sprints 4 and 5 landed TODAY and shifted line numbers. The contract cites sprint-review.ts:215 for the version write \u2014 the curator verified it is actually :287 now. Trust the briefing over the contract text for line numbers.",
+    "carriedSecurityFinding": "Sprint 5's audit flagged (non-blocking) that one `evaluations` entry now carries THREE copies of unbounded model text against a 4096-byte cap sized at 2x the largest payload in a ~1KB STUB corpus. It is fail-CLOSED, not silent-drop. Not this sprint's problem, but do not make it worse.",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/contracts/sprint-contract.ts",
+      "src/orchestrator/workflow/conformance.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-6",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 6,
+    "title": "The version delta closes \u2014 contracts and pipelineResult converge",
+    "description": "PGE's sprint_exit writes version: attempts; the imperative runSprintCycle writes none. Close the last contract delta, which closes pipelineResult with it since that field is a container for the same objects.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260814-pge-full-convergence-5"
+    ],
+    "features": [
+      "feat-5"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-6-1",
+        "description": "Both engines agree on `version` for an equivalent run \u2014 by giving the imperative engine an equivalent monotone, replay-stable source, not by deleting the field the rank-aware channel join reads.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-2",
+        "description": "The value stays replay-stable: two runs over the same input produce the same version, proven by execution.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-3",
+        "description": "Neither 'contracts' nor 'pipelineResult' appears in the divergence set, verified by running the harness.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-4",
+        "description": "VOLATILE_KEYS is unchanged \u2014 convergence is real, not achieved by excluding the field from comparison.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-5",
+        "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Removing version from SprintContractSchema.",
+      "Adding version to VOLATILE_KEYS."
+    ],
+    "stopConditions": [
+      "The imperative engine has no replay-stable monotone source at its settle site \u2014 report what IS available rather than shipping something a replay cannot reproduce."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 4,
+    "generatorNotes": "PGE derives version from `attempts` \u2014 a count-filter over the appendById evaluations channel, order-invariant by construction (src/pge/nodes/sprint-review.ts:215). The imperative engine tracks its own iteration count in runSprintCycle; use that, and check it increments across the same transitions. Sprint 3 of spec-20260812-terminal-vocabulary documents why a wall-clock or ordering-derived value is disqualified. Do NOT give the schema a .default() \u2014 it would stamp the seeded copy and break the channel join. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "Run the same input twice and diff the version. Then confirm VOLATILE_KEYS did not grow \u2014 that is the cheap way this criterion could be faked. Finally verify pipelineResult closed as a CONSEQUENCE of contracts rather than being separately special-cased. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/contracts/sprint-contract.ts",
+      "src/orchestrator/workflow/conformance.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      ".bober/golden/"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T14:37:07Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "GOLDEN_PASS_THRESHOLD=80 node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

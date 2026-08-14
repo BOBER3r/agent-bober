@@ -1,0 +1,18 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-9",
+  "status": "complete-with-finding",
+  "iteration": 1,
+  "criteria": [
+    "sc-9-1 MET (reconfirmed, not rebuilt): rework_route still off NEVER_EXECUTED; coverage test passes on working tree AND clean detached worktree at afe67e6.",
+    "sc-9-2 NOT MET \u2014 synthesize is STRUCTURALLY UNREACHABLE. Reachable only via route_after_eval's 'partial' label, selected only when reworkRoundsTaken >= maxIterations(2) at a SECOND invocation of route_after_eval. Independently re-derived: supervisorNode never selects 'evaluate' while dispatchableContracts is non-empty (supervisor.ts:165 checks sprints first), and evaluate_global/route_after_eval/critique write NEITHER sprintContracts NOR branchStatus \u2014 so the all-succeeded state that guard requires is exactly what rework_route sees. rework_route's dispatch set is therefore always empty when it runs, so it always selects 'exhausted' on its first and only reachable invocation, ending every reachable run at graceful_failure BEFORE route_after_eval can run twice.",
+    "sc-9-3 MET via the amended form: NEVER_EXECUTED holds only the two structurally-proven entries, EACH now backed by a claim test (context_compact in supervisor.test.ts, synthesize newly in root.test.ts). Guard proven to bite by FOUR separate mutations of REAL production code, each confirmed red then reverted. ALSO removed the committed golden case in a scratch edit and confirmed the REAL coverage guard reports (missing grew to include critique/rework_route; the 0.85 ratio check failed), then restored.",
+    "sc-9-4 MET: coverage computed against the topology ARTIFACT (declared read from .bober/topology/coding.json in beforeAll) \u2014 already true from sprint 8, unchanged. 42/44 reconfirmed on both trees.",
+    "sc-9-5 MET: clean detached worktree at afe67e6 + fresh npm ci \u2014 468 files / 7114 passed / 6 skipped / 0 failed; typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean; golden 8/8 (100%)."
+  ],
+  "rejectedContrivance": "Investigated seeding a case's seed/entryNodeId to force counters.reworkRounds=2, which would technically produce an 'ok' span for synthesize. REJECTED: no real run of the shipped graph can produce that counter value (proven in root.test.ts CLAIM 1-3), so the case would prove nothing about the shipped runtime \u2014 exactly the contrivance the nonGoal and this spec's history reject.",
+  "coverage": "42/44 before and after \u2014 unchanged. No production .ts runtime behaviour changed.",
+  "commits": [
+    "afe67e6 confirm rework_route still executes; synthesize independently reconfirmed structurally unreachable"
+  ],
+  "blockers": []
+}

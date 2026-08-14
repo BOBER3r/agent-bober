@@ -1,0 +1,106 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-5-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-5",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T14:06:16Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 5,
+    "criteriaFailed": 1,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 1,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors; typecheck:tests 0 errors",
+      "details": "clean detached worktree at 080967b"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": "warnings in a file untouched by this diff"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "output": "467 files / 7095 passed / 0 failed (6 env-gated skips)",
+      "details": "skip-count delta vs generator is environment-gated live-integration tests, not a regression"
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "7/7 (100%)",
+      "details": "evaluator independently re-ran GOLDEN_CAPTURE=1 and got a byte-identical empty diff"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-5-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "sprint-evaluate.ts:414-437 attaches RAW result.summary, not the decorated local; test asserts not.toContain('['), ruling out the [decision.reason] decoration. Matches pipeline.ts:592/:719 verbatim. Proven against a real two-engine run."
+    },
+    {
+      "criterionId": "sc-5-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "generatorNotes: generated?.notes (raw GeneratorResult.notes), matching pipeline.ts:428. Verified node-level and in the two-engine comparison."
+    },
+    {
+      "criterionId": "sc-5-3",
+      "required": true,
+      "result": "FAIL",
+      "evidence": "The strip at sprint-review.ts:276-279 is real and load-bearing \u2014 evaluator confirmed independently. But the shipped negative control does NOT bite.",
+      "feedback": "MUTATION TEST: replaced `...contractWithoutFeedback` with `...contract` at sprint-review.ts:279 and deleted the destructure. ALL 32 tests in sprint-evaluate.test.ts still passed, INCLUDING the 'sc-5-3 negative control'. Reason: that test only exercises a PASSING branch where outcome.evaluatorFeedback is always defined, so spread-order alone (later key wins) overrides the seed whether or not it was stripped. The 4th test uses the fixture default contract which has no seeded key at all. Across the WHOLE repo only one test failed on the mutant \u2014 an unrelated golden byte-order diff (capture.test.ts:302) \u2014 and only from JSON key insertion order, not semantics. Evaluator constructed the discriminating test itself: seed a stale value AND route through underDeliveringExplain(1)'s refusal path where outcome.evaluatorFeedback is genuinely undefined \u2014 that test FAILS on the mutant and PASSES on shipped code. Also a definitionOfDone violation: the doc comment at sprint-review.ts:266-274 claims 'a stale value on contract (however it got there) can never survive by omission' with no test that fails when the claim stops being true."
+    },
+    {
+      "criterionId": "sc-5-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "conformance.engines.test.ts:625-630 canonical whole-object comparison against a real two-engine run; canonical/normalize recursively sorts keys and strips volatile keys. Both-directions control at :434-459 proves the strip does real work AND does not over-hide. Pin array byte-unchanged."
+    },
+    {
+      "criterionId": "sc-5-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "6 files gained coherent additive entries at every settled-contract occurrence; replay-plan-clarify-rounds-exhausted diff confirmed EMPTY. Evaluator re-ran GOLDEN_CAPTURE=1: byte-stable."
+    },
+    {
+      "criterionId": "sc-5-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All green on clean detached worktree at 080967b; no dependency changes; no files outside estimatedFiles."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "high",
+      "category": "quality",
+      "file": "src/pge/nodes/sprint-evaluate.test.ts",
+      "line": "860-889",
+      "description": "The sc-5-3 negative control does not discriminate between the strip being present or absent.",
+      "expected": "A test that seeds a stale evaluatorFeedback/generatorNotes AND routes through a path where the decisive verdict carries NO raw value (e.g. the refusal path, or security-block-into-exhaustion), then asserts the settled contract does not carry the stale seed.",
+      "reproduction": "At 080967b: change sprint-review.ts:279 from `...contractWithoutFeedback,` to `...contract,`, delete the destructure at 276-278, run `npx vitest run src/pge/nodes/sprint-evaluate.test.ts` \u2014 all 32 tests still pass."
+    }
+  ],
+  "summary": "Five of six criteria solid. sc-5-3 fails: the strip works, but the test cited as proof is inert under mutation. Required criterion + definitionOfDone violation."
+}

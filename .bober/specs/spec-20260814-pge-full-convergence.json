@@ -6,7 +6,7 @@
   "title": "Close every conformance divergence and run every graph node",
   "description": "The graph engine is built but not finished: four conformance fields still diverge from the imperative pipeline, and six of its nodes have never executed in any run. This spec closes all four divergences at their architectural causes and drives all six nodes to execution, so the flip bar becomes satisfiable as originally written. The default stays 'ts' \u2014 this makes the flip a decision you can take with evidence, not a risk this spec takes.",
   "mode": "brownfield",
-  "status": "in-progress",
+  "status": "completed",
   "ambiguityScore": 5,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -247,5 +247,6 @@
       "goldenReplayCases": "7 (was 6).",
       "resumeGuidance": "Sprint 4 is next and now looks like plumbing rather than a wall \u2014 map the imperative engine's ten phase events to graph nodes and emit them through the existing appendHistory path. The likely realistic end state for the whole spec is 3 of 4 divergences closed, with audits permanently accepted, so sprint 11 must re-specify the bar to name that single proven exception."
     }
-  }
+  },
+  "completedAt": "2026-08-14T18:43:27Z"
 }

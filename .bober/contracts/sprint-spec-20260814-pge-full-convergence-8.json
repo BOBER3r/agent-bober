@@ -4,7 +4,7 @@
   "sprintNumber": 8,
   "title": "context_compact and critique execute",
   "description": "Two of the six never-executed nodes are unreachable simply because no committed case drives them. Add cases that do.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-2"
   ],
@@ -61,7 +61,30 @@
     "src/pge/golden/capture.test.ts"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass-amended",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-8-1",
+      "timestamp": "2026-08-14T16:51:38Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T16:51:38Z",
+  "preFlightFinding": {
+    "foundBy": "curator, before implementation",
+    "at": "2026-08-14T16:19:06Z",
+    "sc-8-1": "context_compact is STRUCTURALLY BLOCKED, not missing a case. Its only inbound edge is supervisor --compact--> context_compact, and the shipped supervisor handler (supervisor.ts:140-177) has NO code path returning COMPACT_LABEL; grep confirms the label is referenced nowhere else in src/. No featureRequest, binding, seed (refused by executor.ts:446) or permitted config ({approved:true} only) can change a node body. sc-8-1 is UNSATISFIABLE by case authoring \u2014 the stopCondition fires.",
+    "nonGoalConflict": "The nonGoal 'Driving rework_route or synthesize \u2014 sprint 9' CANNOT hold. critique's sole successor is rework_route, so any case that drives critique to execution necessarily drives rework_route too. This is forced by topology, not a scope choice. NEVER_EXECUTED must shrink by TWO, not one.",
+    "consequenceForSprint9": "Sprint 9's scope narrows: rework_route will already be executed, leaving synthesize."
+  },
+  "completedAt": "2026-08-14T16:51:38Z",
+  "amendedDisposition": {
+    "criterion": "sc-8-1",
+    "amendedAt": "2026-08-14T16:51:38Z",
+    "reason": "context_compact is structurally unreachable by case authoring. The contract's own stopCondition anticipated this and instructed recording over contrivance.",
+    "acceptedAs": "Structurally recorded, not a retry target. Backed by a claim test in supervisor.test.ts that fails the moment the handler gains a compact-selecting path.",
+    "costToClose": "topology change (add 'messages' to supervisor.reads) + graphVersion bump + new supervisor handler logic \u2014 shipped production code, out of scope for a case-authoring sprint.",
+    "nonGoalConflict": "rework_route was driven to execution because critique's sole successor IS rework_route \u2014 topology-forced, evaluator-confirmed. synthesize left untouched."
+  }
 }

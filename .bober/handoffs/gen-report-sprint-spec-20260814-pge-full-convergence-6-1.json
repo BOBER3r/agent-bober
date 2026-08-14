@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-6",
+  "status": "partial",
+  "iteration": 1,
+  "criteria": [
+    "sc-6-1 MET: new settledAttempts decisive-round counter in pipeline.ts, hoisted above the retry loop, incremented once per round the evaluator ran for, written as Math.max(1, settledAttempts) at all four settle sites. Chose briefing option (ii) (decisive-round count) over option (i) (raw `iteration` loop variable). conformance test asserts canonical(pgeContract) === canonical(tsContract) with NOTHING stripped. Mutation-verified: stashed pipeline.ts -> all 4 new tests failed; restored -> all 4 passed.",
+    "sc-6-2 MET: frozen-clock, fresh-temp-root replay test runs the same two-round scenario TWICE via runSprintCycle and asserts version equality (=2) plus full deep-equality. Proven by execution on working tree AND clean worktree at 1fd29e9.",
+    "sc-6-3 NOT MET: divergence set is ['audits','pipelineResult'], not free of both named fields. `contracts` IS fully closed (verified: absent from report.diffs, canonical equality with nothing stripped). But running the REAL harness after the fix \u2014 rather than trusting the contract's premise \u2014 revealed pipelineResult still diverges for a SEPARATE, independent reason: PipelineResult.errors is populated only by PgeEngine.run from the interpreter's TaskFailure records (the same commit-node FAIL_CLOSED refusal already visible in the audits divergence), and the imperative engine has NO interpreter and NO gated commit step, so no honest equivalent write site.",
+    "sc-6-4 MET: git diff --stat on conformance.ts is EMPTY \u2014 file byte-untouched. VOLATILE_KEYS still exactly its ten keys. Neither `version` nor the newly-found `errors` was added.",
+    "sc-6-5 MET: golden 7/7 on working tree AND clean worktree; `git status --porcelain .bober/golden/` empty before and after both runs \u2014 PROVEN zero cases moved, not assumed. Confirms the briefing's prediction (executor.ts builds PgeEngine alone; this sprint changed only the imperative engine).",
+    "sc-6-6 MET: clean detached worktree at 1fd29e9 \u2014 suite 467 files / 7100+ passed / 0 failed; typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean; golden 7/7; pge validate ok; pge docs --check ok (44 nodes); pge diff empty."
+  ],
+  "rejectedDishonestFixes": [
+    "Adding `errors` to VOLATILE_KEYS \u2014 would hide a real, engine-observable difference; the file's own doc comment forbids this bar.",
+    "Fabricating an `errors` entry for the imperative engine \u2014 would misreport behaviour that architecturally cannot happen there; same category of dishonesty the sprint's stopCondition protects against for `version`."
+  ],
+  "commits": [
+    "1fd29e9 version delta closes -- contracts fully converges; pipelineResult narrows to a new, independent errors finding"
+  ],
+  "blockers": [
+    "sc-6-3 not fully met: pipelineResult remains in the divergence set due to PipelineResult.errors, discovered mid-sprint, with no honest imperative equivalent. Genuine architectural gap, not anticipated or authorized by this contract's scope. Recommends a follow-up deciding between (a) giving the imperative engine an equivalent checkpoint-gated commit step (a real behaviour change) or (b) formally joining `audits` as a permanently-accepted divergence via a new ADR."
+  ],
+  "notes": "COUNTER DECISION: option (ii), settledAttempts, NOT the raw `iteration` loop variable. The two disagree on exactly one row \u2014 a generator-failure round advances `iteration` but produces no evaluations entry on the PGE side (gate_syntax routes to the corrector 'without spending an evaluation'), so version:iteration would make the engines disagree on precisely the round shape sc-6-1 exists to unify. settledAttempts counts rounds that reached a decisive verdict (pass, fail, AND security-blocked \u2014 the evaluator runs before the security check imperatively), matching how PGE's attempts counts non-skipped evaluations entries, but NOT a round where the generator itself failed and the evaluator never ran. Pinned by a dedicated discriminating test (generator-failure-then-pass writes version:1, not 2) and verified against a live mutation. The out-of-loop return deliberately stays version-less even though settledAttempts is in scope there \u2014 an unsettled contract has no attempt count to report."
+}

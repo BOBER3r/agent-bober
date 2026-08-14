@@ -1,0 +1,31 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-5",
+  "status": "complete",
+  "criteria": [
+    "sc-5-1 met: conformance test asserts pgeContract.evaluatorFeedback === tsContract.evaluatorFeedback (both 'all criteria met' \u2014 the RAW EvaluationRunResult.summary, NOT the decorated evaluations-channel copy). Node-level test asserts raw undecorated value on both pass ('all criteria met') and fail ('criteria failed') paths.",
+    "sc-5-2 met: same test asserts pgeContract.generatorNotes === tsContract.generatorNotes ('generated <contractId>'); node-level test covers pass and fail paths.",
+    "sc-5-3 met: sprintExitNode DESTRUCTURES both fields OFF the seeded contract before spreading, then re-adds from the decisive verdict. Dedicated negative control seeds 'SEEDED \u2014 must not survive' and asserts the producing node's real values win.",
+    "sc-5-4 met: canonical(pgeContract minus version) === canonical(tsContract minus version) \u2014 whole-object comparison, not field-by-field inference. Pure-function both-directions control proves the stripping neither hides a real divergence nor fails to hide version.",
+    "sc-5-5 met: GOLDEN_CAPTURE=1 recapture of 6 moved cases (replay-plan-clarify-rounds-exhausted correctly did NOT move, confirmed via git diff --quiet); hunks read per-case; re-running capture reproduced an identical empty diff (byte-stable). Golden 7/7 in working tree AND clean worktree.",
+    "sc-5-6 met: clean detached worktree at 080967b \u2014 typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean; full suite 467 files / 7099 passed / 0 failed; golden 7/7; pge validate --mode full + pge docs --check ok (44 nodes)."
+  ],
+  "commits": [
+    "b03463b carry the raw evaluatorFeedback/generatorNotes pair on SprintVerdict",
+    "412d967 sprint_exit writes evaluatorFeedback/generatorNotes from the decisive verdict",
+    "ff7f8e1 flip the conformance pin -- evaluatorFeedback/generatorNotes converge",
+    "59226b8 re-capture the golden dataset for evaluatorFeedback/generatorNotes",
+    "080967b docs -- contracts narrows to version alone, plus a checked scanner"
+  ],
+  "keyFiles": [
+    "src/pge/state/overall.ts (SprintVerdictSchema widened with 2 optional raw-value fields; doc comment engages anchors.ts prior rejection)",
+    "src/pge/nodes/sprint-evaluate.ts (exported readGeneratorResult; sprintVerdict() populates both from RAW result.summary + generated.notes; 4096-byte channel-budget comment)",
+    "src/pge/nodes/sprint-review.ts (branchOutcome returns the pair; sprintExitNode strips stale seeded copy before re-adding)",
+    "src/orchestrator/workflow/conformance.engines.test.ts (4 literal assertions flipped to assert-against-other-engine; sc-5-4 canonical assertion + both-directions control; divergence-set pin array UNCHANGED)",
+    "src/pge/topology/docs.test.ts (new source scanner proving both fields have real writers)",
+    "src/pge/nodes/sprint-evaluate.test.ts (4 new tests incl. sc-5-3 negative control)",
+    "docs/pge-graph.md, docs/sprints/sprint-spec-20260814-pge-full-convergence-5.md, docs/sprints/README.md",
+    ".bober/golden/replay-*.json (6 recaptured)"
+  ],
+  "blockers": [],
+  "notes": "STOP CONDITION FIRED TWICE, deliberately unsynthesised and documented in code + sprint doc: (1) pipeline.ts:418-421's literal 'Generator failed to complete the implementation.' at max-iterations \u2014 sprint_generate does not branch on result.success in the graph; (2) pipeline.ts:520-525's rendered security-gate feedback \u2014 the graph's security block routes to sprint_correct, never to a settle. Both leave the field genuinely ABSENT on a settled contract rather than carrying a plausible placeholder. PRE-EXISTING DEFECT FOUND, NOT FIXED (out of scope, reproduced via git-stash BEFORE any sprint-5 edit): sprint_route and sprint_correct share the sprintIterations loop counter and both declare onExhausted:'sprint_exit', so the multi-round golden case enters sprint_exit's handler TWICE and re-enters sprint_curate_mocks once with the already-settled contract embedded. Every write agrees in content so it is harmless to sc-5's claims, but worth a future sprint if the double-invoke ever produces disagreeing writes. nonGoals respected: version/versionRank untouched (sprint 6); nothing about what the evaluator DECIDES changed \u2014 only where already-decided raw values are carried. No topology change, no graphVersion bump."
+}

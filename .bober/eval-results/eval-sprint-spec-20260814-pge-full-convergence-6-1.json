@@ -1,0 +1,100 @@
+{
+  "evalId": "eval-sprint-spec-20260814-pge-full-convergence-6-1",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-6",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T15:10:40Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "467 files passed / 1 skipped; 7100 passed / 6 skipped / 0 failed",
+      "details": "fresh git worktree --detach + npm ci at 1fd29e9"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "clean; typecheck:tests clean",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean",
+      "details": ""
+    },
+    {
+      "strategy": "custom-golden",
+      "required": true,
+      "result": "pass",
+      "output": "7/7 (100%); .bober/golden/ porcelain empty before AND after",
+      "details": "zero artifact drift verified directly"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-6-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "settledAttempts hoisted above the loop, incremented at pipeline.ts:509, written as Math.max(1,settledAttempts) at all 4 settle sites (:437,:592,:619,:776). Evaluator INDEPENDENTLY reverted pipeline.ts to 43f0b99 -> all 4 new tests failed; restored -> all 4 passed. Confirmed PGE attempts (sprint-review.ts:270-274) is Math.max(1, evaluations.filter(contractId match && verdict!=='skipped').length) \u2014 exactly the claimed semantics. Confirmed the crux disagreement is real: a genfail round with iteration<max does `continue` at :417-421, advancing iteration without touching settledAttempts, mirroring gate_syntax routing to the corrector without an evaluations entry."
+    },
+    {
+      "criterionId": "sc-6-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "pipeline.test.ts:660-712 runs runSprintCycle TWICE under a frozen clock with a fresh temp root, asserting version equality (=2) plus full toEqual deep-equality. Evaluator executed it directly in a clean worktree."
+    },
+    {
+      "criterionId": "sc-6-3",
+      "required": true,
+      "result": "pass-AMENDED",
+      "evidence": "ADJUDICATED. `contracts` verifiably CLOSED \u2014 canonical(pge)===canonical(ts) with NOTHING stripped (previously version was stripped). pipelineResult's CONTAINER portion closed as a genuine CONSEQUENCE (both engines' containers now asserted toEqual their own contract). What remains is pipelineResult.errors, confirmed a PRE-EXISTING architectural gap this sprint did not cause.",
+      "amendedDisposition": "The contract's premise ('closes pipelineResult with it since that field is a container for the same objects') is factually incomplete. Accepted as an architectural divergence on the same footing as `audits`, per sprint 3's precedent."
+    },
+    {
+      "criterionId": "sc-6-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "git diff on conformance.ts is BYTE-EMPTY \u2014 untouched. VOLATILE_KEYS read directly at :65-76: exactly its 10 keys. Neither `version` nor `errors` present."
+    },
+    {
+      "criterionId": "sc-6-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "golden 7/7; .bober/golden/ porcelain empty before and after. Zero cases moved \u2014 verified, not inferred."
+    },
+    {
+      "criterionId": "sc-6-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All five gates re-run on a fresh detached worktree + npm ci. Also pge validate (0 diagnostics) and pge docs --check (44 nodes)."
+    }
+  ],
+  "architecturalFinding": {
+    "confirmed": true,
+    "detail": "PipelineResult.errors has EXACTLY ONE write site repo-wide: PgeEngine.run (src/pge/engine/pge-engine.ts:551-572), spreading errors from the interpreter's own TaskFailure records, only when failures.length>0. That code and its doc comment PRE-DATE this sprint \u2014 introduced in spec-20260812-pge-real-workload-errors sprint 5 \u2014 and this sprint's diff does not touch the PipelineResult interface at all. The divergence was previously MASKED because contracts/version was also diverging under the same pipelineResult field name; nobody had isolated the container portion from the whole. Imperative equivalent: runSprintCycle's auto-commit (pipeline.ts:449-462) calls commitAll UNCONDITIONALLY when autoCommit is true, in a try/catch that only debug-logs and continues \u2014 no HITL gate at all. finalizePipelineRun requests the end-of-pipeline checkpoint AFTER the marker and history event are written and does not gate on its outcome. The graph, by contrast, has an explicit hitl_commit node (coding.graph.ts:911-923) feeding a separate commit node (:926-937) \u2014 'reachable only behind the approval gate, which is what makes the git effect blockable fail-closed'. So fabricating an errors entry would misreport an event the imperative architecture CANNOT produce, and adding errors to VOLATILE_KEYS would violate that set's own documented bar ('a key belongs here only when two runs of the SAME engine over the same input would differ on it' \u2014 errors differs BETWEEN engines on the SAME input, exactly the class VOLATILE_KEYS must not hide).",
+    "rootCauseSharedWithAudits": "Both remaining divergences trace to the SAME architectural fact: the graph has a checkpoint-gated commit the imperative engine lacks."
+  },
+  "regressions": [],
+  "summary": "All 6 required criteria pass on a clean detached worktree. sc-6-3 adjudicated pass under the architectural-gap protocol: the contract's premise was factually wrong, the gap is real and pre-existing, and the generator's handling (report it, reject both dishonest fixes) was correct \u2014 directly analogous to sprint 3's audits precedent. Recommend amending the disposition rather than retrying."
+}

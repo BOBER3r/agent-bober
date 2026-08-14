@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-5",
+  "status": "complete",
+  "iteration": 2,
+  "criteria": [
+    "sc-5-3 met: new discriminating test seeds stale evaluatorFeedback/generatorNotes AND routes through underDeliveringExplain(1)'s curator-refusal path where outcome carries NEITHER raw value, asserting neither key is present on the settled contract. MUTATION EVIDENCE (disposable detached worktree at 080967b): applied the evaluator's exact mutation (deleted destructure at sprint-review.ts:276-278, `...contractWithoutFeedback` -> `...contract` at :279) -> 32 passed, 1 FAILED, and the failure was exactly the new test ('expected true to be false' on `\"evaluatorFeedback\" in entry` at :939). All 32 others, including the renamed former control, still passed under the mutant. Reverted via git checkout in the same worktree -> 33/33 passed. Also RENAMED the old non-discriminating test to stop it overclaiming, with a comment explaining why it cannot detect the strip.",
+    "sc-5-1/sc-5-2/sc-5-4 unchanged \u2014 no production code touched this iteration.",
+    "sc-5-5 met: no production code changed so no golden artifacts move; golden 7/7 byte-identical on working tree AND clean worktree at 23a1718.",
+    "sc-5-6 met: clean detached worktree at 23a1718 \u2014 suite 467 files / 7096 passed / 0 failed; typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build all clean; golden 7/7."
+  ],
+  "commits": [
+    "23a1718 replace the inert sc-5-3 control with a discriminating one"
+  ],
+  "filesChanged": [
+    "src/pge/nodes/sprint-evaluate.test.ts (test file ONLY \u2014 no production code touched)"
+  ],
+  "blockers": [],
+  "notes": "Purely a proof fix, matching the orchestrator's note that the implementation was never wrong. Mutation worktree was removed with git worktree remove --force; no artifacts remain. Off-limits working-tree noise left untouched and unstaged."
+}

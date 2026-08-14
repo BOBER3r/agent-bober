@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-11",
+  "status": "complete",
+  "iteration": 1,
+  "criteria": [
+    "sc-11-1 MET (amended form): ran the harness live via compare(). report.equivalent is FALSE \u2014 the literal unamended claim stays pinned directly. equivalentModuloAcceptedDivergences(report) is TRUE \u2014 the amended claim. ARCHITECTURALLY_ACCEPTED_DIVERGENCES names both remaining fields with source-grounded reasons (ADR-1's Checkpoint.interrupt/grantScope/resumeMessageId facts; sprint 6's PgeEngine.run-is-sole-write-site finding).",
+    "sc-11-2 MET: permanent synthetic test proves all three directions against hand-built ConformanceReports (new divergence -> false; an accepted divergence silently MISSING -> false; both missing, i.e. the literal equivalent:true case -> false). PLUS two LIVE mutations of shipped conformance.ts, each observed red then reverted byte-identical against a held pre-mutation copy: (1) a bogus third 'accepted' field -> the real-run test went red; (2) weakening the 'no less' half to a SUBSET check \u2014 the exact shape a silently-relaxed comparison takes -> the direction-2 test went red.",
+    "sc-11-3 MET: docs/pge-graph.md 'Engine migration disposition' rewritten in place + a new 'Sprint 11's own outcome' closing subsection. docs.test.ts (76 tests, incl. assertFlipPrerequisitesStated and region-gutting mutation tests) passes.",
+    "sc-11-4 MET: git diff on oracle-retention.test.ts is EMPTY \u2014 never opened. Its 3 describe blocks still pass and still assert pipeline.engine defaults to 'ts', TsPipelineEngine constructs/is selected/is the fallback.",
+    "sc-11-5 MET: closing subsection + sprint record state field by field what did NOT converge, and explicitly: 'equivalent: true, unamended, remains permanently unreached... this record does not claim otherwise.'",
+    "sc-11-6 MET: working tree 468 files / 7120 passed / 2 skipped / 0 failed; clean detached worktree at 97ac340 468 / 7116 passed / 6 skipped / 0 failed; typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean in both; golden 8/8."
+  ],
+  "trueDivergenceSet": "['audits','pipelineResult'] \u2014 unchanged since sprint 6, both architectural, sharing one root cause.",
+  "flipSentence": "Three open decisions, NONE a missing writer/case/test: (1) sustained amended-equivalence across more real runs and configs, not just the one golden fixture; (2) the still-undecided Option B success-semantics call; (3) the still-RECOMMENDED, still-UNDECIDED formal ADR joinder of pipelineResult.errors to audits' ADR-1 acceptance \u2014 deliberately left undecided, since that is an architect's call, not a generator's.",
+  "caveatsCarried": "Sprint 10's two evidence caveats (stub collaborators; per-update not accumulated) were RESTATED in the closing section rather than left to not travel forward.",
+  "commits": [
+    "1487ba1 re-specify equivalent:true as equivalentModuloAcceptedDivergences, proven both directions",
+    "97ac340 the closing record -- the bar is met, default stays 'ts' by choice"
+  ],
+  "blockers": []
+}

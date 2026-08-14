@@ -1,0 +1,33 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-4",
+  "status": "complete",
+  "criteria": [
+    "sc-4-1 met: HISTORY_EVENT_NODE_MAP in src/pge/runtime/history.ts committed in 072f814 BEFORE any node body touched; history.test.ts (12 tests) re-derives mapping from real source + committed topology",
+    "sc-4-2 met: conformance.engines.test.ts asserts pge run's ordered event list equals the ts run's own list (10/10, order and names), both shipped engines run for real",
+    "sc-4-3 met: divergence-set pin now ['audits','contracts','pipelineResult']; new pure-function test proves the pin fails if history re-appears AND fails if a real field silently disappears",
+    "sc-4-4 met: emitPhaseEvent delegates to existing appendHistory (src/state/history.ts:81); docs.test.ts inverted scanner asserts exactly ONE writer file; negative control proves node bodies never call appendHistory directly",
+    "sc-4-5 met: GOLDEN_CAPTURE=1 recapture of all 7 replay cases, diff hunks read per-case and documented; golden gate 7/7 (100%)",
+    "sc-4-6 met: clean detached worktree at cf7595d \u2014 typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build all pass; full suite 467 files / 7087 passed / 0 failed; golden 7/7; pge validate+docs ok; pge diff empty"
+  ],
+  "commits": [
+    "072f814 record the ten-event history mapping, before touching any node",
+    "f74e9b3 emit the nine missing phase events from real node lifecycle boundaries",
+    "f22de6a history converges -- drop it from the divergence pin, both directions",
+    "39a2cbe re-capture the golden dataset for the new history events",
+    "bf5b447 rewrite the history disposition -- closed, not open work",
+    "cf7595d sprint doc + README row"
+  ],
+  "keyFiles": [
+    "src/pge/runtime/history.ts (new: emitPhaseEvent + HISTORY_EVENT_NODE_MAP)",
+    "src/pge/runtime/history.test.ts (new, 12 tests)",
+    "src/pge/nodes/{research,plan,sprint-curate,sprint-generate,sprint-evaluate,sprint-review,documenter}.ts (emitters at lifecycle boundaries)",
+    "src/pge/nodes/gates.ts (new generateAttemptsSoFar helper)",
+    "src/orchestrator/workflow/conformance.engines.test.ts (pin updated + sc-4-3 both-directions test)",
+    "src/pge/topology/docs.test.ts (scanner inverted + negative control)",
+    "src/contracts/status-vocabulary.invariant.test.ts (ALLOWLIST :line shifts)",
+    "docs/pge-graph.md, docs/sprints/sprint-spec-20260814-pge-full-convergence-4.md, docs/sprints/README.md",
+    ".bober/golden/replay-*.json (7 recaptured)"
+  ],
+  "blockers": [],
+  "notes": "STOP CONDITION DID NOT FIRE: all nine node-emitted events have a real single emitting node. research-started/research-completed deliberately NOT mapped \u2014 conformanceConfig() disables the research phase on the ts side too, so mapping them would have ADDED a divergence. The 'iteration' derivation took three attempts: the briefing's iterationOf was empirically wrong (sprint_security records a verdict on sprint_evaluate's only inbound edge, so generator-start:1 was followed by evaluator-start:2 for the SAME round); the shared sprintIterations loop counter was also wrong (a retry via sprint_route spends two units, via a gate onFail one, so it jumped 1->3 on the multi-round golden case); gates.ts generateAttemptsSoFar (counts sprint_generate's own committed messages) shipped. Five hand-authored enforcement=integrity golden cases still pin a stale one-entry history block, left byte-unchanged and recorded \u2014 same judgement call spec-20260812 sprint 5 made. Sprint 3's individual doc/README row was found missing from a PRIOR sprint; not backfilled (out of scope) but noted in README."
+}

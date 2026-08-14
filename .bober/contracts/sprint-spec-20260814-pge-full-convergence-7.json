@@ -4,7 +4,7 @@
   "sprintNumber": 7,
   "title": "Retire the dead \"passed\" comparisons",
   "description": "verdictFrom counts contracts whose status is the literal \"passed\", which no engine writes since the terminal-vocabulary spec. The counter is structurally always zero, so parts of its downgrade logic are unreachable for any run.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-6"
   ],
@@ -62,7 +62,15 @@
     ".bober/golden/"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-7-1",
+      "timestamp": "2026-08-14T16:02:44Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T16:02:44Z",
+  "completedAt": "2026-08-14T16:02:44Z"
 }

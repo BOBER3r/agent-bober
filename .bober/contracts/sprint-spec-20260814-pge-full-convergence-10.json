@@ -4,7 +4,7 @@
   "sprintNumber": 10,
   "title": "The graph engine runs this repository's own real workload",
   "description": "Conformance runs on a synthetic fixture. Before claiming the engine is finished, run it against the real 29 KB PlanSpec this repository actually produces, end to end.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260814-pge-full-convergence-3",
     "sprint-spec-20260814-pge-full-convergence-4",
@@ -65,7 +65,15 @@
     "docs/pge-graph.md"
   ],
   "estimatedDuration": "large",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260814-pge-full-convergence-10-1",
+      "timestamp": "2026-08-14T18:02:55Z"
+    }
+  ],
   "createdAt": "2026-08-14T00:00:00Z",
-  "updatedAt": "2026-08-14T00:00:00Z"
+  "updatedAt": "2026-08-14T18:02:55Z",
+  "completedAt": "2026-08-14T18:02:55Z"
 }

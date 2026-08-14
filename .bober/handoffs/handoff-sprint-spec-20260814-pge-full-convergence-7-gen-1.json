@@ -1,0 +1,115 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-7-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-7",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T15:29:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: TypeScript multi-agent pipeline. This spec finishes the PGE graph engine. The default engine deliberately stays 'ts'.",
+    "completedSprints": [
+      "1 ADR for per-branch checkpoints",
+      "2 gated effects execute under a durable approval",
+      "3 audits PROVEN architecturally unreachable, ADR-accepted",
+      "4 history CLOSED (emitPhaseEvent -> existing appendHistory, nine emitters)",
+      "5 evaluatorFeedback/generatorNotes CLOSED (raw pair on SprintVerdict)",
+      "6 version CLOSED (settledAttempts decisive-round counter); contracts fully converges; pipelineResult.errors found architecturally divergent"
+    ],
+    "currentBranch": "bober/pge-full-convergence",
+    "divergenceState": "Set is now ['audits','pipelineResult'] and BOTH entries are architectural, sharing one root cause: the graph has a checkpoint-gated commit the imperative engine lacks.",
+    "importantNote": "Sprints 4-6 all landed TODAY. Line numbers shift constantly. Sprint 5 already edited src/contracts/status-vocabulary.invariant.test.ts (three ALLOWLIST :line entries). Verify current file state; trust the briefing over the contract text for line numbers.",
+    "relevantFiles": [
+      "src/pge/runtime/interpreter.ts",
+      "src/pge/runtime/commit.ts",
+      "src/contracts/status-vocabulary.invariant.test.ts",
+      ".bober/golden/"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-7",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 7,
+    "title": "Retire the dead \"passed\" comparisons",
+    "description": "verdictFrom counts contracts whose status is the literal \"passed\", which no engine writes since the terminal-vocabulary spec. The counter is structurally always zero, so parts of its downgrade logic are unreachable for any run.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260814-pge-full-convergence-6"
+    ],
+    "features": [
+      "feat-5"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-7-1",
+        "description": "src/pge/runtime/interpreter.ts:728 and src/pge/runtime/commit.ts:539 no longer compare against a status literal no writer produces; they use the settled predicate.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-2",
+        "description": "The downgrade paths that were unreachable are shown to be reachable again \u2014 a test drives success-with-failures to 'partial' and proves it fails before the change.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-3",
+        "description": "The status-vocabulary invariant scan's allowlist loses the entries these sites occupied, rather than keeping stale ones.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-4",
+        "description": "Golden cases whose artifacts move are re-captured in this sprint, diff hunks read \u2014 this change alters verdicts, so movement is expected and must be understood.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-5",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing what a verdict MEANS \u2014 only which contracts are counted."
+    ],
+    "stopConditions": [
+      "Making the counter live changes a golden case's verdict in a way that looks wrong rather than merely different \u2014 stop and understand it before re-capturing."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 2,
+    "generatorNotes": "Both sites are allowlisted with reasons in src/contracts/status-vocabulary.invariant.test.ts (around :205) \u2014 remove the entries as you migrate the sites, since a stale allowlist entry fails that test's own bidirectional check. isSettledContractStatus is the predicate. Expect real verdict movement: this is the sprint where previously-dead logic starts running. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "Verify the reachability claim by execution, not by reading: construct a run with successes and failures and confirm the verdict is now 'partial' where it used to be 'failed'. Confirm the allowlist shrank. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      "src/pge/runtime/interpreter.ts",
+      "src/pge/runtime/commit.ts",
+      "src/contracts/status-vocabulary.invariant.test.ts",
+      ".bober/golden/"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T15:29:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "GOLDEN_PASS_THRESHOLD=80 node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

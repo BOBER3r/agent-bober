@@ -1,0 +1,36 @@
+{
+  "contractId": "sprint-spec-20260814-pge-full-convergence-10",
+  "status": "complete",
+  "iteration": 1,
+  "criteria": [
+    "sc-10-1 MET: real-workload.test.ts drives a real PgeEngine over the committed coding.json artifact against this repo's own committed 29,214-canonical-byte PlanSpec (spec-20260805-pge-graph-engineering) and its 14 real contracts \u2014 NOT a golden fixture. 6/6 green on working tree AND clean detached worktree at ba0248f.",
+    "sc-10-2 MET: added recordingCommitBoundary + observedWrites, wrapping the REAL CommitBoundary to record byteSize per ChannelUpdate \u2014 the exact metric commit.ts:388-400 checks \u2014 BEFORE accept/reject, for ALL 11 declared channels (not just the pre-existing 3-channel corpusHeadroom check). Assertions pin all 11 channel ids and assert wouldReject===false for every one.",
+    "sc-10-3 MET: added nodeCoverage \u2014 this run's own spans filtered to status 'ok' (mirroring coverage.test.ts's rule) against all 44 declared nodes read from topology.nodes. 36/44 executed; all 8 never-ok nodes NAMED individually with reasons, pinned two-directionally by exact-equals (not a subset check).",
+    "sc-10-4 MET: committed .bober/topology/measurements/real-workload.json regenerated via MEASURE_REAL_WORKLOAD=1, now carrying observedWrites and nodeCoverage. Re-running WITHOUT the flag compares clean against the committed file on both trees.",
+    "sc-10-5 MET: typecheck, typecheck:tests, lint (0 err/2 pre-existing warn), build clean; suite 468 files / 7118 passed / 2 skipped (working tree), 7114 passed / 6 skipped (clean worktree); golden 8/8 on both; pge docs --check ok (44 nodes)."
+  ],
+  "MEASURED_NUMBERS": {
+    "run": "status completed, terminal node graceful_failure, verdict partial, supersteps 234 of a 512 ceiling",
+    "channels_bytes_vs_cap": {
+      "branchStatus": "108/4096",
+      "counters": "70/4096",
+      "evaluations": "368/4096 (43 writes)",
+      "ledger": "221/4096",
+      "messages": "267/4096",
+      "refs": "287/4096",
+      "spec": "29214/131072",
+      "specDraft": "29214/65536",
+      "sprintContracts": "135106/524288",
+      "testAnchors": "22/4096",
+      "verdict": "0/4096 (0 writes \u2014 never exercised)"
+    },
+    "breached": "NONE. Nothing was raised.",
+    "CARRIED_FINDING_RESULT": "The evaluations channel \u2014 the one sprint 5's audit flagged \u2014 measured 368/4096. It does NOT breach here, but the generator stated plainly that this proves only the STUB corpus does not breach: this run's stub collaborators write short text (generator.notes='generated <contractId>', evaluator.summary='all criteria met'). It does NOT prove a real evaluator's longer free text would stay under the cap. Documented as a residual, UNMEASURED risk.",
+    "nodeCoverage": "36 of 44 executed with status ok on the real run. 8 named: commit (reached, span 'interrupted' \u2014 FAIL_CLOSED refusal, no durable approval under the plain autopilot config), finalize (sole inbound edge commit->finalize never crossed), critique + rework_route (route_after_eval never selects 'rework' \u2014 all 14 branches pass on first stub attempt), sprint_correct (no generated sprint fails a check), plan_clarify (planner stub never needs clarification) \u2014 these SIX are workload-specific misses, each proven reachable elsewhere via a named golden case; context_compact + synthesize are the two structural blocks."
+  },
+  "commits": [
+    "ba0248f measure every channel and every node this real workload touches"
+  ],
+  "nonGoalsRespected": "Default untouched at 'ts'. No performance tuning. No cap or ceiling raised.",
+  "blockers": []
+}

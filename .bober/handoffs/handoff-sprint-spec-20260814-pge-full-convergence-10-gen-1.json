@@ -1,0 +1,126 @@
+{
+  "handoffId": "handoff-sprint-spec-20260814-pge-full-convergence-10-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260814-pge-full-convergence-10",
+  "specId": "spec-20260814-pge-full-convergence",
+  "timestamp": "2026-08-14T17:33:13Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: TypeScript multi-agent pipeline finishing the PGE graph engine. Default engine stays 'ts'.",
+    "completedSprints": [
+      "1-3 checkpoints/gated effects/audits-unreachable(ADR)",
+      "4 history CLOSED",
+      "5 evaluatorFeedback+generatorNotes CLOSED",
+      "6 version CLOSED, contracts fully converges; pipelineResult.errors architectural",
+      "7 dead 'passed' comparisons retired; verdict downgrade logic live",
+      "8 critique + rework_route execute (40/44 -> 42/44); context_compact structurally blocked",
+      "9 synthesize structurally unreachable (4th finding); coverage 42/44 FINAL"
+    ],
+    "currentBranch": "bober/pge-full-convergence",
+    "divergenceState": "['audits','pipelineResult'] \u2014 BOTH architectural, sharing one root cause (the graph has a checkpoint-gated commit the imperative engine lacks).",
+    "fourStructuralLimits": [
+      "audits (sprint 3)",
+      "pipelineResult.errors (sprint 6)",
+      "context_compact (sprint 8)",
+      "synthesize (sprint 9)"
+    ],
+    "CARRIED_SECURITY_FINDING_READ_THIS": "Sprint 5's audit recorded, non-blocking at the time but DIRECTLY RELEVANT HERE: one `evaluations` entry now carries THREE independent copies of unbounded model text against a 4096-byte cap. capForCorpusMax sized that cap at 2x the largest payload measured from the committed corpus \u2014 which for `evaluations` is roughly 1 KB of STUB evaluator text. The sizing pin CANNOT notice the new fields because the corpus it measures predates them. Breach is fail-CLOSED (commit.ts:389 rejects, interpreter.ts:1400-1413 records a TaskFailure and closes the span failed) \u2014 NOT the historical silent-drop bug, which is fixed on this path. This sprint is exactly where a real 29 KB workload would expose it. If it breaches, that IS the finding \u2014 report the measured number.",
+    "relevantFiles": [
+      "src/pge/golden/workload.ts",
+      "src/pge/engine/__fixtures__/real-workload.ts",
+      "src/pge/runtime/interpreter.ts",
+      "docs/pge-graph.md",
+      ".bober/topology/measurements/real-workload.json"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260814-pge-full-convergence-10",
+    "specId": "spec-20260814-pge-full-convergence",
+    "sprintNumber": 10,
+    "title": "The graph engine runs this repository's own real workload",
+    "description": "Conformance runs on a synthetic fixture. Before claiming the engine is finished, run it against the real 29 KB PlanSpec this repository actually produces, end to end.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260814-pge-full-convergence-3",
+      "sprint-spec-20260814-pge-full-convergence-4",
+      "sprint-spec-20260814-pge-full-convergence-6"
+    ],
+    "features": [
+      "feat-7"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-10-1",
+        "description": "A graph run completes against the real committed workload corpus, not the synthetic conformance fixture.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-10-2",
+        "description": "Every channel stays within its declared cap for that workload, measured and reported rather than assumed.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-10-3",
+        "description": "The run's node coverage and verdict are recorded, and any node that does NOT execute on a real workload is named with its reason.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-10-4",
+        "description": "The result is committed as evidence \u2014 a real-workload record a later flip decision can be taken against.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-10-5",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build green, and the golden gate passing at or above its replay floor.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Flipping the default.",
+      "Tuning performance."
+    ],
+    "stopConditions": [
+      "The real workload exceeds a channel cap or a superstep ceiling \u2014 that is the finding, and it is worth more than a passing run. Report the measured number rather than raising the cap reflexively."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 4,
+    "generatorNotes": "spec-20260812-pge-real-workload-errors already built the corpus and sized the caps to it (sprint 3 of that spec, graphVersion 1.3.0); reuse that corpus rather than inventing one. That spec's sprint 1 also established the measurement approach \u2014 follow it, and report numbers rather than a pass/fail. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "evaluatorNotes": "The point is measurement, not a green tick. Check real numbers were reported for every channel, and that a node failing to execute on the real workload was named rather than averaged away. Run the suite as `npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'` \u2014 a bare run picks up nested worktrees. Verify on a CLEAN checkout, not just the working tree: this repo has twice been green locally and red in CI because uncommitted state was carrying the result.",
+    "estimatedFiles": [
+      "src/pge/golden/workload.ts",
+      "src/pge/engine/__fixtures__/real-workload.ts",
+      "src/pge/runtime/interpreter.ts",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-14T00:00:00Z",
+    "updatedAt": "2026-08-14T17:33:13Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run --exclude '**/.claude/worktrees/**' --exclude '**/node_modules/**'",
+      "golden": "GOLDEN_PASS_THRESHOLD=80 node scripts/run-golden-regression.mjs"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}
