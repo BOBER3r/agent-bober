@@ -72,61 +72,76 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  * list on the strength of an actual `status: "ok"` span from a real replay — the rule this
  * file enforces did not relax; a case that satisfies it now exists.
  *
- * `critique` and `rework_route` are genuinely a **missing scenario**, not a structural
- * block — nothing here claims otherwise for them specifically. `context_compact` and
- * `synthesize` ARE structural: no set of bindings, however imaginative, can make case
- * authoring close them, which is exactly why they are recorded here rather than left as a
- * to-do:
+ * ── `critique` and `rework_route` left this list at sprint 8 of spec-20260814-pge-full-convergence ──
+ *
+ * Both sat here on the same claim: nothing in the dataset drove `route_after_eval` to its
+ * `rework` label, because every committed case's branches either all succeeded on the first
+ * attempt or failed outright and were caught by `reduce_sprints` before `evaluate_global`
+ * ever ran. `replay-corrected-sprint-still-grades-fail` closes that gap by exploiting an
+ * asymmetry between two rules that both read the same evaluation history and disagree:
+ * `branchOutcome` (`nodes/sprint-review.ts`) settles a branch on its LAST decisive verdict,
+ * so a branch that fails once and then passes settles `"succeeded"` and `reduce_sprints`'s
+ * `all-branches-settled` gate admits it into global evaluation; `gradeContracts`
+ * (`nodes/root.ts`) instead REDUCES over every recorded verdict and lets one `"fail"` row
+ * outrank a later `"pass"` permanently, so the SAME contract stays graded `"fail"` forever.
+ * `evaluate_global` therefore returns a non-pass verdict on a run every branch of which
+ * succeeded, `route_after_eval` selects `"rework"` (`reworkRoundsTaken` is still under
+ * budget on a first rework round), and `critique` runs: it builds one correction per branch
+ * needing rework and hands off to its sole successor edge, `rework_route`.
+ *
+ * `rework_route` leaves this list in the SAME case, and not by choice: `critique`'s only
+ * outbound edge is `critique -> rework_route` (`e-eval-critiqued`), so no case can drive one
+ * without driving the other — this was recorded ahead of implementation in the sprint's
+ * `preFlightFinding`, and the contract's nonGoal ("driving rework_route — sprint 9") could
+ * not be honoured because it is forced by the graph's topology, not a scope choice. By the
+ * time `rework_route` runs, `reduce_sprints`'s gate has already guaranteed every dispatched
+ * branch's status is `"succeeded"` — `dispatchableContracts` (`nodes/sprint-fanout.ts`)
+ * excludes exactly the branches whose status is `"succeeded"` or `"abandoned"` — so
+ * `rework_route`'s own dispatch set is empty and it selects the `"exhausted"` label rather
+ * than re-offering the branch, still ending a `status: "ok"` span. Sprint 9's remaining work
+ * on this graph narrows to `synthesize` alone.
+ *
+ * `context_compact` and `synthesize` remain structural: no set of bindings, however
+ * imaginative, can make case authoring close either, which is why they stay recorded here
+ * rather than as a to-do:
  *
  *  - `context_compact`'s only edge in is `supervisor -> context_compact` under the `compact`
- *    label, and the shipped supervisor never selects that label: the committed artifact
- *    declares `supervisor.reads` as exactly `["branchStatus", "counters", "evaluations",
- *    "spec"]` — no `messages` — so deciding a window crossed a compression threshold would
- *    mean reading a channel the artifact does not authorise. Re-checked directly against
- *    `.bober/topology/coding.json` for this sprint (unchanged since `1.2.0`, and unmoved by
- *    the `specDraft` channel `1.4.0` added). Recorded as artifact drift in
- *    `nodes/supervisor.ts`.
- *  - `critique` sits behind `route_after_eval`'s `rework` label, chosen whenever
- *    `evaluate_global` returns a non-pass verdict while `reworkRoundsTaken` is still under
- *    budget. `reduce_sprints`'s own gate (`all-branches-settled`) refuses to admit the run
- *    into evaluation at all while any branch is `failed`/`abandoned` — it re-dispatches
- *    such a branch through `fanout_sprints` instead (bounded by `fanoutRetries`) — so
- *    `evaluate_global` is only ever reached once EVERY dispatched branch has already
- *    settled `"succeeded"`. The only way it can still return a non-pass verdict there is
- *    `gradeContracts` grading a contract `"fail"` (or leaving it `"ungraded"`) despite its
- *    branch succeeding — which happens for real whenever a branch needed even one
- *    correction round: `gradeContracts` reduces EVERY recorded verdict for a contract, and
- *    a single `"fail"` row anywhere in that history outweighs a later `"pass"` permanently
- *    (`nodes/root.ts`, `gradeContracts`). None of the committed `replay` cases drives
- *    this — the one case whose branch fails outright is caught by `reduce_sprints` before
- *    reaching `evaluate_global` at all (see `rework_route`'s bullet), and the one case that
- *    exercises `sprint_correct` does so through `gate_syntax`/`gate_anchor_regression`,
- *    neither of which writes a `SprintVerdict`. This is a genuine gap in the dataset, not a
- *    wall: a case pinning a corrected-but-recorded-fail sprint alongside an otherwise
- *    passing run would exercise it.
- *  - `rework_route` is reached only immediately after `critique`, so it inherits `critique`'s
- *    gap — but even in that missing scenario it would not do useful work. Its dispatch rule,
- *    `dispatchableContracts`, re-offers a branch only while its `branchStatus` is not
- *    `"succeeded"`/`"abandoned"` (`nodes/sprint-fanout.ts`), and by the time `rework_route`
- *    can run at all every dispatched branch's status IS `"succeeded"` — `reduce_sprints`'s
- *    gate guarantees it, per `critique`'s bullet. So `rework_route`'s own first (and, see
- *    `synthesize`'s bullet, only ever) invocation would choose the `"exhausted"` label, not
- *    `"rework"`, and still produce a `status: "ok"` span — it is a missing-scenario node
- *    like `critique`, and the case that would exercise `critique` exercises this node too.
- *  - `synthesize` is a genuine STRUCTURAL block, unlike its two neighbours above — its
- *    recorded reason was rewritten at sprint 9 of spec-20260812-pge-real-workload-errors. It
- *    sits behind `route_after_eval`'s `partial` label, selected only when
+ *    label, and the shipped supervisor's handler (`nodes/supervisor.ts:140-177`) has NO code
+ *    path that returns that label at all — its five branches select `plan`, `sprints`,
+ *    `evaluate`, the graceful-failure hop for a refusal, or end the run; `COMPACT_LABEL`
+ *    (`supervisor.ts:82`) is declared and referenced nowhere else in `src/` (grep-verified).
+ *    The committed artifact's `supervisor.reads` — `["branchStatus", "counters",
+ *    "evaluations", "spec"]`, still no `messages` at `graphVersion 1.5.0`, re-verified for
+ *    this sprint — is WHY no such path exists: a supervisor cannot decide a message window
+ *    crossed a compression threshold without reading the messages. The block is therefore at
+ *    LABEL SELECTION, one step upstream of the node itself — `contextCompactNode`'s own body
+ *    would return a `status: "ok"` span even below its threshold (`nodes/root.ts`'s handler,
+ *    the `!decision.shouldCompact` branch) if it were ever entered, so this is not a
+ *    token-threshold problem and enlarging a case's message count changes nothing. What
+ *    would close it — teaching the supervisor to measure the window and select
+ *    `COMPACT_LABEL`, which first requires adding `messages` to `supervisor.reads` — is a
+ *    topology change (a minor `graphVersion` bump) plus a shipped-code change, not a case,
+ *    and is out of this sprint's scope. Recorded as artifact drift in `nodes/supervisor.ts`,
+ *    and backed by a claim test in `nodes/supervisor.test.ts` that fails the moment the
+ *    handler gains a path returning `COMPACT_LABEL`.
+ *  - `synthesize` is a genuine STRUCTURAL block, unlike `context_compact` above, and its
+ *    recorded reason (rewritten at sprint 9 of spec-20260812-pge-real-workload-errors) is
+ *    unaffected by `critique`/`rework_route` closing above: it sits behind
+ *    `route_after_eval`'s `partial` label, selected only when
  *    `reworkRoundsTaken(spec, state) >= maxIterations` (2) at a SECOND invocation of
  *    `route_after_eval` — which never happens. `route_after_eval` and `rework_route` read
  *    the identical counter and the identical `maxIterations` off the SAME artifact loop
  *    bound (`loopBoundOf(spec, "rework_route")`), and the interpreter enforces that bound
  *    independently, at `rework_route` itself, using the counter value already including
  *    this execution's own increment (`boundedDestination`, `src/pge/runtime/
- *    interpreter.ts:1004-1044`). Because `rework_route`'s dispatch set is always empty when
- *    it runs (previous bullet), it never selects its own `"rework"` fan-out — the only edge
- *    that would loop back through the sprint subgraph and return to `evaluate_global` a
- *    second time — so it always exits to `graceful_failure` on its first and only
- *    invocation per run, and `reworkRounds` can reach at most 1, never the bound of 2.
+ *    interpreter.ts:1004-1044`). `rework_route`'s dispatch set is always empty when it runs
+ *    — `dispatchableContracts` excludes branches whose status is `"succeeded"` or
+ *    `"abandoned"`, and `reduce_sprints`'s gate guarantees every dispatched branch IS
+ *    `"succeeded"` by the time `rework_route` can run at all, exactly as the paragraph above
+ *    about `critique`/`rework_route` explains — so it never selects its own `"rework"`
+ *    fan-out, the only edge that would loop back through the sprint subgraph and return to
+ *    `evaluate_global` a second time. It always exits to `graceful_failure` on its first and
+ *    only invocation per run, and `reworkRounds` can reach at most 1, never the bound of 2.
  *    `route_after_eval` is therefore invoked AT MOST ONCE per run, and its own
  *    `reworkRoundsTaken >= maxIterations` branch — `"partial"` and, for that matter, its
  *    `"exhausted"` sibling — can never fire. No golden case, however constructed, can close
@@ -134,13 +149,10 @@ const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
  *    (recorded against sprint 7 of spec-20260812-pge-real-workload-errors) attributed this
  *    to `rework_route`'s dispatch set being always empty "because nothing ever writes
  *    `abandoned`" — the CONCLUSION (dispatch set always empty) is right, but that mechanism
- *    is not: no branch is ever `"abandoned"` in this shipped graph, but that is beside the
- *    point, because `dispatchableContracts` already excludes `"succeeded"` branches, and
- *    `reduce_sprints`'s gate guarantees every branch IS `"succeeded"` by the time
- *    `rework_route` can run at all (`critique`'s bullet). `"succeeded"`, not `"abandoned"`,
- *    is the exclusion that actually bites.
+ *    is not: no branch is ever `"abandoned"` in this shipped graph. `"succeeded"`, not
+ *    `"abandoned"`, is the exclusion that actually bites.
  */
-const NEVER_EXECUTED = ["context_compact", "critique", "rework_route", "synthesize"] as const;
+const NEVER_EXECUTED = ["context_compact", "synthesize"] as const;
 
 async function loadReplayCases(): Promise<GoldenCase[]> {
   const cases: GoldenCase[] = [];
@@ -351,6 +363,49 @@ describe("the status-ok rule, mutated in both directions", () => {
       { nodeId: "synthesize", status: "ok" },
     ]);
     expect(after).not.toEqual(staleNeverExecuted);
+    expect(after).toEqual([]);
+  });
+
+  // sc-8-3: `critique` and `context_compact` moved OPPOSITE directions this sprint —
+  // `critique` left NEVER_EXECUTED, `context_compact` stayed — and the guard has to bite
+  // for each independently of the real golden executor, exactly as the `commit`/`synthesize`
+  // pair above proves it for sprint 9's move. Sprint 5 of this spec shipped a control that
+  // passed identically before and after a change and was rejected for it; sprint 7 proved
+  // its guard by injecting a synthetic stale entry, which is the shape these two follow.
+
+  it("critique silently re-entering NEVER_EXECUTED (losing its ok span) fails the shrunk pin", () => {
+    const declared = ["documenter", "critique"];
+    const currentNeverExecuted: string[] = []; // sprint 8's shrunk list: critique is not on it
+    const before = missingAgainst(declared, [
+      { nodeId: "documenter", status: "ok" },
+      { nodeId: "critique", status: "ok" },
+    ]);
+    expect(before).toEqual(currentNeverExecuted); // matches: critique is genuinely executed now
+
+    // critique's span silently regresses (e.g. a future change makes its buildCorrection
+    // call throw) with NEVER_EXECUTED left at this sprint's shrunk list:
+    const after = missingAgainst(declared, [
+      { nodeId: "documenter", status: "ok" },
+      { nodeId: "critique", status: "failed" },
+    ]);
+    expect(after).not.toEqual(currentNeverExecuted);
+    expect(after).toEqual(["critique"]);
+  });
+
+  it("context_compact gaining an ok span while still listed fails the pin", () => {
+    const declared = ["documenter", "context_compact"];
+    const currentNeverExecuted = ["context_compact"]; // sprint 8 left it structurally blocked
+    const before = missingAgainst(declared, [{ nodeId: "documenter", status: "ok" }]);
+    expect(before).toEqual(currentNeverExecuted); // matches: context_compact is genuinely unreached
+
+    // context_compact starts producing an ok span (its structural-block claim stopped being
+    // true — e.g. a future sprint teaches the supervisor to select COMPACT_LABEL) with the
+    // list left unchanged:
+    const after = missingAgainst(declared, [
+      { nodeId: "documenter", status: "ok" },
+      { nodeId: "context_compact", status: "ok" },
+    ]);
+    expect(after).not.toEqual(currentNeverExecuted);
     expect(after).toEqual([]);
   });
 });

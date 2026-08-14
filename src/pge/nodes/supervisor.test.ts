@@ -22,7 +22,7 @@ import type {
 } from "../registry/nodes.js";
 import { readFailureArtifact } from "../runtime/graceful-failure.js";
 import { initialOverallState } from "../state/overall.js";
-import type { OverallState } from "../state/overall.js";
+import type { GraphMessage, OverallState } from "../state/overall.js";
 import { CODING_GRAPH } from "../topology/coding.graph.js";
 import {
   compileRegion,
@@ -49,7 +49,7 @@ import {
   supervisorTarget,
 } from "./regions.js";
 import { RESEARCH_NODE_IDS } from "./research.js";
-import { PLAN_LABEL, gracefulFailureNode, supervisorNode } from "./supervisor.js";
+import { COMPACT_LABEL, PLAN_LABEL, gracefulFailureNode, supervisorNode } from "./supervisor.js";
 
 /**
  * The two-level tree: the supervisor router, the failure terminal, and the structural
@@ -455,6 +455,49 @@ describe("SUPERVISOR: a router that selects a LABEL the artifact declares (ADR-3
       defaults: { ...PLAN_SPEC.defaults, supervisorNodeId: PLAN_NODE_IDS.draft },
     };
     expect(() => supervisorNode({ spec: notARouter })).toThrow(/is not a router node/);
+  });
+});
+
+// ── CLAIM BACKING: coverage.test.ts's NEVER_EXECUTED entry for `context_compact` ──
+
+/**
+ * `coverage.test.ts`'s `NEVER_EXECUTED` doc block claims the shipped supervisor handler has
+ * NO code path that returns `COMPACT_LABEL`, across every state the COMMITTED coding graph
+ * can produce — not just the projected regions the tests above exercise. This is the test
+ * that backs that claim: it fails the moment the claim stops being true, whether that
+ * happens by a direct edit to `supervisorNode` or by any state this file did not think to
+ * try producing one indirectly.
+ */
+describe("CLAIM: the shipped supervisor never selects the compact label (coverage.test.ts NEVER_EXECUTED)", () => {
+  /** A message window large enough to make a token-threshold heuristic want to compact. */
+  function largeMessageWindow(count: number): GraphMessage[] {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `m-${String(index)}`,
+      seq: index,
+      role: "assistant" as const,
+      nodeId: "sprint_generate",
+      text: "x".repeat(400),
+      tokens: 200,
+    }));
+  }
+
+  it("never selects 'compact' across empty, plan-ready, branches-settled and a large message window", async () => {
+    const supervisor = supervisorNode({ spec: CODING_GRAPH });
+    const states: OverallState[] = [
+      emptyState(),
+      { ...emptyState(), spec: stubPlanSpec() },
+      {
+        ...emptyState(),
+        spec: stubPlanSpec(),
+        branchStatus: { "sprint-spec-a": { state: "succeeded", attempts: 1 } },
+      },
+      { ...emptyState(), spec: stubPlanSpec(), messages: largeMessageWindow(500) },
+    ];
+
+    for (const state of states) {
+      const command = await supervisor.handler(undefined, state, supervisorContext());
+      expect(command.goto).not.toEqual({ kind: "label", label: COMPACT_LABEL });
+    }
   });
 });
 

@@ -549,8 +549,8 @@ measured rather than asserted — `src/pge/golden/coverage.test.ts` executes eve
 `replay` case, reads the node ids and the STATUS of the resulting span files, and pins the
 executed set against the committed artifact.
 
-**40 of the 44 declared nodes execute, as of sprint 2 of `spec-20260814-pge-full-convergence`.**
-The figure moved twice, and both moves are worth separating. Sprint 9 of
+**42 of the 44 declared nodes execute, as of sprint 8 of `spec-20260814-pge-full-convergence`.**
+The figure moved three times, and each move is worth separating. Sprint 9 of
 `spec-20260812-pge-real-workload-errors` corrected the RULE — the committed figure before
 that sprint read **"39 of the 44"**, and the drop to **"38 of the 44"** was a correction, not
 a regression: the earlier rule counted a node as executed the moment its `nodeId` appeared in
@@ -571,17 +571,34 @@ reached immediately after. `commit` was REACHED by four of the (then six) commit
 cases before this — the `hitl_commit` gate that precedes it admits every one of them — but
 never EXECUTED, and the two remained different claims until this case existed.
 
-The four nodes no case executes are pinned in `NEVER_EXECUTED`. Two are genuine
-**structural blocks** — no set of bindings can reach them — and two, `critique` and
-`rework_route`, are a **missing scenario** rather than a structural block, which the source
-comment says explicitly rather than folding them into the same claim as their neighbours:
+Sprint 8 of `spec-20260814-pge-full-convergence` moved the count again, from 40 to 42, by
+closing the gap `critique` and `rework_route` were then filed under: **missing scenario, not
+a structural block.** `replay-corrected-sprint-still-grades-fail` exploits an asymmetry
+between two rules that both read the same evaluation history and disagree — `branchOutcome`
+(`nodes/sprint-review.ts`) settles a branch on its LAST decisive verdict, so a branch that
+fails once and then passes settles `"succeeded"`, while `gradeContracts` (`nodes/root.ts`)
+reduces over every recorded verdict and lets one `"fail"` row outrank a later `"pass"`
+permanently. A branch that needed one correction round therefore settles `"succeeded"` (so
+`reduce_sprints` admits it) while its contract stays graded `"fail"` forever (so
+`evaluate_global` returns non-pass), and `route_after_eval` selects `"rework"` — reaching
+`critique`, and through its sole successor edge, `rework_route`. That successor relationship
+means the two nodes could not be closed independently: `rework_route`'s own dispatch set is
+always empty by the time it runs (`reduce_sprints`'s gate already guarantees every dispatched
+branch is `"succeeded"`, which `dispatchableContracts` excludes), so it selects `"exhausted"`
+rather than re-offering the branch, still ending a `status: "ok"` span. The contract this
+sprint executed against had a nonGoal asking for `rework_route` to stay out of scope; it was
+recorded, ahead of implementation, as structurally unsatisfiable — forced by the graph's
+topology rather than a scope choice — and honoured by shrinking scope for the sprint that
+follows rather than by contriving a case that reaches `critique` without also reaching
+`rework_route`.
+
+The two nodes no case executes are pinned in `NEVER_EXECUTED`. Both are genuine
+**structural blocks** — no set of bindings, however imaginative, can reach them:
 
 | node | why no case executes it |
 | --- | --- |
-| `context_compact` | its only edge in is `supervisor -> context_compact` under the `compact` label, which the shipped supervisor never selects: `supervisor.reads` is exactly `["branchStatus", "counters", "evaluations", "spec"]` — no `messages` — so the decision would read a channel the artifact does not authorise. Recorded as artifact drift in `nodes/supervisor.ts`. Re-verified against the committed artifact at `1.4.0`; unmoved by the `specDraft` channel sprint 7 added. |
-| `critique` | **missing scenario, not a structural block.** Sits behind `route_after_eval`'s `rework` label, chosen whenever `evaluate_global` returns a non-pass verdict. `reduce_sprints`'s own gate refuses to admit the run into evaluation while any branch is `failed`/`abandoned`, re-dispatching it instead — so `evaluate_global` is only ever reached once every branch has already settled `"succeeded"`, and the only way it can still grade the run non-passing is a contract graded `"fail"` (`gradeContracts`, which treats one `fail` verdict anywhere in a contract's history as a PERMANENT fail even after a later `pass`) despite its branch succeeding. No committed case constructs that; it is a gap a new case could close. |
-| `rework_route` | inherits `critique`'s gap, and is likewise a missing scenario rather than a structural block — but even the missing case would not make it dispatch anything: its own re-dispatch rule excludes `"succeeded"` branches, and by the time it can run at all every branch already IS `"succeeded"` (`critique`'s row). It would still produce a `status: "ok"` span, choosing `"exhausted"` instead of `"rework"`. |
-| `synthesize` | **structural block, and the one recorded reason sprint 9 of spec-20260812-pge-real-workload-errors rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous row), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7 of spec-20260812-pge-real-workload-errors) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. |
+| `context_compact` | its only edge in is `supervisor -> context_compact` under the `compact` label, and the shipped supervisor's handler (`nodes/supervisor.ts:140-177`) has **no code path that returns that label at all** — its five branches select `plan`, `sprints`, `evaluate`, the graceful-failure hop for a refusal, or end the run; `COMPACT_LABEL` is declared and referenced nowhere else in `src/`. The committed artifact's `supervisor.reads` — exactly `["branchStatus", "counters", "evaluations", "spec"]`, still no `messages` at `graphVersion 1.5.0`, re-verified for sprint 8 — is WHY no such path exists: a supervisor cannot decide a message window crossed a compression threshold without reading the messages. The block is therefore at LABEL SELECTION, one step upstream of the node itself — `contextCompactNode`'s own body would return a `status: "ok"` span even below its threshold if it were ever entered, so this is not a token-threshold problem and enlarging a case's message count changes nothing. What would close it — teaching the supervisor to measure the window and select `COMPACT_LABEL`, which first requires adding `messages` to `supervisor.reads` — is a topology change (a minor `graphVersion` bump) plus a shipped-code change, not a case. Recorded as artifact drift in `nodes/supervisor.ts`, and backed by a claim test in `nodes/supervisor.test.ts` that fails the moment the handler gains a path returning `COMPACT_LABEL`. |
+| `synthesize` | **structural block, and the one recorded reason sprint 9 of spec-20260812-pge-real-workload-errors rewrote.** Reachable only via `route_after_eval`'s `partial` label, which needs a SECOND invocation of `route_after_eval` with its rework counter at the declared bound of 2 — and that second invocation never happens. `rework_route` reads the identical counter and bound the interpreter enforces on `rework_route` itself, and because `rework_route`'s dispatch set is always empty when it runs (previous paragraph), it never selects its own `"rework"` fan-out — the one edge that would loop back and reach `evaluate_global` again — so it always exits straight to `graceful_failure` on its first and only invocation per run. No golden case can close this; it is dead code by construction. An earlier analysis (sprint 7 of spec-20260812-pge-real-workload-errors) attributed this to `rework_route`'s dispatch set being empty "because nothing ever writes `abandoned`" — the conclusion was right, the mechanism was not: `abandoned` is irrelevant, since the exclusion that actually bites is `"succeeded"`, which every branch already is by the time `rework_route` can run at all. Sprint 9 of `spec-20260814-pge-full-convergence` inherits this node as the only remaining gap. |
 
 The pin is **two-directional**, like the conformance divergence set: a node that stops being
 executed fails, and a node that *starts* being executed fails too — because each entry above
@@ -590,12 +607,14 @@ those claims stopped being true and the explanation should be deleted deliberate
 of spec-20260812-pge-real-workload-errors proved both directions by mutation against
 synthetic spans rather than only against the real dataset — `src/pge/golden/coverage.test.ts`'s
 "the status-ok rule, mutated in both directions" block — because the real dataset can only
-ever demonstrate the direction its own cases happen to exercise; sprint 2 of
-`spec-20260814-pge-full-convergence` is the concrete instance the mutation-proof anticipated,
+ever demonstrate the direction its own cases happen to exercise. Sprint 2 of
+`spec-20260814-pge-full-convergence` is one concrete instance the mutation-proof anticipated,
 where `commit` and `finalize` left the list because the claim behind their membership
-stopped being true, and the guard caught nothing because the deletion was deliberate.
+stopped being true; sprint 8 is a second, independent instance, adding a control that proves
+the guard bites for `critique` re-entering the list and for `context_compact` leaving it, each
+by injecting a synthetic span rather than by driving the real golden executor.
 
-With the corrected rule, `40 / 44 ≈ 90.9%` still clears the dataset's own floor of "strictly
+With the corrected rule, `42 / 44 ≈ 95.5%` still clears the dataset's own floor of "strictly
 greater than 85%" (`covers a substantial majority of the graph, so the pin is not vacuous`,
 same file) without that floor moving — NFR0 forbids lowering a gate to protect a number, and
 this sprint did not need to.

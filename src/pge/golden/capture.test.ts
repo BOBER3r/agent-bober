@@ -155,6 +155,35 @@ function critiquingBindings(rounds: number): BindingsFactory {
   };
 }
 
+/**
+ * The evaluator fails the first `failures` calls, then passes — a corrected sprint.
+ *
+ * Derives from {@link wholeGraphBindings} twice, once passing and once failing, and
+ * switches between the two whole bindings sets on `evaluator` alone so every OTHER
+ * collaborator (and its persistence) is identical to `replay-full-run-evaluation-fails`.
+ * This is `critiquingBindings`'s counting shape applied one seam over: the seam that
+ * produces the finding here is `route_after_eval`'s own routing rule, not `critique`
+ * answering non-null.
+ */
+function correctingBindings(failures: number): BindingsFactory {
+  let seen = 0;
+  return (input) => {
+    const passing = wholeGraphBindings(input);
+    const failing = wholeGraphBindings(input, { evaluationPasses: false });
+    return {
+      ...passing,
+      evaluator: async (...args: Parameters<NonNullable<CodingBindings["evaluator"]>>) => {
+        seen += 1;
+        const bindings = seen <= failures ? failing : passing;
+        if (bindings.evaluator === undefined) {
+          throw new Error("wholeGraphBindings always sets evaluator");
+        }
+        return bindings.evaluator(...args);
+      },
+    };
+  };
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     caseId: "replay-full-run-evaluation-passes",
@@ -233,6 +262,17 @@ const SCENARIOS: readonly Scenario[] = [
     featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
     makeBindings: () => (input) => wholeGraphBindings(input),
     configInput: GOLDEN_APPROVED_CONFIG_INPUT,
+  },
+  {
+    caseId: "replay-corrected-sprint-still-grades-fail",
+    title: "a branch that fails once and then passes still routes to rework",
+    intent:
+      "Pin the asymmetry between branchOutcome's last-decisive-verdict rule and gradeContracts' one-fail-outranks-a-later-pass reduction: a branch that fails its first evaluation and passes its retry settles succeeded, so reduce_sprints admits it, but its contract stays graded fail forever, so evaluate_global returns non-pass and route_after_eval selects rework — driving critique and, through its sole successor, rework_route.",
+    tags: ["replay", "full-run", "region:sprint", "rework", "critique"],
+    notes:
+      "The only difference from replay-full-run-evaluation-fails is that the evaluator's SECOND call passes: the branch settles succeeded (sprint-review.ts's branchOutcome takes the LAST decisive verdict) while gradeContracts keeps the contract fail permanently (root.ts's one-fail-outranks-a-later-pass reduction over every recorded verdict), so evaluate_global's verdict stays non-pass and route_after_eval routes to critique instead of pass, which is critique's sole successor edge into rework_route.",
+    featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
+    makeBindings: () => correctingBindings(1),
   },
 ];
 
