@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -947,13 +947,29 @@ function assertDispositionCitesEvidence(doc: string): void {
  * sentence survives a later edit.
  */
 function assertFlipPrerequisitesStated(doc: string): void {
-  // (a) history and audits are recommended for PERMANENT ACCEPTANCE, not merely open work —
-  // the ADR-6 fan-out validation error is audits' architectural ground.
+  // (a) `audits` is recommended for PERMANENT ACCEPTANCE, not merely open work — the ADR-6
+  // fan-out validation error is its architectural ground. `history` must NOT be paired with
+  // it: a 2026-08-14 targeted correction (`spec-20260814-pge-full-convergence`) replaced a
+  // false claim — introduced at sprint 6 of `spec-20260812-terminal-vocabulary` — that no
+  // curator node exists to emit a history write. Two `role: "curator"` nodes exist
+  // (`sprint_curate_explain`, `sprint_curate_mocks`); the real, checked gap is that no PGE
+  // node body calls `appendHistory` — a missing writer, not a missing node. `history` is
+  // therefore open work, not permanently accepted, and the assertions below pin that split
+  // rather than the pre-correction "history and audits" pairing.
   expect(
     doc,
-    "the permanent-acceptance disposition for history/audits must be stated",
+    "audits' permanent-acceptance disposition must be stated",
   ).toContain("permanent acceptance");
   expect(doc, "audits' ADR-6 fan-out ground must be named").toContain("InterruptInsideFanOut");
+  expect(
+    doc,
+    "history must be stated as open work, not permanently accepted — the corrected claim",
+  ).toContain("OPEN WORK, not permanently accepted");
+  expect(
+    doc,
+    "the corrected history ground must name the curator-role nodes that actually exist",
+  ).toContain("sprint_curate_explain");
+  expect(doc, "…both curator nodes, not just one").toContain("sprint_curate_mocks");
   // sc-1-3/sc-1-4 (spec-20260814-pge-full-convergence sprint 1) — the ground is no longer
   // merely "unrevisited": the ADR WAS revisited and concluded the rule stands for a
   // runtime-grounded reason ADR-6 never gave. Both the citation and the reason must survive.
@@ -1109,8 +1125,29 @@ describe("the document's changelog, disposition and stated limitations", () => {
     assertFlipPrerequisitesStated(shippedDoc);
   });
 
-  it("FAILS when the permanent-acceptance disposition for history/audits is edited out", () => {
+  it("FAILS when audits' permanent-acceptance disposition is edited out", () => {
     const gutted = shippedDoc.split("permanent acceptance").join("open work");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when history's corrected 'open work' disposition is edited back to permanently accepted", () => {
+    // Guards the 2026-08-14 correction itself: `history` must stay OUT of the
+    // permanent-acceptance bucket now that the "no curator node" ground it was pinned on is
+    // known false. If a future edit quietly re-merges it with `audits`, this must catch it.
+    const gutted = shippedDoc
+      .split("OPEN WORK, not permanently accepted")
+      .join("permanently accepted");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when the corrected history ground stops naming the curator nodes that actually exist", () => {
+    const gutted = shippedDoc.split("sprint_curate_explain").join("a curator step");
     expect(gutted).not.toBe(shippedDoc);
     expect(() => {
       assertFlipPrerequisitesStated(gutted);
@@ -1157,5 +1194,100 @@ describe("the document's changelog, disposition and stated limitations", () => {
     expect(() => {
       assertFlipPrerequisitesStated(gutted);
     }).toThrow();
+  });
+});
+
+// ── The corrected `history` claim is a checked fact, not prose that can rot ────────────
+//
+// The 2026-08-14 targeted correction (`spec-20260814-pge-full-convergence`) replaced a false
+// claim — "there is no curator node to emit a history write" — with a true one: two
+// `role: "curator"` nodes exist, but no PGE node body calls `appendHistory`. The tests above
+// only pin that the DOCUMENT states the corrected claim; the tests below re-derive the
+// underlying FACT from the real `src/pge` source tree on every run, independent of what the
+// document says, so a future PGE node gaining a real history writer — or this claim rotting
+// the way the "no curator node" one silently did for two sprints — fails a test instead of
+// becoming a second silent lie.
+
+/** A minimal in-memory file, for the pure-function mutation controls below. */
+interface ScannedFile {
+  /** repo-relative, forward slashes */
+  path: string;
+  content: string;
+}
+
+/**
+ * True for `foo.ts`, false for `foo.test.ts` and anything not ending `.ts` — exactly the
+ * `--include="*.ts"` (non-test) semantics the doc's own cited `grep` command uses.
+ */
+function isProductionTsFile(name: string): boolean {
+  return name.endsWith(".ts") && !name.endsWith(".test.ts");
+}
+
+/**
+ * PURE — mirrors `findOffenders` in `src/contracts/status-vocabulary.invariant.test.ts`: the
+ * mutation control below drives this directly with synthetic content, so "the scan bites" is
+ * proven without ever writing a scratch file under `src/pge` (a crashed run would otherwise
+ * leave one behind — see `lint-boundary.test.ts`'s identical rationale).
+ */
+function findAppendHistoryCallers(files: readonly ScannedFile[]): string[] {
+  return files.filter((file) => file.content.includes("appendHistory")).map((file) => file.path);
+}
+
+/** Every production (non-test) `.ts` file under `dir`, repo-relative path, read from disk. */
+async function collectPgeSourceFiles(dir: string, root: string): Promise<ScannedFile[]> {
+  const out: ScannedFile[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules") continue;
+      out.push(...(await collectPgeSourceFiles(full, root)));
+      continue;
+    }
+    if (!isProductionTsFile(entry.name)) continue;
+    out.push({
+      path: full.slice(root.length).split("\\").join("/"),
+      content: await readFile(full, "utf8"),
+    });
+  }
+  return out;
+}
+
+describe("the corrected `history` claim is checked against source, not trusted as prose", () => {
+  it("finds ZERO appendHistory callers in src/pge today, and the doc's claim agrees", async () => {
+    const files = await collectPgeSourceFiles(join(REPO_ROOT, "src", "pge"), REPO_ROOT);
+    // Sanity: the walk actually happened against the real tree (71 non-test files as of this
+    // correction), not an empty or missing directory silently reporting "no callers".
+    expect(files.length).toBeGreaterThan(50);
+    expect(
+      findAppendHistoryCallers(files),
+      'src/pge now has an appendHistory call site — the disposition\'s "open work, zero ' +
+        'writers" claim (docs/pge-graph.md, conformance.engines.test.ts) is stale and must ' +
+        "be rewritten, together with this test, before either can be trusted again",
+    ).toEqual([]);
+    // The other direction of the same invariant: the doc must still state the zero-writer
+    // fact this test just re-derived from source, so an edit that quietly drops the claim
+    // (without a real writer appearing) fails here too, not just when a writer appears.
+    expect(
+      shippedDoc,
+      "the doc must still state appendHistory returns zero hits under src/pge",
+    ).toContain("returns ZERO hits: no PGE node body");
+  });
+
+  it("the scanner actually bites: a synthetic node body calling appendHistory is caught", () => {
+    const hit = findAppendHistoryCallers([
+      {
+        path: "src/pge/nodes/fake-node.ts",
+        content: 'await appendHistory(root, { event: "curator-start" });',
+      },
+      { path: "src/pge/nodes/other-node.ts", content: "export const x = 1;" },
+    ]);
+    expect(hit).toEqual(["src/pge/nodes/fake-node.ts"]);
+  });
+
+  it("isProductionTsFile matches the doc's cited grep semantics: *.ts, excluding *.test.ts", () => {
+    expect(isProductionTsFile("sprint-curate.ts")).toBe(true);
+    expect(isProductionTsFile("sprint-curate.test.ts")).toBe(false);
+    expect(isProductionTsFile("sprint-curate.tsx")).toBe(false);
+    expect(isProductionTsFile("README.md")).toBe(false);
   });
 });

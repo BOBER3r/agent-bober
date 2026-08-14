@@ -2,6 +2,23 @@
 
 **Contract:** sprint-spec-20260812-terminal-vocabulary-6  ·  **Spec:** spec-20260812-terminal-vocabulary  ·  **Completed:** 2026-08-12
 
+## Erratum (2026-08-14, `spec-20260814-pge-full-convergence` targeted correction)
+
+This record's own claim, below, that `history` has **"no curator node to emit a
+start/complete pair from"** is **FALSE, and was already false when this sprint closed**: the
+topology declared two `role: "curator"` nodes at that time — `sprint_curate_explain` and
+`sprint_curate_mocks` (`src/pge/topology/coding.graph.ts:576,592`) — shipped in commit
+`7d33553`, sprints 1-3 of `spec-20260805-pge-graph-engineering`, well before this sprint's
+2026-08-12 close. The ground actually checked, directly rather than inferred: no PGE node
+body calls `appendHistory` (`grep -rn "appendHistory" src/pge --include="*.ts"`, non-test, is
+zero hits) — a MISSING WRITER, not a missing node to host one. `history` is corrected to
+**OPEN WORK, not permanently accepted**; `audits`' own disposition (the
+`InterruptInsideFanOut` fan-out ground) is unaffected and unchanged. The claims below are
+left as originally written, for the record of what this sprint actually concluded — read them
+alongside this erratum, not in place of it. The corrected, canonical disposition lives in
+`docs/pge-graph.md`'s "Engine migration disposition" and is enforced by
+`src/pge/topology/docs.test.ts`.
+
 ## What this sprint added
 
 Nothing that runs. This is the spec's docs-only closing sprint: no production `.ts` file
@@ -58,7 +75,8 @@ artifact declares **two** HITL checkpoint ids, `end-of-pipeline` and `post-plan`
 former is ever *evaluated* on this fixture, because a settled plan takes `e-plan-ok`, never
 the `e-plan-clarify` edge that reaches `post-plan`), and both the `history` and `audits`
 bullets now state the **permanent-acceptance** disposition and its architectural grounds —
-no curator node to emit a start/complete pair from (`history`), and `InterruptInsideFanOut`
+no curator node to emit a start/complete pair from (`history` — **see erratum above: this
+ground is FALSE, corrected 2026-08-14**), and `InterruptInsideFanOut`
 (`src/pge/topology/validate.ts:1089-1099`) being a blocking validation error for five of the
 eight checkpoint ids the fan-out region would need (`audits`) — grounds this spec's own
 `outOfScope[0]` states but this file had not spelled out until now. The per-field test's own
@@ -74,9 +92,11 @@ where it closed, state what it did and did not move, state the divergence set as
 state the consequence. This spec's record is longer than the model because sc-6-4 asks for
 four additional things, each sourced rather than invented:
 
-1. **`history` and `audits` are recommended for permanent acceptance**, not left as open
-   work — the grounds are the ones above, restated as a numbered flip-prerequisite rather
-   than only inside the divergence-set prose.
+1. **`audits` is recommended for permanent acceptance**, not left as open work — the ground
+   is the one above, restated as a numbered flip-prerequisite rather than only inside the
+   divergence-set prose. (**`history` was originally paired here too, under the same "no
+   curator node" ground the erratum above corrects; `history` is open work, not permanently
+   accepted.**)
 2. **Option B success semantics**, defined verbatim from
    `spec-20260812-pge-real-workload-errors.json`'s `resolvedClarifications` D3: making
    `PipelineResult.success` false on a `FAIL_CLOSED` refusal, rejected there and here because
@@ -164,7 +184,7 @@ as a follow-up, not performed.
 | Claim | The test that pins it |
 |---|---|
 | The divergence set is unchanged at four fields, both directions, field- and delta-level | `conformance.engines.test.ts`, the pinned array + the "3. contracts" per-field asserts (re-verified by mutation this sprint, see above) |
-| `history`/`audits` are recommended for permanent acceptance, with the ADR-6/no-curator-node grounds | `src/pge/topology/docs.test.ts`, `assertFlipPrerequisitesStated` + its permanent-acceptance gutted control |
+| `history`/`audits` are recommended for permanent acceptance, with the ADR-6/no-curator-node grounds (**the no-curator-node ground was FALSE — see erratum above; `history` is open work, not permanently accepted**) | `src/pge/topology/docs.test.ts`, `assertFlipPrerequisitesStated` + its permanent-acceptance gutted control |
 | Option B is named as the term of art and its `completionMarker` consequence stated | same file, the Option B gutted control |
 | The durable-checkpoint gap for `commit`/`finalize` is stated | same file, the durable-checkpoint gutted control |
 | Re-specifying the bar is named as the prerequisite, and the bar is stated unsatisfiable by design | same file, the re-specification gutted control |
@@ -186,12 +206,17 @@ artifacts, as expected.
   sprints**, and that is the honest headline, not a caveat. What moved is *inside* two of the
   four fields, and what remains is now recommended for permanent acceptance rather than left
   ambiguous — a stronger, more falsifiable end state than "in progress" was, even though the
-  number of open fields did not change.
+  number of open fields did not change. (**Corrected 2026-08-14 — see erratum above: only
+  `audits` is permanently accepted; `history` is open work.**)
 - **A future reader must not read "two mechanisms closed" as "halfway to a flip."** The bar
   as currently written cannot be satisfied by any further vocabulary sprint — it needs a new
   PGE-node writer (a topology change, `nonGoal`-adjacent everywhere in this spec) and a
   deliberate re-specification of what "equivalent" should mean once two fields are
   permanently accepted. That re-specification is the next spec's to write, not this one's.
+  (**Corrected 2026-08-14: only `audits` is permanently accepted — see erratum above; the
+  "new PGE-node writer" this bullet already names is exactly what would close `history`,
+  which was open work even at this sprint's close, not a second permanently-accepted
+  field.**)
 - **The `<!-- pge:nodes -->` literal-marker trap is real and easy to hit while writing about
   the checker itself** — caught here only because the full suite was run before committing.
   Any future edit to this section that needs to describe what the checker does should name

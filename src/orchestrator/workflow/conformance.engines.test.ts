@@ -272,14 +272,21 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    `finalizePipelineRun`, because phase is a CHANNEL in the graph and per-node progress
     //    lives in the superstep trace, not in `history.jsonl`. Closing it means either
     //    deleting the imperative engine's event stream or giving nine node bodies a history
-    //    writer through the commit boundary — and the boundary cannot reconstruct a
-    //    `curator-start`/`curator-complete` PAIR from one superstep commit, because there is
-    //    NO CURATOR NODE to emit that pair from (`grep -rn "appendHistory\|history.jsonl"
-    //    src/pge --include="*.ts"`, non-test, is zero hits). RECOMMENDED FOR PERMANENT
-    //    ACCEPTANCE on that architectural ground — named by
-    //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`, not this sprint's
-    //    invention — so closing it is a topology decision, not something a later
-    //    vocabulary sprint can reach.
+    //    writer through the commit boundary. CORRECTION, not an amendment: a prior version
+    //    of this comment claimed the boundary "cannot reconstruct a
+    //    `curator-start`/`curator-complete` pair... because there is NO CURATOR NODE to emit
+    //    that pair from" — that clause is FALSE. The topology declares TWO
+    //    `role: "curator"` nodes, `sprint_curate_explain` (`coding.graph.ts:576`) and
+    //    `sprint_curate_mocks` (`:592`) — a node to host the write exists. What is actually
+    //    true: `appendHistory` (`src/state/history.ts:81`) is a plain exported function the
+    //    imperative engine calls inline at ten sites in `pipeline.ts`, and
+    //    `grep -rn "appendHistory\|history.jsonl" src/pge --include="*.ts"` (non-test) is
+    //    ZERO hits — no PGE node body, curator or otherwise, calls it. That is a MISSING
+    //    WRITER, not a missing place for one: `history` is OPEN WORK, not RECOMMENDED FOR
+    //    PERMANENT ACCEPTANCE — left undone on scope grounds alone
+    //    (`spec-20260814-pge-full-convergence`'s own `outOfScope[0]`, inherited from
+    //    `spec-20260812-terminal-vocabulary`'s), not an architectural bound the way
+    //    `audits`' fan-out block below is.
     //  - `audits`: NOT a duplicated checkpoint id, and — since
     //    `spec-20260814-pge-full-convergence` sprint 3 — no longer a single declared id
     //    either. The imperative pipeline records EIGHT checkpoints under eight distinct
@@ -322,8 +329,8 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    the assertion below. The sixth, `post-plan`, is already declared and simply does
     //    not fire on this fixture. `audits` therefore STAYS in the divergence set,
     //    recorded — per the spec's amended feat-3 AC2 — as RECOMMENDED FOR PERMANENT
-    //    ACCEPTANCE alongside `history`, not as open work a later sprint can close
-    //    further.
+    //    ACCEPTANCE — `history` (corrected above) is NOT, it is open work — not as open
+    //    work a later sprint can close further.
     //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
     //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
     //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
