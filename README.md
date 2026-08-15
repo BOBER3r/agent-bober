@@ -980,7 +980,10 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
   // -- Pipeline ----------------------------------------
   "pipeline": {
-    "engine": "ts",                       // Orchestration engine: "ts" (default) | "skill" | "workflow"
+    // Orchestration engine. "pge" runs the graph engine and is an explicit opt-in that
+    // never becomes the default; a topology that does not compile downgrades to "ts"
+    // inside PgeEngine.run. See docs/pge-graph.md for what it does and does not yet cover.
+    "engine": "ts",                       // "ts" (default) | "skill" | "workflow" | "medical-sop" | "pge"
     "researchPhase": true,                // Run two-phase research before planning (default: true)
     "architectPhase": false,              // Run solution architecture phase before planning (default: false)
     "maxIterations": 20,                  // Max total iterations across all sprints
@@ -1004,7 +1007,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "example": {
       "displayName": "Example research team",
       "memoryNamespace": "example",       // Lessons land in .bober/memory/example/
-      "pipelineShape": "ts",              // "ts" | "skill" | "workflow"
+      "pipelineShape": "ts",              // Same enum as pipeline.engine (see above)
       "providers": { "chat": "openai" }   // Partial role->provider override; unset roles keep defaults
     }
   },
