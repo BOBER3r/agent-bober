@@ -149,7 +149,7 @@ export class TokensaveMcpClient {
     this.stopping = true;
 
     // Reject any pending calls gracefully
-    this.rejectAllPending(makeGraphError("GRAPH_ERROR", "engine stopped"));
+    this.rejectAllPending(makeGraphError("GRAPH_ERROR", "backend stopped"));
 
     const child = this.child;
     if (!child || child.exitCode !== null) {
@@ -190,15 +190,15 @@ export class TokensaveMcpClient {
 
   /**
    * Send a JSON-RPC 2.0 request and await the matching response.
-   * Rejects immediately when health is 'broken' or the engine is stopped.
+   * Rejects immediately when health is 'broken' or the backend is stopped.
    */
   async call<T>(tool: string, params: unknown): Promise<T> {
     if (this.healthState === "broken") {
-      throw makeGraphError("GRAPH_UNAVAILABLE", "engine breaker tripped");
+      throw makeGraphError("GRAPH_UNAVAILABLE", "backend breaker tripped");
     }
 
     if (this.stopping || !this.child || this.healthState !== "ready") {
-      throw makeGraphError("GRAPH_ERROR", "engine not ready");
+      throw makeGraphError("GRAPH_ERROR", "backend not ready");
     }
 
     const id = this.nextId++;
@@ -368,7 +368,7 @@ export class TokensaveMcpClient {
 
     // 1. Reject every in-flight pending immediately and clear the map
     this.rejectAllPending(
-      makeGraphError("GRAPH_ERROR", "engine restarted mid-call"),
+      makeGraphError("GRAPH_ERROR", "backend restarted mid-call"),
     );
 
     // 2. Log the restart incident

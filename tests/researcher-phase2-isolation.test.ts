@@ -24,7 +24,7 @@ import type { SprintContract } from "../src/contracts/sprint-contract.js";
 // Mock graphPipelineLifecycle to return "ready"
 vi.mock("../src/graph/pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
-    engineHealth: vi.fn().mockReturnValue("ready"),
+    backendHealth: vi.fn().mockReturnValue("ready"),
     getGraphClient: vi.fn().mockReturnValue(null),
     getGraphDeps: vi.fn().mockReturnValue(null),
   },

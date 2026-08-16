@@ -74,7 +74,7 @@ export const runSecurityVerifier: SecurityVerifier = {
     // The verifier reuses the SAME "curator" read-only role as the finder —
     // no bash/write/edit (nonGoals[0]). No new AgentRole is introduced.
     const graphState = getGraphState(config);
-    const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+    const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
     const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
     const systemPrompt = await assembleSystemPrompt(
       "curator",

@@ -1,4 +1,4 @@
-// GraphBackend — per-engine tool catalog, param builders, and response-shape
+// GraphBackend — per-backend tool catalog, param builders, and response-shape
 // adapters. The backend produces {tool, params, narrow}; GraphClient keeps
 // ownership of sandbox filtering, staleness, health short-circuits, and
 // prefetch dispatch (see src/graph/client.ts).
@@ -27,13 +27,13 @@ export interface SearchOpts {
  *  awareness of the ambient NodeJS namespace in this project's flat config). */
 export type Platform = typeof process.platform;
 
-/** How to run the engine's long-lived MCP server. */
+/** How to run the backend's long-lived MCP server. */
 export interface ProcessSpec {
   binary: string;
   serveArgs: string[];
 }
 
-/** How to detect + version-gate the engine binary. */
+/** How to detect + version-gate the backend binary. */
 export interface PrereqSpec {
   versionArgs: string[];
   isCompatible(version: string): boolean;
@@ -68,7 +68,7 @@ export interface CallPlan<T> {
 }
 
 /**
- * Per-engine tool catalog + param builders + response-shape adapters.
+ * Per-backend tool catalog + param builders + response-shape adapters.
  *
  * GraphClient is injected with a concrete GraphBackend at construction and
  * delegates every tool-name/params/narrow decision to it, while keeping all
@@ -86,10 +86,10 @@ export interface GraphBackend {
   overviewPlan(): CallPlan<string>;
   changesPlan(since?: string): CallPlan<NodeRef[]>;
 
-  /** How to spawn the engine's long-lived MCP server (binary + serve args). */
+  /** How to spawn the backend's long-lived MCP server (binary + serve args). */
   processSpec(): ProcessSpec;
-  /** How to detect + version-gate the engine binary. */
+  /** How to detect + version-gate the backend binary. */
   prereqSpec(): PrereqSpec;
-  /** How to run + parse the engine's short-lived init/sync/status CLI. */
+  /** How to run + parse the backend's short-lived init/sync/status CLI. */
   cliMap(): CliMap;
 }

@@ -175,7 +175,7 @@ export async function runPlanner(
     "planner",
     "bober-planner",
     projectRoot,
-    { graphEnabled: false, engineHealth: "disabled" },
+    { graphEnabled: false, backendHealth: "disabled" },
   );
   const model = resolveModel(config.planner.model);
 

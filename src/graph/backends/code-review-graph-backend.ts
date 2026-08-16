@@ -1,6 +1,6 @@
 /**
  * CodeReviewGraphBackend — GraphBackend implementation for the
- * `code-review-graph` engine.
+ * `code-review-graph` backend.
  *
  * Registered so backend auto-detection (Sprint 3) can select it when
  * tokensave is not installed but code-review-graph is. As of Sprint 6, all

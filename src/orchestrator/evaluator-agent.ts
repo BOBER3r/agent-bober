@@ -218,7 +218,7 @@ async function runSingleLensEval(
     // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit).
     // UNION mode when gated: all original tools retained AND graph_* tools added.
     const graphState = getGraphState(config);
-    const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+    const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
     const toolSet = resolveRoleTools("evaluator", projectRoot, graphState, graphDeps ?? undefined);
     // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
     const systemPrompt = await assembleSystemPrompt("evaluator", "bober-evaluator", projectRoot, graphState);

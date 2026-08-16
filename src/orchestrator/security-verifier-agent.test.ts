@@ -29,7 +29,7 @@ vi.mock("./tools/index.js", async () => {
   const actual = await vi.importActual<typeof ToolsIndexModule>("./tools/index.js");
   return {
     ...actual,
-    getGraphState: () => ({ graphEnabled: false, engineHealth: "disabled" }),
+    getGraphState: () => ({ graphEnabled: false, backendHealth: "disabled" }),
     getGraphDeps: () => undefined,
   };
 });

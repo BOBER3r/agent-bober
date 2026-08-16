@@ -209,7 +209,7 @@ The optional `security.diff` object (`SecurityDiffConfigSchema`) has its own fie
 |---|---|---|---|
 | `mode` | `"estimated-files" \| "git-diff"` | `"estimated-files"` | `estimated-files` ranks signatures against the sprint's `estimatedFiles` scope (today's behavior). `git-diff` computes a **real** `AuditDiff` (changed files + hunks) via the orchestrator-owned `SecurityDiffProvider` and feeds the real hunks to the selector and the finder prompt. `git-diff` is **never** the default. |
 | `baseRef` | `string` (optional) | unset | The git ref to diff against. When omitted, the provider resolves the merge-base with the detected default branch (`origin/HEAD` → `origin/main`/`master` → `main`/`master`), falling back to `HEAD~1`. |
-| `expandWithGraph` | `boolean` | `false` | When `true` **and** the tokensave graph engine is `ready`, expands the changed files into a call-graph neighborhood (`GraphClient.impact`) surfaced to the finder. Ignored (empty neighborhood) when the graph is not ready. |
+| `expandWithGraph` | `boolean` | `false` | When `true` **and** the tokensave graph backend is `ready`, expands the changed files into a call-graph neighborhood (`GraphClient.impact`) surfaced to the finder. Ignored (empty neighborhood) when the graph is not ready. |
 
 Even in `git-diff` mode the auditor toolset stays read-only — `git` runs only in
 orchestrator Node ([ADR-5](../.bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-5.md)) —

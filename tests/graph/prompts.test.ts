@@ -82,21 +82,21 @@ describe("AgentGraphPrompts.decorate — integration", () => {
   it("returns base unchanged when graph disabled", () => {
     const base = "AGENT BASE PROMPT";
     expect(
-      AgentGraphPrompts.decorate("curator", base, { graphEnabled: false, engineHealth: "ready" }),
+      AgentGraphPrompts.decorate("curator", base, { graphEnabled: false, backendHealth: "ready" }),
     ).toBe(base);
   });
 
-  it("returns base unchanged when engine not ready", () => {
+  it("returns base unchanged when backend not ready", () => {
     const base = "AGENT BASE PROMPT";
     expect(
-      AgentGraphPrompts.decorate("curator", base, { graphEnabled: true, engineHealth: "starting" }),
+      AgentGraphPrompts.decorate("curator", base, { graphEnabled: true, backendHealth: "starting" }),
     ).toBe(base);
   });
 
   it("returns base unchanged for planner even when graph enabled and ready", () => {
     const base = "PLANNER BASE";
     expect(
-      AgentGraphPrompts.decorate("planner", base, { graphEnabled: true, engineHealth: "ready" }),
+      AgentGraphPrompts.decorate("planner", base, { graphEnabled: true, backendHealth: "ready" }),
     ).toBe(base);
   });
 
@@ -104,7 +104,7 @@ describe("AgentGraphPrompts.decorate — integration", () => {
     const base = "CURATOR BASE";
     const decorated = AgentGraphPrompts.decorate("curator", base, {
       graphEnabled: true,
-      engineHealth: "ready",
+      backendHealth: "ready",
     });
     expect(decorated.startsWith(base + "\n\n---\n\n")).toBe(true);
     expect(decorated.endsWith(AgentGraphPrompts.fragmentFor("curator", "gated"))).toBe(true);
@@ -113,7 +113,7 @@ describe("AgentGraphPrompts.decorate — integration", () => {
   it("generator/evaluator use 'dual' mode even though their tool surface is UNION", () => {
     const decorated = AgentGraphPrompts.decorate("generator", "G", {
       graphEnabled: true,
-      engineHealth: "ready",
+      backendHealth: "ready",
     });
     expect(decorated).toContain("BOTH");
   });

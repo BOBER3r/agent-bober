@@ -1,9 +1,9 @@
 # Pluggable graph backends: tokensave vs code-review-graph
 
-agent-bober's code graph is **engine-agnostic**. Every graph-consuming surface — `agent-bober
+agent-bober's code graph is **backend-agnostic**. Every graph-consuming surface — `agent-bober
 onboard`, `agent-bober impact`, the `agent-bober graph` command group, and the external MCP server
 (`src/mcp/server.ts`) — talks to the graph through a single `GraphClient` API. `GraphClient` owns
-the cross-cutting sandbox/staleness/health/fallback logic and delegates the per-engine tool catalog
+the cross-cutting sandbox/staleness/health/fallback logic and delegates the per-backend tool catalog
 and response shaping to an injected `GraphBackend` (`src/graph/backends/types.ts`). Two backends are
 registered today:
 
@@ -19,20 +19,20 @@ section is the short version.
 
 ## 1. Selection algorithm
 
-`resolveGraphBackend()` (`src/graph/backends/registry.ts`) decides which engine a given run uses:
+`resolveGraphBackend()` (`src/graph/backends/registry.ts`) decides which backend a given run uses:
 
 1. **Explicit `config.graph.backend` wins.** If set (`"tokensave"` | `"code-review-graph"`), that
-   engine is used directly — the other engine is never probed, and if the chosen engine's binary
-   turns out to be missing, the caller's own prereq check surfaces *that engine's* install hint, not
+   backend is used directly — the other backend is never probed, and if the chosen backend's binary
+   turns out to be missing, the caller's own prereq check surfaces *that backend's* install hint, not
    a combined one.
 2. **Otherwise, auto-detect.** Each backend in `KNOWN_BACKENDS` (tokensave first, then
    code-review-graph — `registry.ts:28-31`) is probed by running its version command
    (`<binary> --version`); the first one that responds with a parseable version wins. **tokensave is
    preferred when both are installed**, because it is probed first.
 3. **Neither installed** → `resolveGraphBackend` throws a `GraphBackendResolutionError` whose
-   message concatenates **both** engines' install hints (`registry.ts:146-152`).
+   message concatenates **both** backends' install hints (`registry.ts:146-152`).
 
-Per-engine binary path overrides are independent config keys — `graph.tokensavePath` and
+Per-backend binary path overrides are independent config keys — `graph.tokensavePath` and
 `graph.codeReviewGraphPath` (`src/config/schema.ts:394-401`) — resolved via `binaryForBackend()`
 (`registry.ts:70-82`). Selection is **config-only**: there is no per-command `--backend` CLI flag.
 
@@ -59,9 +59,9 @@ called out with a `bober:` comment at `registry.ts:95-99`.
 
 ---
 
-## 2. Installing an engine
+## 2. Installing a backend
 
-Neither engine ships with `npm install -g agent-bober` — install at least one separately.
+Neither backend ships with `npm install -g agent-bober` — install at least one separately.
 
 ### tokensave (native Rust binary)
 
@@ -87,14 +87,14 @@ Requires **Python 3.10+**. `CodeReviewGraphBackend.prereqSpec().isCompatible` cu
 **any** detected version (`code-review-graph-backend.ts:301`) — see [§5](#5-residual-follow-ups)
 for why, and the planned tightening.
 
-If neither engine is installed, graph features degrade gracefully and the rest of the pipeline
+If neither backend is installed, graph features degrade gracefully and the rest of the pipeline
 (Researcher → Planner → Curator → Generator → Evaluator) is unaffected.
 
 ---
 
 ## 3. Operation parity — the full table
 
-Every `GraphClient` operation is backed by exactly one tool call on each engine. This table is
+Every `GraphClient` operation is backed by exactly one tool call on each backend. This table is
 derived directly from `tokensave-backend.ts` and `code-review-graph-backend.ts` — the source line
 for each mapping is included so it can be spot-checked against the code.
 
@@ -126,14 +126,14 @@ footgun.
 | `agent-bober graph sync [paths]` | `tokensave sync <paths>` | `tokensave-backend.ts:366` | `code-review-graph update <paths>` | `code-review-graph-backend.ts:313-322` |
 | `agent-bober graph status --json` | `tokensave status --json` | `tokensave-backend.ts:367` | `code-review-graph status --json` | `code-review-graph-backend.ts:323` |
 
-`resolveGraphBackend()` picks the engine once per command invocation; `registerGraphCommand()`
+`resolveGraphBackend()` picks the backend once per command invocation; `registerGraphCommand()`
 (`src/cli/commands/graph.ts`) then constructs a `TokensaveCli` from whichever backend was resolved,
-so `init`/`sync`/`status` always run the *actual* selected engine's verbs — never a hardcoded
+so `init`/`sync`/`status` always run the *actual* selected backend's verbs — never a hardcoded
 tokensave path.
 
 ### `agent-bober graph status` readout
 
-As of Sprint 7, `graph status` (both human-readable and `--json`) reports which engine is live:
+As of Sprint 7, `graph status` (both human-readable and `--json`) reports which backend is live:
 
 ```bash
 $ agent-bober graph status --json
@@ -143,14 +143,14 @@ $ agent-bober graph status --json
   "tokensaveVersion": "6.1.1",
   "lastSyncedHeadSha": "23e8b73...",
   "stale": false,
-  "engine": "tokensave",
+  "backend": "tokensave",
   "backendVersion": "6.1.1",
   "selectedBy": "auto-detect"
 }
 ```
 
-- `engine` — the resolved backend id (`tokensave` | `code-review-graph`), `graph.ts:297,309`.
-- `backendVersion` — the resolved engine's detected version, falling back to
+- `backend` — the resolved backend id (`tokensave` | `code-review-graph`), `graph.ts:297,309`.
+- `backendVersion` — the resolved backend's detected version, falling back to
   `manifest.backendVersion` if the live prereq check failed, `graph.ts:298,310`.
 - `selectedBy` — `"config"` when `config.graph.backend` was set explicitly, else `"auto-detect"`,
   `graph.ts:299-301,311`.
@@ -210,7 +210,7 @@ ls .bober/onboarding/
 #    README.md  architecture-overview.md  hotspots.md  knowledge-gaps.md  communities.md
 ```
 
-This verifies, with a real engine and a real graph, that `onboard` (and by extension `impact` /
+This verifies, with a real backend and a real graph, that `onboard` (and by extension `impact` /
 `graph status`) works end-to-end through `code-review-graph` — not just against fixtures. It has
 **not** been re-run as part of this sprint (Sprint 8 is docs + a final fixture/tokensave
 verification pass only); the manual command above is the reproducible recipe for whoever runs it

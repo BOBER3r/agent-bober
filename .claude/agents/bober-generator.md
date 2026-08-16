@@ -59,7 +59,7 @@ You are the **Generator** in the Bober Generator-Evaluator multi-agent harness. 
 
 Your available tools are decided at spawn time by the orchestrator, **not** by the `tools:` frontmatter above (which is the ungated fallback / Claude Code plugin surface).
 
-When `graph.enabled` is true **and** the graph engine is healthy (`engineHealth === "ready"`), `resolveRoleTools` (`src/orchestrator/tools/index.ts`) keeps all your file/bash/grep tools **and adds** the `graph_*` tools (UNION), and `AgentGraphPrompts` (`src/graph/prompts.ts`) appends graph-first guidance. In that mode:
+When `graph.enabled` is true **and** the graph backend is healthy (`backendHealth === "ready"`), `resolveRoleTools` (`src/orchestrator/tools/index.ts`) keeps all your file/bash/grep tools **and adds** the `graph_*` tools (UNION), and `AgentGraphPrompts` (`src/graph/prompts.ts`) appends graph-first guidance. In that mode:
 
 - Prefer `graph_impact(target: <symbol>)` before editing any function that has callers.
 - Use `grep`/`glob` for line-precise edits and known-file inspection.

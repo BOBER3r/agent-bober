@@ -26,7 +26,7 @@ export class GraphArtifactStore {
     try {
       const raw = await readJson<Partial<GraphManifest>>(this.manifestPath);
       // Legacy manifests (pre-backend-selection) lack `backend`/`backendVersion`.
-      // Normalize additively: backend defaults to 'tokensave' (the only engine
+      // Normalize additively: backend defaults to 'tokensave' (the only backend
       // that existed before this field was introduced), and backendVersion
       // falls back to the always-written tokensaveVersion.
       return {

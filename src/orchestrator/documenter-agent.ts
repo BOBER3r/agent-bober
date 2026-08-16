@@ -254,7 +254,7 @@ export async function runDocumenter(
   // Documenter needs WRITE access — reuse the "generator" role tool set
   // (bash, read/write/edit, glob, grep; UNION with graph_* when gated).
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("generator", projectRoot, graphState, graphDeps ?? undefined);
   const systemPrompt = await assembleSystemPrompt("generator", "bober-documenter", projectRoot, graphState);
 

@@ -9,7 +9,7 @@
  * - NEVER BLOCKS SPAWN: 5s timeout + try/catch; returns firstMessage unchanged on failure.
  * - RESEARCHER-PHASE2 ISOLATION: NEVER uses contract.title/description/feature text.
  *   Uses ONLY overrides.questionKeywords.
- * - graph.enabled=false or engineHealth!='ready' → returns firstMessage unchanged.
+ * - graph.enabled=false or backendHealth!='ready' → returns firstMessage unchanged.
  */
 
 import { execa } from "execa";
@@ -390,7 +390,7 @@ function bodyForData(spec: PrefetchSpec, data: unknown): string {
 /**
  * Builds and injects deterministic graph context into agent first messages.
  *
- * Constructor takes a GraphClient (may be null if engine not ready) and a
+ * Constructor takes a GraphClient (may be null if backend not ready) and a
  * GraphSection config. inject() is the only public method.
  *
  * Usage in agent files:
@@ -414,7 +414,7 @@ export class PreflightContextInjector {
    * Fast-path: returns firstMessage UNCHANGED when:
    * - graph.enabled !== true
    * - client is null
-   * - engineHealth !== 'ready'
+   * - backendHealth !== 'ready'
    *
    * Timeout: 5000ms. On timeout or any error, logs an incident and returns
    * firstMessage unchanged. Agent spawn is NEVER blocked.
@@ -444,7 +444,7 @@ export class PreflightContextInjector {
     // recorded. This is what makes "is the graph actually firing?" answerable
     // from .bober/history.jsonl rather than a matter of faith.
     const startedAt = Date.now();
-    const health = graphPipelineLifecycle.engineHealth();
+    const health = graphPipelineLifecycle.backendHealth();
 
     // Enabled but no client wired in.
     if (!this.client) {
@@ -454,7 +454,7 @@ export class PreflightContextInjector {
       return firstMessage;
     }
 
-    // Enabled but engine not ready (starting/syncing/disabled).
+    // Enabled but backend not ready (starting/syncing/disabled).
     if (health !== "ready") {
       await this.recordTelemetry(
         role, contract, "skipped-engine-not-ready", false, 0, Date.now() - startedAt, health, false,
@@ -524,7 +524,7 @@ export class PreflightContextInjector {
     injected: boolean,
     charsAdded: number,
     elapsedMs: number,
-    engineHealth: string,
+    backendHealth: string,
     partialFailure: boolean,
   ): Promise<void> {
     try {
@@ -546,7 +546,7 @@ export class PreflightContextInjector {
           // Rough heuristic (~4 chars/token); telemetry only, not billing.
           approxTokensAdded: Math.max(0, Math.round(charsAdded / 4)),
           budgetTokens: this.getBudgetForRole(role),
-          engineHealth,
+          backendHealth,
           elapsedMs,
           partialFailure,
         },

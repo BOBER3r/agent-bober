@@ -90,7 +90,7 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
-      // Resolve which engine to run — explicit config.graph.backend wins,
+      // Resolve which backend to run — explicit config.graph.backend wins,
       // else auto-detect (tokensave preferred when both are installed).
       const backend = await resolveGraphBackend(config);
       const binary = binaryForBackend(backend, config);
@@ -110,7 +110,7 @@ export function registerGraphCommand(program: Command): void {
       await store.ensureLayout();
 
       // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
-      // init honors whichever engine was selected, not a hardcoded tokensave.
+      // init honors whichever backend was selected, not a hardcoded tokensave.
       const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       try {
@@ -137,7 +137,7 @@ export function registerGraphCommand(program: Command): void {
         lastSyncedHeadSha: existingManifest?.lastSyncedHeadSha ?? null,
         pendingFiles: existingManifest?.pendingFiles ?? [],
         // always overwrite with fresh values; tokensaveVersion is kept
-        // back-compat (only updated when tokensave IS the resolved engine —
+        // back-compat (only updated when tokensave IS the resolved backend —
         // a cr-graph run does not know tokensave's version, so it preserves
         // whatever was last recorded).
         tokensaveVersion:
@@ -179,7 +179,7 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
-      // Resolve which engine to run — explicit config.graph.backend wins,
+      // Resolve which backend to run — explicit config.graph.backend wins,
       // else auto-detect (tokensave preferred when both are installed).
       const backend = await resolveGraphBackend(config);
       const binary = binaryForBackend(backend, config);
@@ -199,7 +199,7 @@ export function registerGraphCommand(program: Command): void {
       await store.ensureLayout();
 
       // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
-      // sync honors whichever engine was selected, not a hardcoded tokensave.
+      // sync honors whichever backend was selected, not a hardcoded tokensave.
       const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       // --force → `tokensave sync --force .` re-indexes everything;
@@ -263,7 +263,7 @@ export function registerGraphCommand(program: Command): void {
         return;
       }
 
-      // Resolve which engine to run — explicit config.graph.backend wins,
+      // Resolve which backend to run — explicit config.graph.backend wins,
       // else auto-detect (tokensave preferred when both are installed).
       const backend = await resolveGraphBackend(config);
       const binary = binaryForBackend(backend, config);
@@ -276,11 +276,11 @@ export function registerGraphCommand(program: Command): void {
       const manifest = await store.readManifest();
       const staleness = await store.staleness();
 
-      // Attempt to get live status from the resolved engine's binary.
+      // Attempt to get live status from the resolved backend's binary.
       let liveStatus = { ready: false, indexedFileCount: 0, tokensaveVersion: "" };
       if (prereq.ok) {
         // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
-        // status honors whichever engine was selected, not a hardcoded tokensave.
+        // status honors whichever backend was selected, not a hardcoded tokensave.
         const cli = new TokensaveCli(projectRoot, null, binary, backend);
         try {
           liveStatus = await cli.status();
@@ -289,12 +289,12 @@ export function registerGraphCommand(program: Command): void {
         }
       }
 
-      // Backend-status readout (sc-7-5): which engine is active, its version,
+      // Backend-status readout (sc-7-5): which backend is active, its version,
       // and whether it was pinned by explicit config or auto-detected. This
       // mirrors resolveGraphBackend's own "explicit config.graph.backend wins"
       // branch (registry.ts:100-103) without needing to change that function's
       // signature (it has 5 existing call sites + its own test suite).
-      const engine = backend.id;
+      const backendId = backend.id;
       const backendVersion = (prereq.ok ? prereq.version : "") || manifest?.backendVersion || "";
       const selectedBy: "config" | "auto-detect" = config.graph?.backend
         ? "config"
@@ -306,7 +306,7 @@ export function registerGraphCommand(program: Command): void {
         tokensaveVersion: liveStatus.tokensaveVersion || manifest?.tokensaveVersion || "",
         lastSyncedHeadSha: manifest?.lastSyncedHeadSha ?? null,
         stale: staleness.stale,
-        engine,
+        backend: backendId,
         backendVersion,
         selectedBy,
       };
@@ -327,7 +327,7 @@ export function registerGraphCommand(program: Command): void {
       process.stdout.write(
         `Last HEAD SHA:   ${output.lastSyncedHeadSha ?? chalk.gray("(none)")}\n`,
       );
-      process.stdout.write(`Engine:          ${output.engine}\n`);
+      process.stdout.write(`Backend:         ${output.backend}\n`);
       process.stdout.write(
         `Version:         ${output.backendVersion || chalk.gray("(unknown)")}\n`,
       );

@@ -67,7 +67,7 @@ export async function runCodeReviewer(
   // Code reviewer reuses the "evaluator" role tool set — read-only (bash, read, grep, glob).
   // Adding a distinct role is a separate refactor — out of scope per contract s5-c9.
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("evaluator", projectRoot, graphState, graphDeps ?? undefined);
   const systemPrompt = await assembleSystemPrompt("evaluator", "bober-code-reviewer", projectRoot, graphState);
 

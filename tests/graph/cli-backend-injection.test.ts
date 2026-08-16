@@ -167,7 +167,7 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
       parseStatus: () => ({ ready: false, indexedFileCount: 0, tokensaveVersion: "" }),
     };
     const fakeBackend: GraphBackend = {
-      id: "fake-engine",
+      id: "fake-backend",
       searchPlan: () => {
         throw new Error("n/a");
       },
@@ -186,11 +186,11 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
       changesPlan: () => {
         throw new Error("n/a");
       },
-      processSpec: (): ProcessSpec => ({ binary: "fake-engine-binary", serveArgs: ["serve"] }),
+      processSpec: (): ProcessSpec => ({ binary: "fake-backend-binary", serveArgs: ["serve"] }),
       prereqSpec: (): PrereqSpec => ({
         versionArgs: ["--version"],
         isCompatible: () => true,
-        installHint: () => "install fake-engine",
+        installHint: () => "install fake-backend",
         incompatibleHint: () => "",
       }),
       cliMap: () => fakeCliMap,
@@ -198,7 +198,7 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp, null, undefined, fakeBackend);
     await cli.init({ languageTier: "core" });
-    expect(execa).toHaveBeenCalledWith("fake-engine-binary", ["init"], expect.any(Object));
+    expect(execa).toHaveBeenCalledWith("fake-backend-binary", ["init"], expect.any(Object));
   });
 
   it("an explicit binaryOverride still wins over the backend's default binary", async () => {

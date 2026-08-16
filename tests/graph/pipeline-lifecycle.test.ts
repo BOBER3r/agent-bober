@@ -108,10 +108,10 @@ afterEach(async () => {
 // ── Tests: no-op when disabled ──────────────────────────────────────────
 
 describe("GraphPipelineLifecycle — graph.enabled=false", () => {
-  it("start() is a no-op — engineHealth() returns 'disabled'", async () => {
+  it("start() is a no-op — backendHealth() returns 'disabled'", async () => {
     const { graphPipelineLifecycle } = await import("../../src/graph/pipeline-lifecycle.js");
     await graphPipelineLifecycle.start(tmp, makeConfig(false));
-    expect(graphPipelineLifecycle.engineHealth()).toBe("disabled");
+    expect(graphPipelineLifecycle.backendHealth()).toBe("disabled");
   });
 
   it("start() does not spawn any subprocess when disabled", async () => {
@@ -132,7 +132,7 @@ describe("GraphPipelineLifecycle — graph.enabled=false", () => {
     const { graphPipelineLifecycle } = await import("../../src/graph/pipeline-lifecycle.js");
     await graphPipelineLifecycle.start(tmp, makeConfig(false));
     await graphPipelineLifecycle.start(tmp, makeConfig(false));
-    expect(graphPipelineLifecycle.engineHealth()).toBe("disabled");
+    expect(graphPipelineLifecycle.backendHealth()).toBe("disabled");
   });
 });
 
@@ -172,11 +172,11 @@ describe("GraphPipelineLifecycle — prereq failure", () => {
 // ── Tests: happy path ───────────────────────────────────────────────────
 
 describe("GraphPipelineLifecycle — enabled and prereq passes", () => {
-  it("start() spawns MCP client and engineHealth() returns 'ready'", async () => {
+  it("start() spawns MCP client and backendHealth() returns 'ready'", async () => {
     const { graphPipelineLifecycle } = await import("../../src/graph/pipeline-lifecycle.js");
     await graphPipelineLifecycle.start(tmp, makeConfig(true));
     expect(TokensaveMcpClient).toHaveBeenCalledOnce();
-    expect(graphPipelineLifecycle.engineHealth()).toBe("ready");
+    expect(graphPipelineLifecycle.backendHealth()).toBe("ready");
   });
 
   it("start() writes a PID file with correct shape", async () => {

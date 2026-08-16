@@ -53,7 +53,7 @@ agent-bober impact sandboxPath
 
 Output:
 ```
-Starting graph engine...
+Starting graph backend...
 Analysing impact for: sandboxPath
 Impact report written: .bober/graph/impact/sandboxpath.md
   Affected symbols: N

@@ -102,7 +102,7 @@ export function registerImpactCommand(program: Command): void {
         return;
       }
 
-      // Resolve which engine to run — explicit config.graph.backend wins,
+      // Resolve which backend to run — explicit config.graph.backend wins,
       // else auto-detect (tokensave preferred when both are installed).
       const backend = await resolveGraphBackend(config);
       const binary = binaryForBackend(backend, config);
@@ -134,13 +134,13 @@ export function registerImpactCommand(program: Command): void {
         processSpecForBackend(backend, config),
       );
 
-      process.stdout.write(chalk.cyan("Starting graph engine...\n"));
+      process.stdout.write(chalk.cyan("Starting graph backend...\n"));
 
       try {
         await mcpClient.start();
       } catch (err) {
         process.stderr.write(
-          `Failed to start graph engine: ${err instanceof Error ? err.message : String(err)}\n`,
+          `Failed to start graph backend: ${err instanceof Error ? err.message : String(err)}\n`,
         );
         process.exitCode = 1;
         return;

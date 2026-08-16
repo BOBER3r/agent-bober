@@ -42,7 +42,7 @@ export interface ToolSet {
  */
 export interface GraphState {
   graphEnabled: boolean;
-  engineHealth: "ready" | "starting" | "restarting" | "broken" | "disabled";
+  backendHealth: "ready" | "starting" | "restarting" | "broken" | "disabled";
 }
 
 // ── Role → tool mapping ────────────────────────────────────────────
@@ -123,22 +123,22 @@ export function getGraphInternalTools(
  * Snapshot the current graph-pipeline state for tool-surface gating.
  *
  * Safe to call before `graphPipelineLifecycle.start()` — returns
- * `{graphEnabled: false, engineHealth: 'disabled'}` in that case.
+ * `{graphEnabled: false, backendHealth: 'disabled'}` in that case.
  *
  * @param config  Optional bober configuration. When absent, graphEnabled=false.
  */
 export function getGraphState(config?: BoberConfig): GraphState {
   const graphEnabled = config?.graph?.enabled === true;
-  const rawHealth = graphPipelineLifecycle.engineHealth();
-  const validHealth: GraphState["engineHealth"] =
+  const rawHealth = graphPipelineLifecycle.backendHealth();
+  const validHealth: GraphState["backendHealth"] =
     rawHealth === "ready" ||
     rawHealth === "starting" ||
     rawHealth === "restarting" ||
     rawHealth === "broken" ||
     rawHealth === "disabled"
-      ? (rawHealth as GraphState["engineHealth"])
+      ? (rawHealth as GraphState["backendHealth"])
       : "disabled";
-  return { graphEnabled, engineHealth: validHealth };
+  return { graphEnabled, backendHealth: validHealth };
 }
 
 /**
@@ -154,7 +154,7 @@ export function getGraphDeps(): { client: GraphClient; fallback: GraphFallback }
 /**
  * Build the runtime tool set for a given agent role.
  *
- * When `ctx.graphEnabled === true` AND `ctx.engineHealth === 'ready'`,
+ * When `ctx.graphEnabled === true` AND `ctx.backendHealth === 'ready'`,
  * applies ADR-8 gating:
  *   - Roles `researcher-phase2`, `curator`, `architect`: removes bash/grep/glob,
  *     adds the 6 graph_* tools (read_file is retained).
@@ -176,7 +176,7 @@ export function getGraphDeps(): { client: GraphClient; fallback: GraphFallback }
 export function resolveRoleTools(
   role: AgentRole,
   projectRoot: string,
-  ctx?: { graphEnabled: boolean; engineHealth?: string },
+  ctx?: { graphEnabled: boolean; backendHealth?: string },
   graphDeps?: { client: GraphClient; fallback: GraphFallback },
 ): ToolSet {
   // 1. Validate role — throw a clear, listable error for unknown roles.
@@ -201,9 +201,9 @@ export function resolveRoleTools(
     }
   }
 
-  // 3. Determine if gating applies. Treat undefined engineHealth as 'disabled'.
-  const engineHealth = ctx?.engineHealth ?? "disabled";
-  const gated = ctx?.graphEnabled === true && engineHealth === "ready";
+  // 3. Determine if gating applies. Treat undefined backendHealth as 'disabled'.
+  const backendHealth = ctx?.backendHealth ?? "disabled";
+  const gated = ctx?.graphEnabled === true && backendHealth === "ready";
 
   // 4. Not gated → return base set unchanged (zero behavior change from 0.12.0).
   if (!gated) {

@@ -9,7 +9,7 @@ import { TokensaveBackend } from "./backends/tokensave-backend.js";
 /**
  * Backend-agnostic version-gate check: runs `<binary> <spec.versionArgs>`,
  * extracts a semver, and asks the backend's PrereqSpec whether it is
- * compatible. Every engine-specific string (version range, install hints)
+ * compatible. Every backend-specific string (version range, install hints)
  * lives inside the injected PrereqSpec — this class has none.
  */
 export class GenericPrereqCheck {

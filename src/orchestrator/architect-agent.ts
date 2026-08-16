@@ -187,7 +187,7 @@ async function runArchitectSingleLoop(
   // and ready, bash/grep/glob are removed and graph_* tools are added (ADR-8).
   // write_file and edit_file are RETAINED in gated mode.
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("architect", projectRoot, graphState, graphDeps ?? undefined);
   // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
   const systemPrompt = await assembleSystemPrompt("architect", "bober-architect", projectRoot, graphState);
@@ -404,7 +404,7 @@ async function runArchitectPanel(
 
   // Build shared tool set and system prompt (same as single-loop path).
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("architect", projectRoot, graphState, graphDeps ?? undefined);
   const systemPrompt = await assembleSystemPrompt("architect", "bober-architect", projectRoot, graphState);
 

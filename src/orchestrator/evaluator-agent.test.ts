@@ -62,7 +62,7 @@ vi.mock("./agent-loader.js", () => ({
 }));
 vi.mock("./tools/index.js", () => ({
   resolveRoleTools: () => ({ schemas: [], handlers: new Map() }),
-  getGraphState: () => ({ enabled: false, engineHealth: "disabled" }),
+  getGraphState: () => ({ enabled: false, backendHealth: "disabled" }),
   getGraphDeps: () => undefined,
 }));
 vi.mock("../graph/preflight-injector.js", () => ({
@@ -75,7 +75,7 @@ vi.mock("../graph/preflight-injector.js", () => ({
 vi.mock("../graph/pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
     getGraphClient: () => null,
-    engineHealth: () => "disabled",
+    backendHealth: () => "disabled",
     getGraphDeps: () => null,
   },
 }));

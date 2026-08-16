@@ -60,7 +60,7 @@ export class AgentGraphPrompts {
    *
    * Returns baseSystemPrompt UNCHANGED when:
    *  - graph is not enabled, OR
-   *  - engine health is not 'ready', OR
+   *  - backend health is not 'ready', OR
    *  - the fragment for (role, modeForRole(role)) is empty.
    *
    * Otherwise returns `baseSystemPrompt + "\n\n---\n\n" + fragment`.
@@ -71,9 +71,9 @@ export class AgentGraphPrompts {
   static decorate(
     role: BoberAgentRole,
     baseSystemPrompt: string,
-    ctx: { graphEnabled: boolean; engineHealth: string },
+    ctx: { graphEnabled: boolean; backendHealth: string },
   ): string {
-    if (!ctx.graphEnabled || ctx.engineHealth !== "ready") return baseSystemPrompt;
+    if (!ctx.graphEnabled || ctx.backendHealth !== "ready") return baseSystemPrompt;
     const mode = modeForRole(role);
     const fragment = AgentGraphPrompts.fragmentFor(role, mode);
     if (fragment.length === 0) return baseSystemPrompt;

@@ -85,7 +85,7 @@ describe.skipIf(!hasTokensave)("hook integration with real tokensave (s8-c10)", 
 // ── Lightweight structural tests (always run, no binary required) ────────
 
 describe("hook integration — structural (no binary)", () => {
-  it("GraphHookHandler can be constructed without a running engine", async () => {
+  it("GraphHookHandler can be constructed without a running backend", async () => {
     const { GraphHookHandler } = await import("../../src/graph/hook-handler.js");
     const cli = { sync: vi.fn().mockResolvedValue({ indexed: 0 }) };
     const store = {

@@ -187,14 +187,14 @@ export function clearAgentCache(): void {
  * evaluator-agent, planner-agent). It chains `loadAgentDefinition` with
  * `AgentGraphPrompts.decorate` using the provided graph-state context.
  *
- * When `ctx.graphEnabled === false` OR `ctx.engineHealth !== 'ready'` OR
+ * When `ctx.graphEnabled === false` OR `ctx.backendHealth !== 'ready'` OR
  * the role has no fragment, returns `definition.systemPrompt` unchanged.
  */
 export async function assembleSystemPrompt(
   role: BoberAgentRole,
   agentName: string,
   projectRoot: string,
-  ctx: { graphEnabled: boolean; engineHealth: string },
+  ctx: { graphEnabled: boolean; backendHealth: string },
 ): Promise<string> {
   const definition = await loadAgentDefinition(agentName, projectRoot);
   const decorated = AgentGraphPrompts.decorate(

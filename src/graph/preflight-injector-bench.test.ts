@@ -6,7 +6,7 @@
  * and bench runs require `vitest bench` — this test runs with `npm test`.
  *
  * Asserts p99 < 100ms across 100 warm iterations with mocked GraphClient.
- * (Excludes cold engine spawn — this tests formatting overhead only.)
+ * (Excludes cold backend spawn — this tests formatting overhead only.)
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -18,7 +18,7 @@ import type { SprintContract } from "../contracts/sprint-contract.js";
 // Mock graphPipelineLifecycle to return "ready"
 vi.mock("./pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
-    engineHealth: vi.fn().mockReturnValue("ready"),
+    backendHealth: vi.fn().mockReturnValue("ready"),
     getGraphClient: vi.fn().mockReturnValue(null),
     getGraphDeps: vi.fn().mockReturnValue(null),
   },

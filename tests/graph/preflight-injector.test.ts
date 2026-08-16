@@ -21,10 +21,10 @@ import type { GraphSection } from "../../src/graph/types.js";
 
 // ── Mocks ──────────────────────────────────────────────────────────
 
-// Mock graphPipelineLifecycle to control engineHealth
+// Mock graphPipelineLifecycle to control backendHealth
 vi.mock("../../src/graph/pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
-    engineHealth: vi.fn().mockReturnValue("ready"),
+    backendHealth: vi.fn().mockReturnValue("ready"),
     getGraphClient: vi.fn().mockReturnValue(null),
     getGraphDeps: vi.fn().mockReturnValue(null),
   },
@@ -123,12 +123,12 @@ const fixtureContract: SprintContract = {
 
 describe("PreflightContextInjector", () => {
   beforeEach(() => {
-    vi.mocked(graphPipelineLifecycle.engineHealth).mockReturnValue("ready");
+    vi.mocked(graphPipelineLifecycle.backendHealth).mockReturnValue("ready");
   });
 
   // ── s6-c1: graph disabled → firstMessage verbatim ────────────────
 
-  describe("graph disabled / engine not ready", () => {
+  describe("graph disabled / backend not ready", () => {
     it("returns firstMessage unchanged when graph.enabled=false", async () => {
       const client = makeClient();
       const config = makeGraphConfig({ enabled: false });
@@ -147,8 +147,8 @@ describe("PreflightContextInjector", () => {
       expect(result).toBe(original);
     });
 
-    it("returns firstMessage unchanged when engineHealth is 'starting'", async () => {
-      vi.mocked(graphPipelineLifecycle.engineHealth).mockReturnValue("starting");
+    it("returns firstMessage unchanged when backendHealth is 'starting'", async () => {
+      vi.mocked(graphPipelineLifecycle.backendHealth).mockReturnValue("starting");
       const client = makeClient();
       const config = makeGraphConfig();
       const injector = new PreflightContextInjector(client, config);
@@ -158,8 +158,8 @@ describe("PreflightContextInjector", () => {
       expect(client.prefetch).not.toHaveBeenCalled();
     });
 
-    it("returns firstMessage unchanged when engineHealth is 'broken'", async () => {
-      vi.mocked(graphPipelineLifecycle.engineHealth).mockReturnValue("broken");
+    it("returns firstMessage unchanged when backendHealth is 'broken'", async () => {
+      vi.mocked(graphPipelineLifecycle.backendHealth).mockReturnValue("broken");
       const client = makeClient();
       const config = makeGraphConfig();
       const injector = new PreflightContextInjector(client, config);
@@ -168,8 +168,8 @@ describe("PreflightContextInjector", () => {
       expect(result).toBe(original);
     });
 
-    it("returns firstMessage unchanged when engineHealth is 'disabled'", async () => {
-      vi.mocked(graphPipelineLifecycle.engineHealth).mockReturnValue("disabled");
+    it("returns firstMessage unchanged when backendHealth is 'disabled'", async () => {
+      vi.mocked(graphPipelineLifecycle.backendHealth).mockReturnValue("disabled");
       const client = makeClient();
       const config = makeGraphConfig();
       const injector = new PreflightContextInjector(client, config);
@@ -376,7 +376,7 @@ describe("PreflightContextInjector", () => {
 
     it("all queries fail → returns only warning line", async () => {
       const client = makeClient({
-        overview: { ok: false, reason: "GRAPH_ERROR", detail: "engine broken" },
+        overview: { ok: false, reason: "GRAPH_ERROR", detail: "backend broken" },
       });
       const injector = new PreflightContextInjector(client, makeGraphConfig());
       const original = "Original msg";

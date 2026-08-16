@@ -26,7 +26,7 @@ export class GraphFallback {
         // In dual mode, all filesystem tools are still on the role's tool surface.
         return {
           message:
-            "Graph engine is unavailable (subprocess down or breaker tripped)." +
+            "Graph backend is unavailable (subprocess down or breaker tripped)." +
             (detail ? ` (${detail})` : ""),
           suggestedTools:
             this.mode === "gated" ? ["read_file"] : ["grep", "glob", "read_file"],
@@ -54,7 +54,7 @@ export class GraphFallback {
       case "GRAPH_ERROR":
         return {
           message:
-            "Graph engine returned an error." +
+            "Graph backend returned an error." +
             (detail ? ` (${detail})` : ""),
           suggestedTools:
             this.mode === "gated" ? ["read_file"] : ["grep", "glob", "read_file"],

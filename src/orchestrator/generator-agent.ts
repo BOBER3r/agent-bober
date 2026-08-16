@@ -61,7 +61,7 @@ export async function runGenerator(
   // Build tool set (generator gets full access — UNION mode when gated:
   // all original tools retained AND graph_* tools added).
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("generator", projectRoot, graphState, graphDeps ?? undefined);
   // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
   const systemPrompt = await assembleSystemPrompt("generator", "bober-generator", projectRoot, graphState);

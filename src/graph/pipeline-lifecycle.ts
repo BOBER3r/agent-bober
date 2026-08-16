@@ -77,7 +77,7 @@ class GraphPipelineLifecycleImpl {
     this.pidPath = resolve(projectRoot, ".bober/graph/.serve.pid");
     this.incidents = new IncidentLog(projectRoot);
 
-    // Resolve which engine to run — explicit config.graph.backend wins,
+    // Resolve which backend to run — explicit config.graph.backend wins,
     // else auto-detect (tokensave preferred when both are installed).
     const backend = await resolveGraphBackend(config);
     const binary = binaryForBackend(backend, config);
@@ -114,7 +114,7 @@ class GraphPipelineLifecycleImpl {
 
     // Instantiate and start hook handler (debounce + queue + IPC poll).
     // Construct the CLI from the ALREADY-RESOLVED backend (see above) so the
-    // hook-sync loop honors whichever engine was selected, not a hardcoded
+    // hook-sync loop honors whichever backend was selected, not a hardcoded
     // tokensave.
     const cli = new TokensaveCli(projectRoot, this.store, binary, backend);
     this.hookHandler = new GraphHookHandler(
@@ -159,7 +159,7 @@ class GraphPipelineLifecycleImpl {
     if (this.stopping) return;
     this.stopping = true;
 
-    // Drain hook queue BEFORE killing the engine; otherwise cli.sync() will fail.
+    // Drain hook queue BEFORE killing the backend; otherwise cli.sync() will fail.
     if (this.hookHandler) {
       try {
         await this.hookHandler.flush();
@@ -191,9 +191,9 @@ class GraphPipelineLifecycleImpl {
     logger.info("[graph] Pipeline lifecycle stopped");
   }
 
-  // ── engineHealth ──────────────────────────────────────────────────
+  // ── backendHealth ──────────────────────────────────────────────────
 
-  engineHealth(): string {
+  backendHealth(): string {
     if (this.healthOverride === "disabled") return "disabled";
     if (!this.mcpClient) return "starting";
     return this.mcpClient.health();
@@ -217,13 +217,13 @@ class GraphPipelineLifecycleImpl {
 
   /**
    * Lazy accessor for the GraphClient instance.
-   * Returns null if the engine is not 'ready'.
+   * Returns null if the backend is not 'ready'.
    * Caches the constructed client on first call.
    */
   private _graphClient: GraphClient | null = null;
 
   getGraphClient(): GraphClient | null {
-    if (this.engineHealth() !== "ready") return null;
+    if (this.backendHealth() !== "ready") return null;
     if (!this.mcpClient || !this.store || !this.incidents || !this.projectRoot) {
       return null;
     }
@@ -263,7 +263,7 @@ class GraphPipelineLifecycleImpl {
   }
 
   /**
-   * Returns {client, fallback} when engine is 'ready', null otherwise.
+   * Returns {client, fallback} when the backend is 'ready', null otherwise.
    * Used by resolveRoleTools to construct gated tool sets.
    */
   getGraphDeps(): { client: GraphClient; fallback: GraphFallback } | null {

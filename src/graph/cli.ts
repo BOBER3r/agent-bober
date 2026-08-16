@@ -14,7 +14,7 @@ import type { StatusResult, SyncResult } from "./types.js";
 // ── TokensaveCli ───────────────────────────────────────────────────
 
 /**
- * Short-lived execa wrapper for `<engine> init/sync/status`.
+ * Short-lived execa wrapper for `<backend> init/sync/status`.
  *
  * Each method spawns a child process and waits for it to exit.
  * Use `TokensaveMcpClient` for long-lived JSON-RPC calls.
@@ -31,7 +31,7 @@ import type { StatusResult, SyncResult } from "./types.js";
  * `CodeReviewGraphBackend`, whose `cliMap()` throws a NOT_IMPL error) never
  * throws at construction time. Only an actual init/sync/status call surfaces
  * the stub's error, which is the correct "honored but not yet implemented"
- * behavior for an unimplemented engine (sc-3-6).
+ * behavior for an unimplemented backend (sc-3-6).
  */
 export class TokensaveCli {
   constructor(

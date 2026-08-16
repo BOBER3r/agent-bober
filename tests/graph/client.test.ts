@@ -332,7 +332,7 @@ describe("GraphClient failure reasons", () => {
     expect(mcp.call).not.toHaveBeenCalled();
   });
 
-  it("GRAPH_UNAVAILABLE when engine health is 'broken' — does not call mcpClient", async () => {
+  it("GRAPH_UNAVAILABLE when backend health is 'broken' — does not call mcpClient", async () => {
     const mcp = makeMockMcp({ health: "broken" });
     const client = makeClient(mcp);
     const r = await client.search("foo");
@@ -341,7 +341,7 @@ describe("GraphClient failure reasons", () => {
     expect(mcp.call).not.toHaveBeenCalled();
   });
 
-  it("GRAPH_UNAVAILABLE when engine health is 'restarting' — does not call mcpClient", async () => {
+  it("GRAPH_UNAVAILABLE when backend health is 'restarting' — does not call mcpClient", async () => {
     const mcp = makeMockMcp({ health: "restarting" });
     const client = makeClient(mcp);
     const r = await client.search("foo");
@@ -379,7 +379,7 @@ describe("GraphClient failure reasons", () => {
   it("GRAPH_UNAVAILABLE propagates from mcp call", async () => {
     const err = Object.assign(new Error("unavailable"), {
       reason: "GRAPH_UNAVAILABLE",
-      detail: "engine breaker tripped",
+      detail: "backend breaker tripped",
     });
     const mcp = makeMockMcp({ callImpl: async () => { throw err; } });
     const client = makeClient(mcp);
@@ -656,7 +656,7 @@ describe("GraphClient with graph.enabled=false", () => {
   });
 });
 
-describe("GraphClient with engineHealth='broken'", () => {
+describe("GraphClient with backendHealth='broken'", () => {
   it("every method returns GRAPH_UNAVAILABLE", async () => {
     const mcp = makeMockMcp({ health: "broken" });
     const client = makeClient(mcp);

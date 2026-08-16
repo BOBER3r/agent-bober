@@ -188,7 +188,7 @@ export class GraphClient {
       return {
         ok: false,
         reason: "GRAPH_UNAVAILABLE",
-        detail: health === "broken" ? "engine breaker tripped" : "engine is restarting",
+        detail: health === "broken" ? "backend breaker tripped" : "backend is restarting",
       };
     }
 

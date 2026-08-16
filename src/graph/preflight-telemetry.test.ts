@@ -6,10 +6,10 @@
  * graph leaves a `graph-preflight` row recording injected-vs-skipped, the
  * approx tokens of context added, the outcome, and the elapsed time.
  *
- * The engine is never "ready" in a unit test (the pipeline-lifecycle singleton
+ * The backend is never "ready" in a unit test (the pipeline-lifecycle singleton
  * is un-started), so inject() deterministically takes the
  * "skipped-engine-not-ready" branch — the simplest telemetry path to assert
- * without standing up a real tokensave engine.
+ * without standing up a real tokensave backend.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -24,7 +24,7 @@ import type { GraphSection } from "./types.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 
 // Non-null client → passes the "no-client" guard. Its methods are never called
-// because the engine-not-ready branch returns before runInject().
+// because the backend-not-ready branch returns before runInject().
 const fakeClient = {} as unknown as GraphClient;
 
 function enabledConfig(): GraphSection {

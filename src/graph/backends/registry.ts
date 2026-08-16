@@ -4,14 +4,14 @@
  * `resolveGraphBackend()` decides which GraphBackend implementation the
  * caller should use:
  *   1. An explicit `config.graph.backend` value WINS — no probe of the other
- *      engine, no fallback if that engine's binary turns out to be missing
- *      (the caller's own prereq check surfaces that with the SAME engine's
+ *      backend, no fallback if that backend's binary turns out to be missing
+ *      (the caller's own prereq check surfaces that with the SAME backend's
  *      install hint, not a combined one).
  *   2. Otherwise, auto-detect by probing each known backend's version
  *      command (in `KNOWN_BACKENDS` order — tokensave first, so tokensave
  *      wins when both are installed).
  *   3. If neither is installed, throw a structured error whose hint
- *      concatenates BOTH engines' install hints.
+ *      concatenates BOTH backends' install hints.
  *
  * The probe is injectable so tests never need a real binary on PATH.
  */
@@ -24,7 +24,7 @@ import { CodeReviewGraphBackend } from "./code-review-graph-backend.js";
 
 // ── Registry ─────────────────────────────────────────────────────────
 
-/** Known engines, in preference order (tokensave first). */
+/** Known backends, in preference order (tokensave first). */
 export const KNOWN_BACKENDS: readonly GraphBackend[] = [
   new TokensaveBackend(),
   new CodeReviewGraphBackend(),
@@ -123,7 +123,7 @@ export async function resolveGraphBackend(
   const probe = deps.probe ?? defaultProbe;
   const explicit = config.graph?.backend;
 
-  // Explicit selection wins — no probe of the other engine, no fallback.
+  // Explicit selection wins — no probe of the other backend, no fallback.
   if (explicit) {
     const found = KNOWN_BACKENDS.find((b) => b.id === explicit);
     if (!found) {
@@ -143,7 +143,7 @@ export async function resolveGraphBackend(
     if (result.ok) return backend;
   }
 
-  // Neither installed — combined hint naming BOTH engines.
+  // Neither installed — combined hint naming BOTH backends.
   const hints = KNOWN_BACKENDS.map(
     (b) => `${b.id}: ${b.prereqSpec().installHint(process.platform)}`,
   ).join("; ");

@@ -109,7 +109,7 @@ If you cannot run a required strategy (Playwright not installed, dev server port
 
 Your available tools are decided at spawn time by the orchestrator, **not** by the `tools:` frontmatter above (which is the ungated fallback / Claude Code plugin surface).
 
-When `graph.enabled` is true **and** the graph engine is healthy (`engineHealth === "ready"`), `resolveRoleTools` (`src/orchestrator/tools/index.ts`) keeps all your existing tools **and adds** the `graph_*` tools (UNION), and `AgentGraphPrompts` (`src/graph/prompts.ts`) appends graph-first guidance. In that mode:
+When `graph.enabled` is true **and** the graph backend is healthy (`backendHealth === "ready"`), `resolveRoleTools` (`src/orchestrator/tools/index.ts`) keeps all your existing tools **and adds** the `graph_*` tools (UNION), and `AgentGraphPrompts` (`src/graph/prompts.ts`) appends graph-first guidance. In that mode:
 
 - Prefer `graph_changes(since: <baseline>)` and `graph_impact(target: <symbol>)` to triage the diff and its blast radius.
 - Use `grep` when you need a literal-string search across the working tree.

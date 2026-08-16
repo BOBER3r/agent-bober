@@ -69,36 +69,36 @@ describe("resolveRoleTools — backcompat with static ROLE_TOOLS", () => {
   it("returns the same names as ROLE_TOOLS.curator when ungated (graphEnabled=false)", () => {
     const out = resolveRoleTools("curator", PROJECT_ROOT, {
       graphEnabled: false,
-      engineHealth: "disabled",
+      backendHealth: "disabled",
     });
     const names = out.schemas.map((s) => s.name).sort();
     expect(names).toEqual([...ROLE_TOOLS.curator].sort());
   });
 
-  it("returns ungated set when graphEnabled=true but engineHealth='starting'", () => {
+  it("returns ungated set when graphEnabled=true but backendHealth='starting'", () => {
     const out = resolveRoleTools("curator", PROJECT_ROOT, {
       graphEnabled: true,
-      engineHealth: "starting",
+      backendHealth: "starting",
     });
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
       [...ROLE_TOOLS.curator].sort(),
     );
   });
 
-  it("returns ungated set when graphEnabled=true but engineHealth='restarting'", () => {
+  it("returns ungated set when graphEnabled=true but backendHealth='restarting'", () => {
     const out = resolveRoleTools("curator", PROJECT_ROOT, {
       graphEnabled: true,
-      engineHealth: "restarting",
+      backendHealth: "restarting",
     });
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
       [...ROLE_TOOLS.curator].sort(),
     );
   });
 
-  it("returns ungated set when graphEnabled=true but engineHealth='broken'", () => {
+  it("returns ungated set when graphEnabled=true but backendHealth='broken'", () => {
     const out = resolveRoleTools("curator", PROJECT_ROOT, {
       graphEnabled: true,
-      engineHealth: "broken",
+      backendHealth: "broken",
     });
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
       [...ROLE_TOOLS.curator].sort(),
@@ -112,10 +112,10 @@ describe("resolveRoleTools — backcompat with static ROLE_TOOLS", () => {
     );
   });
 
-  it("treats undefined engineHealth as 'disabled' → ungated", () => {
+  it("treats undefined backendHealth as 'disabled' → ungated", () => {
     const out = resolveRoleTools("curator", PROJECT_ROOT, {
       graphEnabled: true,
-      // engineHealth intentionally omitted
+      // backendHealth intentionally omitted
     });
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
       [...ROLE_TOOLS.curator].sort(),
@@ -127,7 +127,7 @@ describe("resolveRoleTools — backcompat with static ROLE_TOOLS", () => {
     const out = resolveRoleTools(
       "curator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       // graphDeps intentionally omitted
     );
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
@@ -144,7 +144,7 @@ describe("resolveRoleTools — gated researcher-phase2", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const names = new Set(out.schemas.map((s) => s.name));
@@ -165,7 +165,7 @@ describe("resolveRoleTools — gated researcher-phase2", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     expect(out.handlers.has("grep")).toBe(false);
@@ -184,7 +184,7 @@ describe("resolveRoleTools — gated curator", () => {
     const out = resolveRoleTools(
       "curator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const names = new Set(out.schemas.map((s) => s.name));
@@ -206,7 +206,7 @@ describe("resolveRoleTools — gated architect", () => {
     const out = resolveRoleTools(
       "architect",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const names = new Set(out.schemas.map((s) => s.name));
@@ -232,7 +232,7 @@ describe("resolveRoleTools — gated generator (UNION mode)", () => {
     const out = resolveRoleTools(
       "generator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const names = new Set(out.schemas.map((s) => s.name));
@@ -251,7 +251,7 @@ describe("resolveRoleTools — gated generator (UNION mode)", () => {
     const out = resolveRoleTools(
       "generator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     expect(out.schemas.length).toBe(12);
@@ -266,7 +266,7 @@ describe("resolveRoleTools — gated evaluator (UNION mode)", () => {
     const out = resolveRoleTools(
       "evaluator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const names = new Set(out.schemas.map((s) => s.name));
@@ -285,7 +285,7 @@ describe("resolveRoleTools — gated evaluator (UNION mode)", () => {
     const out = resolveRoleTools(
       "evaluator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     expect(out.schemas.length).toBe(10);
@@ -298,7 +298,7 @@ describe("resolveRoleTools — Phase 1 researcher is never gated", () => {
   it("researcher-phase1 ungated returns read_file, glob, grep", () => {
     const out = resolveRoleTools("researcher-phase1", PROJECT_ROOT, {
       graphEnabled: false,
-      engineHealth: "disabled",
+      backendHealth: "disabled",
     });
     const names = new Set(out.schemas.map((s) => s.name));
     expect(names.has("read_file")).toBe(true);
@@ -316,7 +316,7 @@ describe("resolveRoleTools — Phase 1 researcher is never gated", () => {
     const out = resolveRoleTools(
       "researcher-phase1",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     // Original tools still present:
@@ -335,7 +335,7 @@ describe("resolveRoleTools — planner role stays unchanged in gated state", () 
     const out = resolveRoleTools(
       "planner",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     // planner is not in the gated-removal set, so original tools kept and graph added
@@ -354,7 +354,7 @@ describe("resolveRoleTools — unknown role", () => {
       resolveRoleTools(
         "totally-fake-role" as AgentRole,
         PROJECT_ROOT,
-        { graphEnabled: false, engineHealth: "disabled" },
+        { graphEnabled: false, backendHealth: "disabled" },
       ),
     ).toThrow(/unknown agent role/i);
   });
@@ -398,7 +398,7 @@ describe("resolveRoleTools — backcompat shim", () => {
     for (const role of Object.keys(ROLE_TOOLS) as AgentRole[]) {
       const out = resolveRoleTools(role, PROJECT_ROOT, {
         graphEnabled: false,
-        engineHealth: "disabled",
+        backendHealth: "disabled",
       });
       expect(out.schemas.map((s) => s.name).sort()).toEqual(
         [...ROLE_TOOLS[role]].sort(),
@@ -419,7 +419,7 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     // The agentic loop dispatches handlers via this Map — if 'grep' is absent,
@@ -433,7 +433,7 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     expect(out.handlers.has("glob")).toBe(false);
@@ -444,7 +444,7 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     expect(out.handlers.has("bash")).toBe(false);
@@ -455,7 +455,7 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const handler = out.handlers.get("graph_search");
@@ -473,7 +473,7 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
     const out = resolveRoleTools(
       "researcher-phase2",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     // We need to get the handler — it wraps the BoberToolDefinition.handler.
@@ -500,20 +500,20 @@ describe("resolveRoleTools — integration (s5-c6)", () => {
 // ── Token-usage baseline (s5-c7): graphEnabled flag in TokenUsageLog ──
 
 describe("token-usage baseline (s5-c7)", () => {
-  it("graphEnabled flag is false when engineHealth is disabled (ungated state)", () => {
-    const graphState = { graphEnabled: false, engineHealth: "disabled" as const };
+  it("graphEnabled flag is false when backendHealth is disabled (ungated state)", () => {
+    const graphState = { graphEnabled: false, backendHealth: "disabled" as const };
     // Simulate what agents do before writing TokenUsageLog:
     // config.graph?.enabled === true is the pattern used in each agent
     expect(graphState.graphEnabled).toBe(false);
   });
 
-  it("graphEnabled flag is true when engineHealth is ready (gated state)", () => {
-    const graphState = { graphEnabled: true, engineHealth: "ready" as const };
+  it("graphEnabled flag is true when backendHealth is ready (gated state)", () => {
+    const graphState = { graphEnabled: true, backendHealth: "ready" as const };
     expect(graphState.graphEnabled).toBe(true);
   });
 
-  it("engineHealth='broken' does not trigger gating (graceful degradation)", () => {
-    const graphState = { graphEnabled: true, engineHealth: "broken" as const };
+  it("backendHealth='broken' does not trigger gating (graceful degradation)", () => {
+    const graphState = { graphEnabled: true, backendHealth: "broken" as const };
     const out = resolveRoleTools("curator", PROJECT_ROOT, graphState);
     // Should return ungated (static) tools
     expect(out.schemas.map((s) => s.name).sort()).toEqual(
@@ -635,13 +635,13 @@ describe("resolveRoleTools — deduplication", () => {
     const out1 = resolveRoleTools(
       "generator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     const out2 = resolveRoleTools(
       "generator",
       PROJECT_ROOT,
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
       deps,
     );
     // Each independent call should produce the same count

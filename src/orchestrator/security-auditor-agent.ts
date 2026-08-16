@@ -98,7 +98,7 @@ export async function runSecurityAudit(
   // edit tools (nonGoals[3]): unlike the evaluator/code-reviewer roles,
   // the auditor must not be able to run shell commands at all.
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
   const systemPrompt = await assembleSystemPrompt("curator", "bober-security-auditor", projectRoot, graphState);
 

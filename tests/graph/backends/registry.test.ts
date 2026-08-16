@@ -52,7 +52,7 @@ describe("resolveGraphBackend — auto-detect (graph.backend unset)", () => {
     expect(backend.id).toBe("tokensave");
   });
 
-  it("throws a combined install hint naming BOTH engines when NEITHER is detected", async () => {
+  it("throws a combined install hint naming BOTH backends when NEITHER is detected", async () => {
     const probe: VersionProbe = vi.fn(async () => ({ ok: false }));
     expect.assertions(4);
     try {
@@ -60,7 +60,7 @@ describe("resolveGraphBackend — auto-detect (graph.backend unset)", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(GraphBackendResolutionError);
       const message = (err as Error).message;
-      // Must name BOTH engines' install hints.
+      // Must name BOTH backends' install hints.
       expect(message).toContain("pip install code-review-graph");
       const tokensaveHint = KNOWN_BACKENDS[0]!.prereqSpec().installHint(process.platform);
       expect(message).toContain(tokensaveHint);
@@ -89,7 +89,7 @@ describe("resolveGraphBackend — explicit selection (graph.backend set)", () =>
     expect(probe).not.toHaveBeenCalled();
   });
 
-  it("explicit selection does NOT fall back to tokensave when the chosen engine is missing", async () => {
+  it("explicit selection does NOT fall back to tokensave when the chosen backend is missing", async () => {
     // Even though tokensave would be "detected" by this probe, the explicit
     // selection of code-review-graph must win and must not even consult probe.
     const probe: VersionProbe = vi.fn(async (binary: string) =>

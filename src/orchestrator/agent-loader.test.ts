@@ -32,12 +32,12 @@ describe("agent-loader — assembleSystemPrompt", () => {
     clearAgentCache();
   });
 
-  it("returns decorated prompt when graphEnabled=true and engineHealth=ready for curator", async () => {
+  it("returns decorated prompt when graphEnabled=true and backendHealth=ready for curator", async () => {
     const result = await assembleSystemPrompt(
       "curator",
       "bober-curator",
       "/fake/root",
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
     );
     // Should end with the curator gated fragment (appended after separator)
     expect(result).toContain("\n\n---\n\n");
@@ -50,7 +50,7 @@ describe("agent-loader — assembleSystemPrompt", () => {
       "curator",
       "bober-curator",
       "/fake/root",
-      { graphEnabled: false, engineHealth: "ready" },
+      { graphEnabled: false, backendHealth: "ready" },
     );
     // Base prompt is preserved verbatim at the head; no graph guidance is added.
     // (Host-environment + tool context is appended unconditionally — see below.)
@@ -64,7 +64,7 @@ describe("agent-loader — assembleSystemPrompt", () => {
       "planner",
       "bober-planner",
       "/fake/root",
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
     );
     expect(result.startsWith("Base system prompt content.")).toBe(true);
     expect(result).not.toContain("graph_search");
@@ -76,7 +76,7 @@ describe("agent-loader — assembleSystemPrompt", () => {
       "curator",
       "bober-curator",
       "/fake/root",
-      { graphEnabled: false, engineHealth: "ready" },
+      { graphEnabled: false, backendHealth: "ready" },
     );
     expect(result).toContain("# Host Environment");
     expect(result).toContain("# Your Tools");

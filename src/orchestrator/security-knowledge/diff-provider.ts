@@ -372,7 +372,7 @@ export interface SecurityDiffComputeInput {
   baseRef?: string;
   expandWithGraph: boolean;
   signal: AbortSignal;
-  /** Needed for the `getGraphState(config).engineHealth === 'ready'` gate (sc-6-2). */
+  /** Needed for the `getGraphState(config).backendHealth === 'ready'` gate (sc-6-2). */
   config?: BoberConfig;
   /** Injected in tests — default wraps execa. */
   runner?: GitRunner;
@@ -429,7 +429,7 @@ export const securityDiffProvider: SecurityDiffProvider = {
       const { files, truncated } = parseUnifiedDiff(nameStatusResult.stdout, unifiedResult.stdout);
 
       let neighborhoodFiles: string[] = [];
-      if (expandWithGraph && getGraphState(config).engineHealth === "ready") {
+      if (expandWithGraph && getGraphState(config).backendHealth === "ready") {
         neighborhoodFiles = await collectGraphNeighborhood(
           files.map((f) => f.path),
           signal,

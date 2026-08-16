@@ -4,7 +4,7 @@
  *
  * sc-6-1: injected GitRunner -> parsed AuditDiff; throwing/failed runner ->
  * EMPTY_DIFF (never throws); changedFiles-count and hunk-byte caps -> truncated:true.
- * sc-6-2: graph neighborhood expansion, gated on engineHealth === 'ready'.
+ * sc-6-2: graph neighborhood expansion, gated on backendHealth === 'ready'.
  *
  * Never shells real git — every test injects a fake GitRunner.
  */
@@ -24,7 +24,7 @@ const { securityDiffProvider, parseUnifiedDiff, extractDiffKeywords, EMPTY_DIFF 
 
 beforeEach(() => {
   getGraphStateSpy.mockReset();
-  getGraphStateSpy.mockReturnValue({ graphEnabled: false, engineHealth: "disabled" });
+  getGraphStateSpy.mockReturnValue({ graphEnabled: false, backendHealth: "disabled" });
   getGraphDepsSpy.mockReset();
   getGraphDepsSpy.mockReturnValue(null);
 });
@@ -253,8 +253,8 @@ describe("securityDiffProvider.compute — sc-6-1", () => {
 // ── securityDiffProvider.compute — sc-6-2 (graph neighborhood) ───────
 
 describe("securityDiffProvider.compute — sc-6-2 graph neighborhood expansion", () => {
-  it("adds neighborhoodFiles via GraphClient.impact when expandWithGraph and engineHealth==='ready'", async () => {
-    getGraphStateSpy.mockReturnValue({ graphEnabled: true, engineHealth: "ready" });
+  it("adds neighborhoodFiles via GraphClient.impact when expandWithGraph and backendHealth==='ready'", async () => {
+    getGraphStateSpy.mockReturnValue({ graphEnabled: true, backendHealth: "ready" });
     const impactMock = vi.fn(async (target: string) => ({
       ok: true,
       data: {
@@ -285,8 +285,8 @@ describe("securityDiffProvider.compute — sc-6-2 graph neighborhood expansion",
     expect(impactMock).toHaveBeenCalledWith("src/foo.ts");
   });
 
-  it("skips graph expansion (neighborhoodFiles:[]) when engineHealth is not 'ready' — changedFiles still returned", async () => {
-    getGraphStateSpy.mockReturnValue({ graphEnabled: true, engineHealth: "starting" });
+  it("skips graph expansion (neighborhoodFiles:[]) when backendHealth is not 'ready' — changedFiles still returned", async () => {
+    getGraphStateSpy.mockReturnValue({ graphEnabled: true, backendHealth: "starting" });
 
     const runner = makeRunner({
       "diff --name-status": { stdout: "M\tsrc/foo.ts" },
@@ -307,7 +307,7 @@ describe("securityDiffProvider.compute — sc-6-2 graph neighborhood expansion",
   });
 
   it("treats a GraphResult ok:false as neighborhoodFiles:[] without dropping the git-derived changedFiles", async () => {
-    getGraphStateSpy.mockReturnValue({ graphEnabled: true, engineHealth: "ready" });
+    getGraphStateSpy.mockReturnValue({ graphEnabled: true, backendHealth: "ready" });
     const impactMock = vi.fn(async () => ({ ok: false, reason: "GRAPH_ERROR", detail: "boom" }));
     getGraphDepsSpy.mockReturnValue({ client: { impact: impactMock }, fallback: {} });
 
@@ -329,7 +329,7 @@ describe("securityDiffProvider.compute — sc-6-2 graph neighborhood expansion",
   });
 
   it("does not expand the graph at all when expandWithGraph is false, even if the graph is ready", async () => {
-    getGraphStateSpy.mockReturnValue({ graphEnabled: true, engineHealth: "ready" });
+    getGraphStateSpy.mockReturnValue({ graphEnabled: true, backendHealth: "ready" });
     const impactMock = vi.fn();
     getGraphDepsSpy.mockReturnValue({ client: { impact: impactMock }, fallback: {} });
 

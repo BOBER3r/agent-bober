@@ -210,7 +210,7 @@ async function exploreCodebase(
   // Phase 2 gets read-only tools to explore the codebase.
   // When graph is enabled and ready, bash/grep/glob are removed and graph_* tools are added.
   const graphState = getGraphState(config);
-  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const graphDeps = graphState.backendHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools(
     "researcher-phase2",
     projectRoot,

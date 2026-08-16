@@ -42,7 +42,7 @@ describe("Researcher-Phase2 prompt-fragment isolation invariant", () => {
     const decorated = AgentGraphPrompts.decorate(
       "researcher-phase2",
       "BASE_SYSTEM_PROMPT_XYZAB",
-      { graphEnabled: true, engineHealth: "ready" },
+      { graphEnabled: true, backendHealth: "ready" },
     );
     // The base appears (it's the prefix), but the fragment portion (after \n\n---\n\n)
     // must not contain the sentinel.

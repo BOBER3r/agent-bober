@@ -26,7 +26,7 @@ interface HookQueueLine {
  *
  * onPostToolUse is synchronous (fire-and-forget). flush() drains the queue
  * with a 5000ms total budget — called from GraphPipelineLifecycle.stop()
- * before the engine is killed.
+ * before the backend is killed.
  */
 export class GraphHookHandler {
   private readonly queue = new Set<string>();

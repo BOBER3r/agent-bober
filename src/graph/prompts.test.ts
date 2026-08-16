@@ -18,12 +18,12 @@ describe("AgentGraphPrompts — module-load smoke tests", () => {
 
   it("decorate returns base unchanged when graph is disabled", () => {
     const base = "BASE";
-    expect(AgentGraphPrompts.decorate("curator", base, { graphEnabled: false, engineHealth: "ready" })).toBe(base);
+    expect(AgentGraphPrompts.decorate("curator", base, { graphEnabled: false, backendHealth: "ready" })).toBe(base);
   });
 
   it("decorate appends separator + fragment when conditions met", () => {
     const base = "BASE";
-    const out = AgentGraphPrompts.decorate("curator", base, { graphEnabled: true, engineHealth: "ready" });
+    const out = AgentGraphPrompts.decorate("curator", base, { graphEnabled: true, backendHealth: "ready" });
     expect(out.startsWith("BASE\n\n---\n\n")).toBe(true);
     expect(out.length).toBeGreaterThan(base.length);
   });

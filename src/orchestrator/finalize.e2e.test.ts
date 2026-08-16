@@ -29,7 +29,7 @@ import type { WorkflowRunResult } from "./workflow/types.js";
 
 vi.mock("../graph/pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
-    engineHealth: vi.fn().mockReturnValue("disabled"),
+    backendHealth: vi.fn().mockReturnValue("disabled"),
     getGraphClient: vi.fn().mockReturnValue(null),
     getGraphDeps: vi.fn().mockReturnValue(null),
   },

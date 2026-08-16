@@ -2,7 +2,7 @@
  * sc-7-5 (sprint 7): `agent-bober graph status` backend-status readout.
  *
  * Augments the existing `graph status` action (graph.ts:242-316) with the
- * active engine id, its version, and whether it was chosen by explicit
+ * active backend id, its version, and whether it was chosen by explicit
  * config or auto-detection. This test drives the REAL resolveGraphBackend +
  * binaryForBackend + GenericPrereqCheck + TokensaveCli through a mocked
  * execa transport for BOTH backends: an explicit code-review-graph config
@@ -76,7 +76,7 @@ function captureStdio(): { stdout: string[]; restore: () => void } {
 }
 
 /** Generic execa mock: handles `--version` probes and `status --json` for
- *  both engines, keyed by the binary passed as the first execa argument. */
+ *  both backends, keyed by the binary passed as the first execa argument. */
 function mockExecaGeneric(opts: {
   versionStdout: string;
   statusStdoutByBinary: Record<string, string>;
@@ -133,7 +133,7 @@ describe("graph status backend-status readout (sc-7-5)", () => {
       await prog.parseAsync(["node", "test", "graph", "status"]);
 
       const out = stdout.join("");
-      expect(out).toContain("Engine:          code-review-graph\n");
+      expect(out).toContain("Backend:         code-review-graph\n");
       expect(out).toContain("Version:         2.3.7\n");
       expect(out).toContain("Selected by:     config\n");
     } finally {
@@ -171,7 +171,7 @@ describe("graph status backend-status readout (sc-7-5)", () => {
       await prog.parseAsync(["node", "test", "graph", "status"]);
 
       const out = stdout.join("");
-      expect(out).toContain("Engine:          tokensave\n");
+      expect(out).toContain("Backend:         tokensave\n");
       expect(out).toContain("Version:         6.1.1\n");
       expect(out).toContain("Selected by:     auto-detect\n");
     } finally {
@@ -179,7 +179,7 @@ describe("graph status backend-status readout (sc-7-5)", () => {
     }
   });
 
-  it("--json output includes engine/backendVersion/selectedBy as additive fields", async () => {
+  it("--json output includes backend/backendVersion/selectedBy as additive fields", async () => {
     (loadConfig as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       graph: {
         enabled: true,
@@ -209,12 +209,12 @@ describe("graph status backend-status readout (sc-7-5)", () => {
       await prog.parseAsync(["node", "test", "graph", "status", "--json"]);
 
       const parsed = JSON.parse(stdout.join("")) as {
-        engine: string;
+        backend: string;
         backendVersion: string;
         selectedBy: string;
         indexedFileCount: number;
       };
-      expect(parsed.engine).toBe("code-review-graph");
+      expect(parsed.backend).toBe("code-review-graph");
       expect(parsed.backendVersion).toBe("2.3.7");
       expect(parsed.selectedBy).toBe("config");
     } finally {
