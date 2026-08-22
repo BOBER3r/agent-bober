@@ -144,14 +144,12 @@ describe("init.ts — UNIVERSAL_COMMANDS includes all 3 new skills", () => {
     expect(universalBlock).toContain('"bober.impact"');
   });
 
-  it("skillMap includes all 3 new entries", async () => {
-    const initSrc = await readFile(
-      join(repoRoot, "src", "cli", "commands", "init.ts"),
-      "utf-8",
-    );
-    expect(initSrc).toContain('"bober.graph": "bober-graph.md"');
-    expect(initSrc).toContain('"bober.onboard": "bober-onboard.md"');
-    expect(initSrc).toContain('"bober.impact": "bober-impact.md"');
+  it("skillMap (now derived by buildSkillMap from skills/, not a hardcoded literal) includes all 3 new entries", async () => {
+    const { buildSkillMap } = await import("../../src/cli/skill-map.js");
+    const map = await buildSkillMap(skillsRoot);
+    expect(map["bober.graph"]).toBe("bober-graph.md");
+    expect(map["bober.onboard"]).toBe("bober-onboard.md");
+    expect(map["bober.impact"]).toBe("bober-impact.md");
   });
 });
 

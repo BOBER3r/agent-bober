@@ -14,6 +14,7 @@ import { logger } from "../../utils/logger.js";
 import { scanProject } from "../../discovery/scanner.js";
 import { generateEvalConfig } from "../../discovery/config-generator.js";
 import { synthesizePrinciples } from "../../discovery/synthesizer.js";
+import { buildSkillMap } from "../skill-map.js";
 
 // ── Provider types ────────────────────────────────────────────────
 
@@ -1047,42 +1048,23 @@ export async function installClaudeCommands(
   const commandsDir = join(projectRoot, ".claude", "commands");
   await ensureDir(commandsDir);
 
-  // Map skill directories to command file names
-  const skillMap: Record<string, string> = {
-    "bober.plan": "bober-plan.md",
-    "bober.sprint": "bober-sprint.md",
-    "bober.eval": "bober-eval.md",
-    "bober.run": "bober-run.md",
-    "bober.react": "bober-react.md",
-    "bober.brownfield": "bober-brownfield.md",
-    "bober.solidity": "bober-solidity.md",
-    "bober.anchor": "bober-anchor.md",
-    "bober.principles": "bober-principles.md",
-    "bober.playwright": "bober-playwright.md",
-    "bober.research": "bober-research.md",
-    "bober.architect": "bober-architect.md",
-    "bober.graph": "bober-graph.md",
-    "bober.onboard": "bober-onboard.md",
-    "bober.impact": "bober-impact.md",
-    "bober.using-bober": "bober-using-bober.md",
-    "bober.verify": "bober-verify.md",
-    "bober.debug": "bober-debug.md",
-    "bober.code-review": "bober-code-review.md",
-    "bober.incident": "bober-incident.md",
-    "bober.diagnose": "bober-diagnose.md",
-    "bober.deploy": "bober-deploy.md",
-    "bober.runbook": "bober-runbook.md",
-    "bober.postmortem": "bober-postmortem.md",
-  };
+  // Map skill directories to command file names — derived at runtime from
+  // skills/ (see buildSkillMap) so a newly added skill is never silently
+  // missing the way a manually-maintained list would go stale.
+  const skillsRoot = join(packageRoot, "skills");
+  const skillMap = await buildSkillMap(skillsRoot);
 
   // Determine which skill keys to install based on mode and preset.
   // Greenfield with no preset → install everything (user hasn't committed to a stack).
   // Greenfield with preset → universal + commands matching that preset.
   // Brownfield → universal + brownfield + playwright.
+  // A skill not classified in either set below defaults to universal —
+  // curation (gating a skill to specific stacks) is opt-in via
+  // STACK_SPECIFIC_COMMANDS, so an unclassified skill is never dropped.
   const shouldInstall = (skillKey: string): boolean => {
     if (UNIVERSAL_COMMANDS.has(skillKey)) return true;
     const stackTargets = STACK_SPECIFIC_COMMANDS[skillKey];
-    if (!stackTargets) return false;
+    if (!stackTargets) return true;
     if (mode === "greenfield") {
       if (!preset) return true; // no preset chosen — install all
       return stackTargets.includes(preset);
@@ -1091,7 +1073,6 @@ export async function installClaudeCommands(
     return stackTargets.includes("brownfield");
   };
 
-  const skillsRoot = join(packageRoot, "skills");
   let installed = 0;
 
   for (const [skillDir, cmdFile] of Object.entries(skillMap)) {
@@ -1121,24 +1102,18 @@ export async function installClaudeCommands(
     }
   }
 
-  // Copy agent definitions
+  // Copy agent definitions — derived at runtime from agents/ (like
+  // skillMap above) so a newly added agent is never silently missing.
   const agentsDir = join(projectRoot, ".claude", "agents");
   await ensureDir(agentsDir);
 
-  const agentFiles = [
-    "bober-planner.md",
-    "bober-generator.md",
-    "bober-evaluator.md",
-    "bober-researcher.md",
-    "bober-architect.md",
-    "bober-curator.md",
-    "bober-documenter.md",
-    "bober-code-reviewer.md",
-    "bober-diagnoser.md",
-    "bober-deployer.md",
-    "bober-postmortemer.md",
-  ];
   const agentsSrc = join(packageRoot, "agents");
+  let agentFiles: string[] = [];
+  try {
+    agentFiles = (await readdir(agentsSrc)).filter((f) => f.endsWith(".md"));
+  } catch {
+    // No agents dir in package — unusual but tolerate.
+  }
 
   for (const agentFile of agentFiles) {
     const src = join(agentsSrc, agentFile);

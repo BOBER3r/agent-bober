@@ -11,9 +11,10 @@
 //      skill edit and must be re-emitted per project.
 //
 // This script does both: build once, then re-inline skills + copy agents into
-// every target listed in scripts/sync-targets.json. The inlining format is
-// kept byte-identical to src/cli/commands/init.ts (installClaudeCommands) so a
-// synced project is indistinguishable from a freshly `init`-ed one.
+// every target listed in scripts/sync-targets.json. The inlining format shares
+// its skill-to-command enumeration with src/cli/commands/init.ts
+// (installClaudeCommands) via src/cli/skill-map.ts, so a synced project's
+// command set can't drift from a freshly `init`-ed one.
 //
 // Usage:
 //   node scripts/update-all.mjs                # build + sync all targets
@@ -26,7 +27,7 @@
 
 import { readFile, writeFile, readdir, mkdir, stat } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -35,20 +36,16 @@ const SKILLS_ROOT = join(PKG_ROOT, "skills");
 const AGENTS_ROOT = join(PKG_ROOT, "agents");
 const TARGETS_FILE = join(__dirname, "sync-targets.json");
 
-// Skill-dir → command-file map. MUST match installClaudeCommands in
-// src/cli/commands/init.ts. Derived at runtime from skills/ so it can never
-// drift: every skills/bober.X dir maps to bober-X.md.
+// Skill-dir → command-file map, shared with installClaudeCommands in
+// src/cli/commands/init.ts via the single implementation in
+// src/cli/skill-map.ts (built to dist/cli/skill-map.js) — the two can no
+// longer drift apart because they're the same function.
+//
+// A dynamic import (not a static top-level one) so this file doesn't hard-fail
+// before the build step below has run on a project with no prior `dist/`.
 async function buildSkillMap() {
-  const entries = await readdir(SKILLS_ROOT, { withFileTypes: true });
-  const map = {};
-  for (const e of entries) {
-    if (!e.isDirectory()) continue;
-    if (!e.name.startsWith("bober.")) continue;
-    // bober.code-review → bober-code-review.md
-    const cmd = e.name.replace(/\./g, "-") + ".md";
-    map[e.name] = cmd;
-  }
-  return map;
+  const mod = await import(pathToFileURL(join(PKG_ROOT, "dist", "cli", "skill-map.js")));
+  return mod.buildSkillMap(SKILLS_ROOT);
 }
 
 // Re-create the inlined command file for one skill, byte-identical to init.ts.
