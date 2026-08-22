@@ -5,9 +5,11 @@
     "/Users/bober4ik/agent-bober-workspace"
   ],
   "targets": [
+    "/Users/bober4ik/WebstormProjects/aile-experimental",
     "/Users/bober4ik/WebstormProjects/solex-integration-demo",
     "/Users/bober4ik/WebstormProjects/solex-integration-demo copy",
     "/Users/bober4ik/WebstormProjects/solex-integration-demo/apps/api",
-    "/Users/bober4ik/WebstormProjects/solex-integration-demo/solex-games-betbook (Copy)"
+    "/Users/bober4ik/WebstormProjects/solex-integration-demo/solex-games-betbook (Copy)",
+    "/Users/bober4ik/WebstormProjects/solex-website"
   ]
 }
